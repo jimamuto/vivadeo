@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 
-async function forward(request: NextRequest, path: string[]): Promise<NextResponse> {
+async function forward(
+  request: NextRequest,
+  path: string[],
+): Promise<NextResponse> {
   const targetPath = `/${path.join("/")}`;
   const backendUrl = getBackendUrl(targetPath);
-  const headers = getBackendHeaders(undefined, request.cookies.get("vivadeo_workspace")?.value);
+  const headers = getBackendHeaders(
+    undefined,
+    request.cookies.get("vivadeo_workspace")?.value,
+  );
   const method = request.method;
   let body: BodyInit | undefined;
 
   if (method !== "GET" && method !== "HEAD") {
     const contentType = request.headers.get("content-type") || "";
-    if (contentType.includes("multipart/form-data") && targetPath.endsWith("/v1/videos/upload")) {
-      body = await request.arrayBuffer();
+    if (contentType.includes("multipart/form-data")) {
+      // Stream the raw body straight through — avoids buffering the entire
+      // video in memory and sidesteps Next.js body-size limits.
+      body = request.body as ReadableStream;
       headers.set("Content-Type", contentType);
     } else if (contentType.includes("application/json")) {
       body = await request.text();
@@ -27,33 +35,52 @@ async function forward(request: NextRequest, path: string[]): Promise<NextRespon
   const response = await fetch(backendUrl, {
     method,
     headers,
-    body
+    body,
+    // Required by Node.js fetch when body is a ReadableStream.
+    // @ts-expect-error: duplex is not in the TS types yet but is required at runtime.
+    duplex: "half",
   });
   const text = await response.text();
   return new NextResponse(text, {
     status: response.status,
     headers: {
-      "content-type": response.headers.get("content-type") || "application/json"
-    }
+      "content-type":
+        response.headers.get("content-type") || "application/json",
+    },
   });
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   return forward(request, (await params).path);
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   return forward(request, (await params).path);
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   return forward(request, (await params).path);
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   return forward(request, (await params).path);
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   return forward(request, (await params).path);
 }
