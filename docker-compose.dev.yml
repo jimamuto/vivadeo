@@ -86,7 +86,7 @@ services:
 
   worker:
     image: ${VIVADEO_API_IMAGE:-ghcr.io/jimamuto/vivadeo-api:latest}
-    command: sh -c "alembic upgrade head && celery -A vivadeo.worker.celery_app worker --loglevel=INFO"
+    command: celery -A vivadeo.worker.celery_app worker --loglevel=INFO
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://vivadeo:vivadeo@postgres:5432/vivadeo
@@ -116,6 +116,8 @@ services:
         target: /root/.modal.toml
         read_only: true
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -138,6 +140,7 @@ services:
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
       EMAIL_FROM: ${EMAIL_FROM:-Vivadeo <no-reply@example.com>}
       RESEND_API_KEY: ${RESEND_API_KEY:-change-me-resend}
+      NODE_ENV: development
       WATCHPACK_POLLING: ${WATCHPACK_POLLING:-true}
       CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
     volumes:
