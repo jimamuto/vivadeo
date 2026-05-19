@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppTopbar } from "@/components/app-topbar";
 
 type Job = {
@@ -14,9 +15,14 @@ type Job = {
 };
 
 export default function JobsPage() {
-  const [jobId, setJobId] = useState("");
+  const searchParams = useSearchParams();
+  const [jobId, setJobId] = useState(searchParams.get("job") ?? "");
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setJobId(searchParams.get("job") ?? "");
+  }, [searchParams]);
 
   useEffect(() => {
     if (!jobId) return;
@@ -46,13 +52,25 @@ export default function JobsPage() {
     };
   }, [jobId]);
 
+  const progress = job ? Math.max(0, Math.min(1, job.progress ?? 0)) : 0;
+  const statusTone =
+    job?.status === "succeeded"
+      ? "good"
+      : job?.status === "failed"
+        ? "bad"
+        : job?.status === "running"
+          ? "live"
+          : "idle";
+
   return (
     <div className="shell page">
       <AppTopbar />
 
       <section className="card fade-in">
-        <h1>Job polling</h1>
-        <p className="muted">Paste a job ID to watch ingest or clip generation progress through the proxy.</p>
+        <div className="dashboard-panel-head">
+          <h1>Job monitor</h1>
+          <p className="muted">Paste job ID or arrive here after upload. Progress updates while backend works.</p>
+        </div>
         <div className="form">
           <div className="field">
             <label htmlFor="jobId">Job ID</label>
@@ -67,12 +85,29 @@ export default function JobsPage() {
 
         {error ? <p style={{ color: "var(--danger)" }}>{error}</p> : null}
         {job ? (
-          <div className="card" style={{ marginTop: 18 }}>
-            <h3>{job.kind}</h3>
-            <p>Status: {job.status}</p>
-            <p>Progress: {Math.round(job.progress * 100)}%</p>
+          <div className="job-card">
+            <div className="job-card-head">
+              <div>
+                <p className="eyebrow">Live job</p>
+                <h3>{job.kind.replace(/_/g, " ")}</h3>
+              </div>
+              <span className={`job-status job-status-${statusTone}`}>{job.status}</span>
+            </div>
+
+            <div className="job-progress" aria-label="Job progress">
+              <div className="job-progress-track">
+                <div className="job-progress-fill" style={{ width: `${progress * 100}%` }} />
+              </div>
+              <div className="job-progress-meta">
+                <span>{Math.round(progress * 100)}%</span>
+                <span>{job.message || "Waiting for worker"}</span>
+              </div>
+            </div>
+
             <p className="muted">{job.message || "No job message yet."}</p>
             {job.error ? <p style={{ color: "var(--danger)" }}>{job.error}</p> : null}
+            {job.status === "succeeded" ? <p className="job-finish">Done. Video ready.</p> : null}
+            {job.status === "failed" ? <p className="job-finish">Failed. Check error above.</p> : null}
           </div>
         ) : null}
       </section>

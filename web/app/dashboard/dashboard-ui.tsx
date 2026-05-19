@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useRef, useState } from "react";
 import type { Job, Video } from "./dashboard-data";
@@ -74,6 +75,7 @@ export function OverviewPanel({ activeWorkspace, videos, jobs }: { activeWorkspa
 }
 
 export function IngestPanel() {
+  const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const [fileStatus, setFileStatus] = useState<FetchStatus>({ state: "idle" });
@@ -87,7 +89,7 @@ export function IngestPanel() {
       const fd = new FormData();
       fd.append("file", file);
       const job = await proxyPost("/v1/videos/upload", fd, false);
-      setFileStatus({ state: "ok", message: `Queued - job ${job.id} (${job.status})` });
+      router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
       if (fileRef.current) fileRef.current.value = "";
     } catch (e: unknown) {
       setFileStatus({ state: "error", message: `Upload failed: ${(e as Error).message}` });
@@ -101,7 +103,7 @@ export function IngestPanel() {
     setUrlStatus({ state: "loading" });
     try {
       const job = await proxyPost("/v1/videos/url", JSON.stringify({ url }));
-      setUrlStatus({ state: "ok", message: `Queued - job ${job.id} (${job.status})` });
+      router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
       if (urlRef.current) urlRef.current.value = "";
     } catch (e: unknown) {
       setUrlStatus({ state: "error", message: `Failed: ${(e as Error).message}` });
