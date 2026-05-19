@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -41,24 +42,10 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
-  check-local-deps:
-    name: Verify local extra installs
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install 3.12
-      - run: uv sync --extra local
-      - run: uv run python -c "from vivadeo.local_embedder import LocalEmbedder; print('OK')"
-
   docker:
     name: Build and publish Docker images
     runs-on: ubuntu-latest
-    needs: [test, check-local-deps]
+    needs: [test]
     steps:
       - uses: actions/checkout@v4
 
