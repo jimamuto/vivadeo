@@ -23,7 +23,8 @@ class ObjectStore:
         )
         self.public_client = boto3.client(
             "s3",
-            endpoint_url=self.settings.s3_public_endpoint_url or self.settings.s3_endpoint_url,
+            endpoint_url=self.settings.s3_public_endpoint_url
+            or self.settings.s3_endpoint_url,
             aws_access_key_id=self.settings.s3_access_key_id,
             aws_secret_access_key=self.settings.s3_secret_access_key,
             region_name=self.settings.s3_region,
@@ -45,8 +46,26 @@ class ObjectStore:
         self.ensure_bucket()
         path = Path(path)
         guessed = mimetypes.guess_type(path.name)[0]
-        extra_args = {"ContentType": content_type or guessed or "application/octet-stream"}
+        extra_args = {
+            "ContentType": content_type or guessed or "application/octet-stream"
+        }
         self.client.upload_file(str(path), self.bucket, key, ExtraArgs=extra_args)
+        return key
+
+    def upload_fileobj(
+        self,
+        fileobj,
+        key: str,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> str:
+        """Stream a file-like object directly into the bucket (no temp file)."""
+        self.ensure_bucket()
+        guessed = mimetypes.guess_type(filename or key)[0]
+        extra_args = {
+            "ContentType": content_type or guessed or "application/octet-stream"
+        }
+        self.client.upload_fileobj(fileobj, self.bucket, key, ExtraArgs=extra_args)
         return key
 
     def download_file(self, key: str, path: str | Path) -> str:
@@ -56,7 +75,9 @@ class ObjectStore:
         return str(path)
 
     def presigned_url(self, key: str, expires_in: int | None = None) -> str:
-        base = (self.settings.s3_public_endpoint_url or self.settings.s3_endpoint_url).rstrip("/")
+        base = (
+            self.settings.s3_public_endpoint_url or self.settings.s3_endpoint_url
+        ).rstrip("/")
         return f"{base}/{key}"
 
 

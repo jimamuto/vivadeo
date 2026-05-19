@@ -3,10 +3,9 @@ const nextConfig = {
   output: "standalone",
   typedRoutes: true,
   experimental: {
-    // Allow large video uploads through the proxy route.
-    serverActions: {
-      bodySizeLimit: "2gb",
-    },
+    // Raise the body buffer limit so large video uploads aren't truncated
+    // before they reach the /api/proxy route handler.
+    proxyClientMaxBodySize: "2gb",
   },
 };
 

@@ -13,7 +13,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const now = Date.now();
   const bucket = buckets.get(ip);
 
@@ -31,5 +32,11 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"]
+  matcher: [
+    // Apply rate-limiting to all API routes EXCEPT the video upload endpoint.
+    // Excluding it prevents Next.js from buffering the entire request body in
+    // memory (the body-clone it creates for middleware is limited to 10MB),
+    // which lets the proxy route stream large files directly to the backend.
+    "/api/((?!proxy/v1/videos/upload).*)",
+  ],
 };
