@@ -9,14 +9,30 @@ export default async function IngestPage() {
 
   return (
     <DashboardShell workspace={activeWorkspace}>
-      <section className="dashboard-section-head">
-        <div>
-          <div className="eyebrow">Ingest</div>
-          <h1>One source, one queue.</h1>
-          <p className="muted">Upload file or queue URL without loading clip or job tables at same time.</p>
+      <div className="dashboard-stack">
+        <section className="dashboard-section-head">
+          <div>
+            <div className="eyebrow">Ingest</div>
+            <h1>One source, one queue.</h1>
+            <p className="muted">Upload file or queue URL without loading clip or job tables at same time.</p>
+          </div>
+        </section>
+        <div className="dashboard-summary-row">
+          <article className="summary-chip">
+            <span>Primary lane</span>
+            <strong>Upload first</strong>
+          </article>
+          <article className="summary-chip">
+            <span>Secondary lane</span>
+            <strong>URL queue</strong>
+          </article>
+          <article className="summary-chip">
+            <span>Focus</span>
+            <strong>One task per view</strong>
+          </article>
         </div>
-      </section>
-      <IngestPanel />
+        <IngestPanel />
+      </div>
     </DashboardShell>
   );
 }

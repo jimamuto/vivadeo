@@ -109,8 +109,8 @@ export function IngestPanel() {
   }
 
   return (
-    <section className="dashboard-module-grid">
-      <article className="card dash-stack">
+    <section className="dashboard-module-grid dashboard-module-grid-ingest">
+      <article className="card dash-stack dash-primary">
         <PlaceholderBlock label="Upload lane" tone="tan" />
         <div>
           <h3>File ingest</h3>
@@ -125,7 +125,7 @@ export function IngestPanel() {
           <StatusLine status={fileStatus} />
         </div>
       </article>
-      <article className="card dash-stack">
+      <article className="card dash-stack dash-secondary">
         <PlaceholderBlock label="URL lane" tone="grain" />
         <div>
           <h3>URL ingest</h3>
@@ -169,8 +169,8 @@ export function ClipStudioPanel() {
   }
 
   return (
-    <section className="dashboard-module-grid">
-      <article className="card dash-stack">
+    <section className="dashboard-clip-panel">
+      <article className="card dash-stack dash-primary">
         <PlaceholderBlock label="Clip frame" tone="oxblood" />
         <div>
           <h3>Clip desk</h3>
@@ -198,7 +198,7 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
     <section className="card dashboard-panel">
       <div className="dashboard-panel-head">
         <h2>Jobs</h2>
-        <p className="muted">Single table, no other flow mixed in.</p>
+        <p className="muted">Single table, no other flow mixed in, with horizontal scroll on tight widths.</p>
       </div>
       {jobs.length === 0 ? <p className="muted">No jobs yet.</p> : (
         <table className="table">

@@ -9,7 +9,7 @@ export default async function ClipStudioPage() {
 
   return (
     <DashboardShell workspace={activeWorkspace}>
-      <div className="dashboard-solo">
+      <div className="dashboard-solo dashboard-clip-stage">
         <section className="dashboard-section-head">
           <div>
             <div className="eyebrow">Clip studio</div>
