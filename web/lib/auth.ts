@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
+import * as authSchema from "@/lib/auth-schema";
 
 type AuthHandlers = {
   GET: (request: Request) => Response | Promise<Response>;
@@ -35,11 +36,11 @@ let authHandler: AuthHandler = createFallbackHandler();
 
 if (databaseUrl && authBaseUrl && authSecret) {
   const sql = postgres(databaseUrl, { max: 1 });
-  const db = drizzle(sql);
+  const db = drizzle(sql, { schema: authSchema });
   const auth = betterAuth({
     baseURL: authBaseUrl,
     secret: authSecret,
-    database: drizzleAdapter(db, { provider: "pg" }),
+    database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true
