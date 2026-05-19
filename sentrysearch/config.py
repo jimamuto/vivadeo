@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     api_key: str = Field("change-me", alias="SENTRYSEARCH_API_KEY")
     api_url: str | None = Field(None, alias="SENTRYSEARCH_API_URL")
+    internal_service_key: str = Field("change-me", alias="SENTRYSEARCH_INTERNAL_SERVICE_KEY")
+    default_org_id: str = Field("default-workspace", alias="SENTRYSEARCH_DEFAULT_ORG_ID")
 
     database_url: str = Field(
         "postgresql+psycopg://sentrysearch:sentrysearch@localhost:5432/sentrysearch",

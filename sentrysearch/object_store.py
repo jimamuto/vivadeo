@@ -56,11 +56,8 @@ class ObjectStore:
         return str(path)
 
     def presigned_url(self, key: str, expires_in: int | None = None) -> str:
-        return self.public_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": self.bucket, "Key": key},
-            ExpiresIn=expires_in or self.settings.s3_presign_seconds,
-        )
+        base = (self.settings.s3_public_endpoint_url or self.settings.s3_endpoint_url).rstrip("/")
+        return f"{base}/{key}"
 
 
 def video_object_key(video_id: str, filename: str) -> str:

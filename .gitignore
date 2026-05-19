@@ -1,5 +1,8 @@
 __pycache__/
 .env
+.next/
+node_modules/
+*.tsbuildinfo
 
 test_footage/
 sentrysearch.egg-info/

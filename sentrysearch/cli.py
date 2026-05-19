@@ -58,6 +58,7 @@ def _api_request(method: str, path: str, payload: dict | None = None) -> dict | 
         method=method,
         headers={
             "X-API-Key": api_key,
+            "X-Workspace-ID": os.environ.get("SENTRYSEARCH_DEFAULT_ORG_ID", "default-workspace"),
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
@@ -105,6 +106,7 @@ def _api_upload(path: str) -> dict:
         method="POST",
         headers={
             "X-API-Key": api_key,
+            "X-Workspace-ID": os.environ.get("SENTRYSEARCH_DEFAULT_ORG_ID", "default-workspace"),
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Accept": "application/json",
         },

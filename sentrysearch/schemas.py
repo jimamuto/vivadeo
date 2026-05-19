@@ -3,8 +3,30 @@
 from pydantic import BaseModel, Field
 
 
+class WorkspaceResponse(BaseModel):
+    id: str
+    slug: str
+    name: str
+    plan: str
+
+
+class WorkspaceCreateRequest(BaseModel):
+    name: str
+    slug: str | None = None
+
+
+class WorkspaceSettingsResponse(BaseModel):
+    organization_id: str
+    settings: dict
+
+
+class WorkspaceSettingsRequest(BaseModel):
+    settings: dict
+
+
 class JobResponse(BaseModel):
     id: str
+    organization_id: str
     kind: str
     status: str
     progress: float
@@ -16,6 +38,7 @@ class JobResponse(BaseModel):
 
 class VideoResponse(BaseModel):
     id: str
+    organization_id: str
     source_type: str
     source_uri: str
     filename: str
@@ -43,6 +66,7 @@ class SearchRequest(BaseModel):
 
 class SearchResult(BaseModel):
     chunk_id: str
+    organization_id: str
     video_id: str
     filename: str
     source_uri: str
@@ -63,6 +87,7 @@ class ClipRequest(BaseModel):
 
 class ClipResponse(BaseModel):
     id: str
+    organization_id: str
     video_id: str
     status: str
     start_time: float
@@ -70,4 +95,3 @@ class ClipResponse(BaseModel):
     object_key: str | None = None
     url: str | None = None
     job_id: str | None = None
-

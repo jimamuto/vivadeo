@@ -13,6 +13,7 @@ class PostgresVideoStore:
     def add_chunk(
         self,
         video_id: str,
+        organization_id: str,
         start_time: float,
         end_time: float,
         embedding: list[float],
@@ -32,6 +33,7 @@ class PostgresVideoStore:
 
         chunk = VideoChunk(
             id=new_id(),
+            organization_id=organization_id,
             video_id=video_id,
             start_time=float(start_time),
             end_time=float(end_time),
@@ -48,6 +50,7 @@ class PostgresVideoStore:
         self,
         query_embedding: list[float],
         n_results: int = 5,
+        organization_id: str | None = None,
         video_id: str | None = None,
     ) -> list[dict]:
         distance = VideoChunk.embedding.cosine_distance(query_embedding).label("distance")
@@ -57,12 +60,15 @@ class PostgresVideoStore:
             .order_by(distance)
             .limit(n_results)
         )
+        if organization_id:
+            stmt = stmt.where(Video.organization_id == organization_id, VideoChunk.organization_id == organization_id)
         if video_id:
             stmt = stmt.where(VideoChunk.video_id == video_id)
         rows = self.session.execute(stmt).all()
         return [
             {
                 "chunk_id": chunk.id,
+                "organization_id": chunk.organization_id,
                 "video_id": video.id,
                 "filename": video.filename,
                 "source_uri": video.source_uri,
@@ -75,7 +81,12 @@ class PostgresVideoStore:
             for chunk, video, dist in rows
         ]
 
-    def stats(self) -> dict:
-        video_count = self.session.scalar(select(func.count()).select_from(Video)) or 0
-        chunk_count = self.session.scalar(select(func.count()).select_from(VideoChunk)) or 0
+    def stats(self, organization_id: str | None = None) -> dict:
+        video_stmt = select(func.count()).select_from(Video)
+        chunk_stmt = select(func.count()).select_from(VideoChunk)
+        if organization_id:
+            video_stmt = video_stmt.where(Video.organization_id == organization_id)
+            chunk_stmt = chunk_stmt.where(VideoChunk.organization_id == organization_id)
+        video_count = self.session.scalar(video_stmt) or 0
+        chunk_count = self.session.scalar(chunk_stmt) or 0
         return {"total_videos": video_count, "total_chunks": chunk_count}

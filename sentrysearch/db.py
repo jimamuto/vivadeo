@@ -34,10 +34,77 @@ class Base(DeclarativeBase):
     pass
 
 
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    plan: Mapped[str] = mapped_column(String(32), nullable=False, default="starter")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AuthUser(Base):
+    __tablename__ = "auth_users"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    name: Mapped[str | None] = mapped_column(String(255))
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("auth_users.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthMembership(Base):
+    __tablename__ = "auth_memberships"
+    __table_args__ = (UniqueConstraint("organization_id", "user_id", name="uq_auth_membership"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("auth_users.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="member")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthInvite(Base):
+    __tablename__ = "auth_invites"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="member")
+    token: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OrganizationSetting(Base):
+    __tablename__ = "organization_settings"
+
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), primary_key=True)
+    settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class Video(Base):
     __tablename__ = "videos"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False, default="default-workspace")
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
     source_uri: Mapped[str] = mapped_column(Text, nullable=False)
     object_key: Mapped[str | None] = mapped_column(Text)
@@ -57,6 +124,7 @@ class VideoChunk(Base):
     __table_args__ = (UniqueConstraint("video_id", "start_time", name="uq_video_chunk_start"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False, default="default-workspace")
     video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id"), nullable=False)
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
@@ -73,6 +141,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False, default="default-workspace")
     kind: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
     video_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("videos.id"))
@@ -89,6 +158,7 @@ class Clip(Base):
     __tablename__ = "clips"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False, default="default-workspace")
     video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id"), nullable=False)
     job_id: Mapped[str | None] = mapped_column(String(36))
     object_key: Mapped[str | None] = mapped_column(Text)
@@ -104,6 +174,7 @@ class DeadLetterEntry(Base):
     __tablename__ = "dead_letter_entries"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False, default="default-workspace")
     video_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("videos.id"))
     chunk_id: Mapped[str] = mapped_column(String(64), nullable=False)
     source_uri: Mapped[str] = mapped_column(Text, nullable=False)
@@ -133,4 +204,3 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
-

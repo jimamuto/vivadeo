@@ -5,6 +5,9 @@ splits it into short chunks, embeds each chunk with a Modal-hosted
 `Qwen/Qwen3-VL-Embedding-2B` model, stores the vectors in Postgres/pgvector, and
 lets callers search the indexed video by text.
 
+For the current service topology, tenant boundaries, and deployment model, see
+`ARCHITECTURE.md`.
+
 ## What You Need
 
 - Docker and Docker Compose.
@@ -19,10 +22,15 @@ Required environment values:
 
 ```text
 SENTRYSEARCH_API_KEY=<secret API key>
+SENTRYSEARCH_INTERNAL_SERVICE_KEY=<secret internal service key>
+SENTRYSEARCH_DEFAULT_ORG_ID=default-workspace
 DATABASE_URL=postgresql+psycopg://sentrysearch:sentrysearch@postgres:5432/sentrysearch
+AUTH_DATABASE_URL=postgres://sentrysearch:sentrysearch@postgres:5432/sentrysearch
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=<secret auth signing key>
 REDIS_URL=redis://redis:6379/0
 S3_ENDPOINT_URL=http://minio:9000
-S3_PUBLIC_ENDPOINT_URL=http://localhost:9000
+S3_PUBLIC_ENDPOINT_URL=http://localhost:3000/api/proxy/v1/media
 S3_BUCKET=sentrysearch
 S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
@@ -44,7 +52,8 @@ Do not commit real API keys or Modal credentials.
 
 The Docker stack runs these services:
 
-- `api`: FastAPI server published on host port `8010`.
+- `web`: Next.js browser app published on host port `3000`.
+- `api`: FastAPI server stays private on the Compose network.
 - `worker`: Celery worker that downloads, chunks, embeds, indexes, and trims
   videos.
 - `postgres`: Postgres with pgvector for video, job, clip, and embedding data.
@@ -67,7 +76,7 @@ Create the environment file:
 cp .env.example .env
 ```
 
-Edit `SENTRYSEARCH_API_KEY` before exposing the API.
+Edit `SENTRYSEARCH_API_KEY` and `SENTRYSEARCH_INTERNAL_SERVICE_KEY` before exposing the stack.
 
 Authenticate Modal if this machine has not been configured yet:
 
@@ -390,7 +399,7 @@ can take longer after a fresh deploy or cache miss.
 If all chunk embeddings fail, the job should move to `failed` and dead-letter
 entries are recorded in Postgres for the failed chunks.
 
-If host `curl http://localhost:8010/healthz` fails from a sandboxed environment,
+If host `curl http://localhost:3000/healthz` fails from a sandboxed environment,
 check from inside the API container instead:
 
 ```bash

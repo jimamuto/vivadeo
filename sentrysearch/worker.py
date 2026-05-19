@@ -45,8 +45,10 @@ def _mark_video(video_id: str, **values) -> None:
 
 def _record_dlq(video_id: str, chunk_id: str, source_uri: str, start: float, end: float, error: str) -> None:
     with session_scope() as session:
+        video = session.get(Video, video_id)
         session.add(
             DeadLetterEntry(
+                organization_id=video.organization_id if video else get_settings().default_org_id,
                 video_id=video_id,
                 chunk_id=chunk_id,
                 source_uri=source_uri,
@@ -58,7 +60,7 @@ def _record_dlq(video_id: str, chunk_id: str, source_uri: str, start: float, end
         )
 
 
-def _index_file(video_id: str, file_path: str, job_id: str) -> None:
+def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
     settings = get_settings()
     embedder = get_embedder(
         app_name=settings.modal_app,
@@ -90,6 +92,7 @@ def _index_file(video_id: str, file_path: str, job_id: str) -> None:
                 for item, embedding in zip(batch, embeddings):
                     store.add_chunk(
                         video_id=video_id,
+                        organization_id=organization_id,
                         start_time=item["start_time"],
                         end_time=item["end_time"],
                         embedding=embedding,
@@ -177,7 +180,7 @@ def _index_file(video_id: str, file_path: str, job_id: str) -> None:
 
 
 @celery_app.task(name="sentrysearch.ingest_local_path")
-def ingest_local_path(job_id: str, video_id: str, path: str) -> None:
+def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: str) -> None:
     try:
         _update_job(job_id, status="running", progress=0.02, message="Uploading original")
         store = ObjectStore()
@@ -191,7 +194,7 @@ def ingest_local_path(job_id: str, video_id: str, path: str) -> None:
             video.duration = _get_video_duration(path)
             video.status = "indexing"
 
-        _index_file(video_id, path, job_id)
+        _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
     except Exception as exc:
@@ -201,7 +204,7 @@ def ingest_local_path(job_id: str, video_id: str, path: str) -> None:
 
 
 @celery_app.task(name="sentrysearch.ingest_uploaded_object")
-def ingest_uploaded_object(job_id: str, video_id: str) -> None:
+def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> None:
     tmp_dir = tempfile.mkdtemp(prefix="sentrysearch_upload_")
     try:
         store = ObjectStore()
@@ -214,7 +217,7 @@ def ingest_uploaded_object(job_id: str, video_id: str) -> None:
         _update_job(job_id, status="running", progress=0.05, message="Downloading original")
         store.download_file(object_key, local_path)
         _mark_video(video_id, status="indexing", duration=_get_video_duration(local_path))
-        _index_file(video_id, local_path, job_id)
+        _index_file(video_id, organization_id, local_path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
     except Exception as exc:
@@ -226,7 +229,7 @@ def ingest_uploaded_object(job_id: str, video_id: str) -> None:
 
 
 @celery_app.task(name="sentrysearch.ingest_url")
-def ingest_url(job_id: str, video_id: str, url: str, max_height: int = 480) -> None:
+def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_height: int = 480) -> None:
     tmp_dir = tempfile.mkdtemp(prefix="sentrysearch_url_")
     try:
         _update_job(job_id, status="running", progress=0.02, message="Downloading URL")
@@ -243,7 +246,7 @@ def ingest_url(job_id: str, video_id: str, url: str, max_height: int = 480) -> N
             video.object_key = object_key
             video.duration = _get_video_duration(path)
             video.status = "indexing"
-        _index_file(video_id, path, job_id)
+        _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
     except Exception as exc:
@@ -255,7 +258,7 @@ def ingest_url(job_id: str, video_id: str, url: str, max_height: int = 480) -> N
 
 
 @celery_app.task(name="sentrysearch.trim_clip")
-def trim_clip_task(job_id: str, clip_id: str) -> None:
+def trim_clip_task(job_id: str, clip_id: str, organization_id: str) -> None:
     tmp_dir = tempfile.mkdtemp(prefix="sentrysearch_clip_")
     try:
         store = ObjectStore()

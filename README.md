@@ -148,22 +148,25 @@ uv run pytest
 
 ## Production Docker Stack
 
-SentrySearch can also run as a single-node production stack with FastAPI,
-Celery, Redis, Postgres/pgvector, and MinIO:
+Vivadeo can also run as a single-node production stack with a browser-first
+Next.js web app in front of FastAPI, Celery, Redis, Postgres/pgvector, and
+MinIO:
 
 ```bash
 cp .env.example .env
-# edit SENTRYSEARCH_API_KEY before exposing the service
+# edit API keys and BETTER_AUTH_SECRET before exposing the service
 docker compose up -d --build
 ```
 
-The API is published on:
+The current production architecture is documented in `ARCHITECTURE.md`.
+
+The web app is published on:
 
 ```text
-http://localhost:8010
+http://localhost:3000
 ```
 
-Core endpoints:
+The FastAPI service stays on the Compose network. Core backend endpoints are:
 
 - `GET /healthz`
 - `POST /v1/videos/upload`
@@ -173,16 +176,20 @@ Core endpoints:
 - `GET /v1/jobs/{job_id}`
 - `GET /v1/stats`
 
-Protected endpoints require:
+Public browser requests go through Next.js. Direct API access requires:
 
 ```text
 X-API-Key: <SENTRYSEARCH_API_KEY>
 ```
 
+Next.js uses `X-Internal-Service-Key` plus `X-Workspace-ID` when it proxies
+backend calls. The default workspace ID is `SENTRYSEARCH_DEFAULT_ORG_ID`.
+Media URLs are also served through the proxy at `/api/proxy/v1/media/...`.
+
 To point the CLI at the production API:
 
 ```bash
-export SENTRYSEARCH_API_URL=http://localhost:8010
+export SENTRYSEARCH_API_URL=http://localhost:3000/api/proxy
 export SENTRYSEARCH_API_KEY=<your-api-key>
 sentrysearch stats
 sentrysearch index /path/to/video.mp4
