@@ -164,6 +164,15 @@ The default `docker-compose.yml` uses prebuilt GHCR images:
 - `ghcr.io/jimamuto/vivadeo-api:latest`
 - `ghcr.io/jimamuto/vivadeo-web:latest`
 
+The API and worker mount Modal credentials from `VIVADEO_MODAL_CONFIG_PATH`.
+The default is `./.modal.toml`, which works on Linux, macOS, Windows, and WSL
+as long as you place or copy your Modal config there. On Windows you can also
+set an absolute path in `.env`, for example:
+
+```text
+VIVADEO_MODAL_CONFIG_PATH=C:\Users\you\.modal.toml
+```
+
 For local development with source mounts and hot reload:
 
 ```bash
@@ -173,8 +182,10 @@ docker compose -f docker-compose.dev.yml up
 
 The dev stack runs FastAPI with `uvicorn --reload` and Next.js with
 `npm run dev`, so Python API and web changes do not require rebuilding the
-containers. The Celery worker also sees mounted source, but still needs a
-container restart for code changes to take effect.
+containers. File watching uses polling by default in dev, which is slower but
+more reliable across Docker Desktop, Windows bind mounts, and WSL. The Celery
+worker also sees mounted source, but still needs a container restart for code
+changes to take effect.
 
 The current production architecture is documented in `ARCHITECTURE.md`.
 

@@ -1,5 +1,6 @@
 __pycache__/
 .env
+.modal.toml
 .next/
 node_modules/
 *.tsbuildinfo
