@@ -1,38 +1,17 @@
 import { cookies } from "next/headers";
-import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
-import DashboardClient, { type Job, type Video } from "./DashboardClient";
-
-async function fetchFromBackend<T>(
-  path: string,
-  workspace: string,
-): Promise<T[]> {
-  try {
-    const res = await fetch(getBackendUrl(path), {
-      headers: getBackendHeaders(undefined, workspace),
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
-    return [];
-  }
-}
+import { DashboardShell } from "./dashboard-shell";
+import { fetchDashboardData } from "./dashboard-data";
+import { OverviewPanel } from "./dashboard-ui";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
   const activeWorkspace =
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
-
-  const [videos, jobs] = await Promise.all([
-    fetchFromBackend<Video>("/v1/videos", activeWorkspace),
-    fetchFromBackend<Job>("/v1/jobs", activeWorkspace),
-  ]);
+  const { videos, jobs } = await fetchDashboardData(activeWorkspace);
 
   return (
-    <DashboardClient
-      activeWorkspace={activeWorkspace}
-      videos={videos}
-      jobs={jobs}
-    />
+    <DashboardShell workspace={activeWorkspace}>
+      <OverviewPanel activeWorkspace={activeWorkspace} videos={videos} jobs={jobs} />
+    </DashboardShell>
   );
 }

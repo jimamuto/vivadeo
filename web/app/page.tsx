@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 
 const services = [
   { title: "Search", body: "Ranked retrieval across footage, text, and image prompts." },
@@ -20,7 +22,14 @@ function SubjectPlaceholder({ tone = "tan" }: { tone?: "tan" | "oxblood" | "grai
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const signedIn = Boolean(session?.user);
+  const profileInitial = (session?.user?.name || session?.user?.email || "V")
+    .trim()
+    .slice(0, 1)
+    .toUpperCase();
+
   return (
     <div className="shell page">
       <header className="topbar">
@@ -34,25 +43,35 @@ export default function HomePage() {
           </div>
           <div className="nav-spacer" />
           <div className="nav-actions">
-            <Link href="/sign-in" className="button-secondary">Sign in</Link>
-            <Link href="/sign-up" className="button">Sign Up</Link>
+            {signedIn ? (
+              <>
+                <Link href="/dashboard" className="button-secondary">Console</Link>
+                <Link href="/settings" className="nav-user" aria-label="Profile">{profileInitial}</Link>
+                <form action="/api/auth/sign-out" method="post">
+                  <button className="nav-logout" type="submit">Log out</button>
+                </form>
+              </>
+            ) : (
+              <>
+                <Link href="/sign-in" className="button-secondary">Sign in</Link>
+                <Link href="/sign-up" className="button">Sign Up</Link>
+              </>
+            )}
           </div>
         </div>
       </header>
 
       <section className="hero hero-home fade-in">
         <div className="hero-copy">
-          <div className="eyebrow">Video archive console</div>
           <h1>Search footage with clarity and keep review in one place.</h1>
           <p className="hero-lead">
             Vivadeo gives teams a clear place to search footage, review clips, and keep archive work organized.
           </p>
           <div className="hero-actions">
-            <Link href="/dashboard" className="button">Open console</Link>
+            <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button">Open console</Link>
             <Link href="#features" className="button-secondary">See services</Link>
           </div>
         </div>
-
       </section>
 
       <section className="stats-band" aria-label="Vivadeo overview" id="about">
@@ -138,20 +157,20 @@ export default function HomePage() {
             <p>For small teams getting started with searchable archives.</p>
             <strong>Sample</strong>
             <span>Pricing placeholder for layout.</span>
-            <Link href="/sign-up" className="button-secondary pricing-cta">Get started</Link>
+            <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary pricing-cta">Get started</Link>
           </article>
           <article className="pricing-card">
             <h3>Enterprise</h3>
             <p>For larger teams that need multiple workspaces and tighter controls.</p>
             <strong>Custom</strong>
             <span>Audit, admin, and rollout support.</span>
-            <Link href="/sign-up" className="button-secondary pricing-cta">Talk to sales</Link>
+            <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary pricing-cta">Talk to sales</Link>
           </article>
         </div>
         <div className="pricing-pro">
           <h3>Professional</h3>
           <p>Designed for flexibility, with advanced tools for custom tailoring.</p>
-          <Link href="/dashboard" className="button pricing-cta">Open console</Link>
+          <Link href={signedIn ? "/dashboard" : "/sign-in"} className="button pricing-cta">Open console</Link>
         </div>
       </section>
 
@@ -159,7 +178,7 @@ export default function HomePage() {
         <div>
           <h2>Empowering teams with seamless integrations.</h2>
           <p>Vivadeo keeps search, review, and workspace context synchronized.</p>
-          <Link href="/dashboard" className="button-secondary">Work with us</Link>
+          <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary">Work with us</Link>
         </div>
         <div className="integration-orbit">
           <span>API</span>
@@ -174,7 +193,7 @@ export default function HomePage() {
       <section className="cta-band">
         <h2>From idea to production in days.</h2>
         <p>Ship searchable video workflows without rebuilding the stack around them.</p>
-        <Link href="/sign-up" className="button">Start free</Link>
+        <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button">Start free</Link>
       </section>
 
       <footer className="footer">

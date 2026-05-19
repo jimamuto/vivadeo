@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: "Your email address has not been verified. Please check your inbox for a verification link.",
@@ -30,6 +33,8 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ error?: string; verify?: string; reset?: string }>;
 }) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (session?.user) redirect("/dashboard");
   const params = await searchParams;
 
   return (
