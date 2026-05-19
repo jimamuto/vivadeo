@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
 type SearchResult = {
   chunk_id: string;
@@ -14,6 +14,86 @@ type SearchResult = {
   similarity_score: number;
 };
 
+function PlaceholderThumb({ tone = "tan" }: { tone?: "tan" | "grain" | "oxblood" }) {
+  return (
+    <div className={`search-thumb search-${tone}`}>
+      <span />
+      <i />
+    </div>
+  );
+}
+
+function ClipCard({ result }: { result: SearchResult }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const { video_id, filename, start_time, end_time, similarity_score } = result;
+  const src = `/api/video/${video_id}#t=${start_time.toFixed(3)},${end_time.toFixed(3)}`;
+
+  function fmt(s: number) {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  }
+
+  function handleTimeUpdate() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.currentTime >= end_time) {
+      v.currentTime = start_time;
+      if (playing) v.play();
+    }
+  }
+
+  function handlePlay() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.currentTime < start_time || v.currentTime >= end_time) v.currentTime = start_time;
+    v.play();
+    setPlaying(true);
+  }
+
+  function handlePause() {
+    videoRef.current?.pause();
+    setPlaying(false);
+  }
+
+  return (
+    <article className="search-result">
+      <div className="search-top">
+        <PlaceholderThumb tone="grain" />
+        <div className="search-meta">
+          <h3>{filename}</h3>
+          <p className="muted">{result.source_uri}</p>
+        </div>
+        <div className="search-score">{(similarity_score * 100).toFixed(1)}%</div>
+      </div>
+      <video
+        ref={videoRef}
+        src={src}
+        muted
+        playsInline
+        preload="metadata"
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={() => {
+          if (videoRef.current) videoRef.current.currentTime = start_time;
+          setPlaying(false);
+        }}
+        className="search-video"
+      />
+      <div className="search-footer">
+        <p className="muted">{fmt(start_time)} - {fmt(end_time)}</p>
+        <div className="search-actions">
+          {playing ? (
+            <button className="button-secondary" onClick={handlePause}>Pause</button>
+          ) : (
+            <button className="button" onClick={handlePlay}>Play clip</button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -24,10 +104,8 @@ export default function SearchPage() {
     setStatus("Searching...");
     const response = await fetch("/api/proxy/v1/search", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ query })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
     });
     if (!response.ok) {
       setStatus(`Search failed (${response.status})`);
@@ -35,40 +113,63 @@ export default function SearchPage() {
     }
     const payload = (await response.json()) as { results: SearchResult[] };
     setResults(payload.results);
-    setStatus(`${payload.results.length} result(s)`);
+    setStatus(payload.results.length === 0 ? "No results found." : `${payload.results.length} result(s) - click a clip to preview it`);
   };
 
   return (
-    <div className="shell" style={{ padding: "28px 0 52px" }}>
+    <div className="shell page">
       <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
+        <div className="topbar-shell">
+          <Link href="/" className="brand">Vivadeo</Link>
+          <div className="nav-center">
+            <Link href="/" className="nav-link">Home</Link>
+            <Link href="/dashboard" className="nav-link">Dashboard</Link>
+            <Link href="/jobs" className="nav-link">Jobs</Link>
+            <Link href="/settings" className="nav-link">Settings</Link>
+          </div>
+          <div className="nav-spacer" />
+          <div className="nav-actions">
+            <Link href="/settings" className="nav-user" aria-label="Profile">V</Link>
+            <form action="/api/auth/sign-out" method="post">
+              <button className="nav-logout" type="submit">Log out</button>
+            </form>
+          </div>
         </div>
-        <Link href="/dashboard" className="button-secondary">Back to dashboard</Link>
       </div>
 
-      <section className="card fade-in">
-        <h1>Search footage</h1>
-        <p className="muted">Run semantic search against the active workspace and inspect clip timestamps.</p>
-        <form className="form" onSubmit={submit}>
-          <div className="field">
-            <label htmlFor="query">Query</label>
-            <input id="query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="person entering loading dock" />
+      <section className="search-shell fade-in">
+        <aside className="search-filters card">
+          <h1>Search</h1>
+          <p className="muted">Curated filter rail. Keep it tactile, not technical.</p>
+          <div className="filter-group">
+            <button className="filter-chip">Speaker's lists</button>
+            <button className="filter-chip">Topics &amp; types</button>
+            <button className="filter-chip">Budget</button>
+            <button className="filter-chip">Date</button>
+            <button className="filter-chip">Comments</button>
+            <button className="filter-chip">Audience</button>
+            <button className="filter-chip">Traveling from</button>
+            <button className="filter-chip">WSB Exclusive</button>
           </div>
-          <button className="button" type="submit">Search</button>
-        </form>
+        </aside>
 
-        {status ? <p className="muted">{status}</p> : null}
-        <div className="split" style={{ marginTop: 18 }}>
-          {results.map((result) => (
-            <article className="card" key={result.chunk_id}>
-              <h3>{result.filename}</h3>
-              <p className="muted">{result.source_uri}</p>
-              <p>{result.start_time.toFixed(1)}s - {result.end_time.toFixed(1)}s</p>
-              <p>Score: {result.similarity_score.toFixed(3)}</p>
-            </article>
-          ))}
+        <div className="search-main">
+          <section className="card search-query">
+            <form className="form" onSubmit={submit}>
+              <div className="field">
+                <label htmlFor="query">Search by keyword</label>
+                <input id="query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="person entering loading dock" />
+              </div>
+              <button className="button" type="submit">Search</button>
+            </form>
+            {status ? <p className="muted" style={{ marginTop: 12 }}>{status}</p> : null}
+          </section>
+
+          <section className="search-feed">
+            {results.map((result) => (
+              <ClipCard key={result.chunk_id} result={result} />
+            ))}
+          </section>
         </div>
       </section>
     </div>

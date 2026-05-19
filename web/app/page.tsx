@@ -1,101 +1,204 @@
 import Link from "next/link";
 
-const features = [
-  {
-    title: "Workspace isolation by default",
-    body: "Every video, job, clip, and setting belongs to an organization. The app keeps a clean tenant boundary from the dashboard to the backend proxy."
-  },
-  {
-    title: "Search that stays in sync",
-    body: "Typed client calls the FastAPI contract directly through a server-side proxy, so UI behavior tracks the backend schema instead of drifting."
-  },
-  {
-    title: "Operator-grade flows",
-    body: "Upload, monitor jobs, review clips, switch workspaces, and manage account settings from one browser-first surface."
-  }
+const services = [
+  { title: "Search", body: "Ranked retrieval across footage, text, and image prompts." },
+  { title: "Ingest", body: "Upload files or queue URLs into the indexing pipeline." },
+  { title: "Clip review", body: "Preview matching moments and trim exact ranges." },
+  { title: "Workspaces", body: "Keep teams, jobs, and libraries isolated by org." },
+  { title: "Automation", body: "Background processing keeps heavier tasks off the front end." },
+  { title: "Admin", body: "Invite users, switch workspaces, and review settings." },
 ];
+
+function SubjectPlaceholder({ tone = "tan" }: { tone?: "tan" | "oxblood" | "grain" }) {
+  return (
+    <div className={`subject subject-${tone}`}>
+      <div className="subject-cut" />
+      <div className="subject-orb" />
+      <div className="subject-line subject-line-a" />
+      <div className="subject-line subject-line-b" />
+    </div>
+  );
+}
 
 export default function HomePage() {
   return (
-    <div className="shell">
+    <div className="shell page">
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
+        <div className="topbar-shell">
+          <Link href="/" className="brand">Vivadeo</Link>
+          <div className="nav-center">
+            <Link href="/" className="nav-link">Home</Link>
+            <Link href="#about" className="nav-link">About</Link>
+            <Link href="#features" className="nav-link">Services</Link>
+            <Link href="#contact" className="nav-link">Contact</Link>
+          </div>
+          <div className="nav-spacer" />
+          <div className="nav-actions">
+            <Link href="/sign-in" className="button-secondary">Sign in</Link>
+            <Link href="/sign-up" className="button">Sign Up</Link>
+          </div>
         </div>
-        <nav className="nav">
-          <Link href="#features">Features</Link>
-          <Link href="#pricing">Pricing</Link>
-          <Link href="/sign-in" className="button-secondary">Sign in</Link>
-          <Link href="/sign-up" className="button">Start free</Link>
-        </nav>
       </header>
 
-      <section className="hero fade-in">
-        <div>
-          <div className="eyebrow">Browser-first video intelligence</div>
-          <h1>Search footage, create clips, and keep teams aligned.</h1>
-          <p>
-            Vivadeo wraps the existing FastAPI, Celery, Postgres, and MinIO stack in a production web app with team workspaces,
-            auth, and an operator-friendly dashboard.
+      <section className="hero hero-home fade-in">
+        <div className="hero-copy">
+          <div className="eyebrow">Video archive console</div>
+          <h1>Search footage with clarity and keep review in one place.</h1>
+          <p className="hero-lead">
+            Vivadeo gives teams a clear place to search footage, review clips, and keep archive work organized.
           </p>
           <div className="hero-actions">
-            <Link href="/sign-up" className="button">Create workspace</Link>
-            <Link href="/dashboard" className="button-secondary">Open dashboard</Link>
+            <Link href="/dashboard" className="button">Open console</Link>
+            <Link href="#features" className="button-secondary">See services</Link>
           </div>
         </div>
 
-        <div className="panel dashboard-card">
-          <div className="tabs" style={{ marginBottom: 18 }}>
-            <span className="pill">Workspace: Northwind</span>
-            <span className="pill">Uploads: 18</span>
-            <span className="pill">Jobs: 4 running</span>
-          </div>
-          <div className="metric-grid">
-            <div className="metric">
-              <strong>94%</strong>
-              clip completion
-            </div>
-            <div className="metric">
-              <strong>1.2s</strong>
-              median search response
-            </div>
-            <div className="metric">
-              <strong>28</strong>
-              indexed hours
-            </div>
-            <div className="metric">
-              <strong>12</strong>
-              active users
-            </div>
-          </div>
-        </div>
       </section>
 
-      <section className="section" id="features">
-        <h2>Built for public SaaS, not a local-only demo</h2>
-        <div className="feature-grid">
-          {features.map((feature) => (
-            <article className="feature" key={feature.title}>
-              <h3>{feature.title}</h3>
-              <p>{feature.body}</p>
+      <section className="stats-band" aria-label="Vivadeo overview" id="about">
+        <article className="stats-card stats-image">
+          <SubjectPlaceholder tone="tan" />
+          <p className="placeholder-note">Place hero image or product art here.</p>
+        </article>
+        <article className="stats-card stats-dark">
+          <span>Workspace</span>
+          <strong>Northwind</strong>
+          <p>Workspace summary or status goes here.</p>
+        </article>
+        <article className="stats-card stats-prop">
+          <span>Search</span>
+          <strong>Ready</strong>
+          <p>Search result summary or key metric goes here.</p>
+        </article>
+        <article className="stats-card stats-light">
+          <span>Library</span>
+          <strong>Organized</strong>
+          <p>Library count or upload status goes here.</p>
+        </article>
+        <article className="stats-card stats-dark">
+          <span>Review</span>
+          <strong>Inline</strong>
+          <p>Review status or clip queue goes here.</p>
+        </article>
+      </section>
+
+      <section className="service-band" id="features">
+        <div className="section-heading">
+          <p className="eyebrow eyebrow-dark">Efficient and integrated video services</p>
+          <h2>Everything the archive needs, in one system.</h2>
+          <p>Search, ingest, clip, and administer without fragmenting the workflow.</p>
+        </div>
+        <div className="service-grid">
+          {services.map((service) => (
+            <article className="service-card" key={service.title}>
+              <span>↗</span>
+              <h3>{service.title}</h3>
+              <p>{service.body}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="section split" id="pricing">
-        <article className="card">
-          <h3>Starter</h3>
-          <p className="muted">For small teams getting started with searchable archives.</p>
-          <p><strong>$29</strong> / workspace / month</p>
-        </article>
-        <article className="card">
-          <h3>Scale</h3>
-          <p className="muted">For larger teams that need multiple workspaces and tighter controls.</p>
-          <p><strong>Custom</strong> pricing with audit and admin controls.</p>
-        </article>
+      <section className="benefits-band">
+        <div className="benefits-visual">
+          <div className="benefits-stat card">
+            <span>Total Projects</span>
+            <strong>Sample</strong>
+            <p>Place a real KPI or summary here.</p>
+          </div>
+          <div className="benefits-bars">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+        <div className="benefits-copy">
+          <p className="eyebrow">Key benefits</p>
+          <h2>Search, clip, and manage footage with less friction.</h2>
+          <ul>
+            <li><strong>Accurate retrieval</strong> Text and image search share one embedding path.</li>
+            <li><strong>Faster review</strong> Inline clip preview keeps context on screen.</li>
+            <li><strong>Cleaner ops</strong> Workspace controls stay visible and scannable.</li>
+          </ul>
+        </div>
       </section>
+
+      <section className="pricing-band">
+        <div className="section-heading section-heading-dark">
+          <p className="eyebrow eyebrow-dark">Tailored plans</p>
+          <h2>Pricing for one workspace or many.</h2>
+          <p>Pick a shape that fits your team, then scale without changing workflows.</p>
+        </div>
+        <div className="pricing-grid">
+          <article className="pricing-card">
+            <h3>Starter</h3>
+            <p>For small teams getting started with searchable archives.</p>
+            <strong>Sample</strong>
+            <span>Pricing placeholder for layout.</span>
+            <Link href="/sign-up" className="button-secondary pricing-cta">Get started</Link>
+          </article>
+          <article className="pricing-card">
+            <h3>Enterprise</h3>
+            <p>For larger teams that need multiple workspaces and tighter controls.</p>
+            <strong>Custom</strong>
+            <span>Audit, admin, and rollout support.</span>
+            <Link href="/sign-up" className="button-secondary pricing-cta">Talk to sales</Link>
+          </article>
+        </div>
+        <div className="pricing-pro">
+          <h3>Professional</h3>
+          <p>Designed for flexibility, with advanced tools for custom tailoring.</p>
+          <Link href="/dashboard" className="button pricing-cta">Open console</Link>
+        </div>
+      </section>
+
+      <section className="integration-band" id="contact">
+        <div>
+          <h2>Empowering teams with seamless integrations.</h2>
+          <p>Vivadeo keeps search, review, and workspace context synchronized.</p>
+          <Link href="/dashboard" className="button-secondary">Work with us</Link>
+        </div>
+        <div className="integration-orbit">
+          <span>API</span>
+          <span>Storage</span>
+          <span>Modal</span>
+          <span>Auth</span>
+          <span>Jobs</span>
+          <span>Media</span>
+        </div>
+      </section>
+
+      <section className="cta-band">
+        <h2>From idea to production in days.</h2>
+        <p>Ship searchable video workflows without rebuilding the stack around them.</p>
+        <Link href="/sign-up" className="button">Start free</Link>
+      </section>
+
+      <footer className="footer">
+        <div>
+          <Link href="/" className="brand">Vivadeo</Link>
+          <p>Video search and clip review for workspace teams.</p>
+        </div>
+        <div>
+          <h4>Company</h4>
+          <a href="#about">About us</a>
+          <a href="#about">Customers</a>
+          <a href="#features">Newsroom</a>
+        </div>
+        <div>
+          <h4>Products</h4>
+          <a href="/dashboard">Search</a>
+          <a href="/dashboard">Clips</a>
+          <a href="/dashboard">Admin</a>
+        </div>
+        <div>
+          <h4>Get in touch</h4>
+          <a href="mailto:hello@vivadeo.example">hello@vivadeo.example</a>
+        </div>
+      </footer>
     </div>
   );
 }

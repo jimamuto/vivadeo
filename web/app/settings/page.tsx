@@ -1,14 +1,33 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user;
+  const displayName = user?.name || "Your display name";
+  const email = user?.email || "your@email.example";
+  const initial = (displayName || "V").trim().slice(0, 1).toUpperCase();
+
   return (
-    <div className="shell" style={{ padding: "28px 0 52px" }}>
+    <div className="shell page">
       <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
+        <div className="topbar-shell">
+          <Link href="/" className="brand">Vivadeo</Link>
+          <div className="nav-center">
+            <Link href="/" className="nav-link">Home</Link>
+            <Link href="/dashboard" className="nav-link">Dashboard</Link>
+            <Link href="/search" className="nav-link">Search</Link>
+            <Link href="/jobs" className="nav-link">Jobs</Link>
+          </div>
+          <div className="nav-spacer" />
+          <div className="nav-actions">
+            <Link href="/settings" className="nav-user" aria-label="Profile">{initial}</Link>
+            <form action="/api/auth/sign-out" method="post">
+              <button className="nav-logout" type="submit">Log out</button>
+            </form>
+          </div>
         </div>
-        <Link href="/dashboard" className="button-secondary">Back to dashboard</Link>
       </div>
 
       <div className="split fade-in">
@@ -18,11 +37,11 @@ export default function SettingsPage() {
           <form className="form">
             <div className="field">
               <label htmlFor="displayName">Display name</label>
-              <input id="displayName" defaultValue="Avery Taylor" />
+              <input id="displayName" defaultValue={displayName} readOnly />
             </div>
             <div className="field">
               <label htmlFor="email">Email</label>
-              <input id="email" defaultValue="avery@northwind.example" />
+              <input id="email" defaultValue={email} readOnly />
             </div>
             <button className="button" type="button">Save changes</button>
           </form>

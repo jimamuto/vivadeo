@@ -85,11 +85,12 @@ function createFallbackHandler(): AuthHandler {
 }
 
 let authHandler: AuthHandler = createFallbackHandler();
+export let auth: ReturnType<typeof betterAuth>;
 
 if (databaseUrl && authBaseUrl && authSecret) {
   const sql = postgres(databaseUrl, { max: 1 });
   const db = drizzle(sql, { schema: authSchema });
-  const auth = betterAuth({
+  auth = betterAuth({
     baseURL: authBaseUrl,
     secret: authSecret,
     database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
@@ -142,6 +143,12 @@ if (databaseUrl && authBaseUrl && authSecret) {
   } as never);
 
   authHandler = auth.handler as AuthHandler;
+} else {
+  auth = {
+    api: {
+      getSession: async () => null,
+    },
+  } as ReturnType<typeof betterAuth>;
 }
 
 const authHandlers: AuthHandlers = {

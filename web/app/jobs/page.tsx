@@ -3,15 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Job = {
-  id: string;
-  organization_id: string;
-  kind: string;
-  status: string;
-  progress: number;
-  message?: string | null;
-  error?: string | null;
-};
+type Job = { id: string; organization_id: string; kind: string; status: string; progress: number; message?: string | null; error?: string | null };
 
 export default function JobsPage() {
   const [jobId, setJobId] = useState("");
@@ -19,52 +11,52 @@ export default function JobsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!jobId) {
-      return;
-    }
-
+    if (!jobId) return;
     let mounted = true;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const poll = async () => {
       try {
         const response = await fetch(`/api/proxy/v1/jobs/${jobId}`);
-        if (!response.ok) {
-          throw new Error(`Job lookup failed (${response.status})`);
-        }
+        if (!response.ok) throw new Error(`Job lookup failed (${response.status})`);
         const nextJob = (await response.json()) as Job;
         if (mounted) {
           setJob(nextJob);
           setError(null);
         }
-        if (nextJob.status === "succeeded" || nextJob.status === "failed") {
-          return;
-        }
+        if (nextJob.status === "succeeded" || nextJob.status === "failed") return;
         timeoutId = setTimeout(poll, 2500);
       } catch (cause) {
-        if (mounted) {
-          setError(cause instanceof Error ? cause.message : "Unknown error");
-        }
+        if (mounted) setError(cause instanceof Error ? cause.message : "Unknown error");
       }
     };
 
     poll();
     return () => {
       mounted = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [jobId]);
 
   return (
-    <div className="shell" style={{ padding: "28px 0 52px" }}>
+    <div className="shell page">
       <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
+        <div className="topbar-shell">
+          <Link href="/" className="brand">Vivadeo</Link>
+          <div className="nav-center">
+            <Link href="/" className="nav-link">Home</Link>
+            <Link href="/dashboard" className="nav-link">Dashboard</Link>
+            <Link href="/search" className="nav-link">Search</Link>
+            <Link href="/settings" className="nav-link">Settings</Link>
+          </div>
+          <div className="nav-spacer" />
+          <div className="nav-actions">
+            <Link href="/settings" className="nav-user" aria-label="Profile">V</Link>
+            <form action="/api/auth/sign-out" method="post">
+              <button className="nav-logout" type="submit">Log out</button>
+            </form>
+          </div>
         </div>
-        <Link href="/dashboard" className="button-secondary">Back to dashboard</Link>
       </div>
 
       <section className="card fade-in">
