@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
+import { forwardAuthCookies } from "@/lib/auth-cookies";
 import { postAuthEndpoint } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -42,12 +43,7 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.redirect(new URL(destination, request.url));
     if (!emailVerificationEnabled) {
-      // Carry the session cookies through so the user is logged in.
-      authResponse.headers.forEach((value, key) => {
-        if (key.toLowerCase() === "set-cookie") {
-          response.headers.append(key, value);
-        }
-      });
+      forwardAuthCookies(authResponse, response);
     }
     response.cookies.set("vivadeo_workspace", workspaceId, {
       httpOnly: true,

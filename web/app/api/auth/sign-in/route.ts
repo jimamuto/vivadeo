@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forwardAuthCookies } from "@/lib/auth-cookies";
 import { postAuthEndpoint } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -15,11 +16,7 @@ export async function POST(request: NextRequest) {
 
   if (authResponse.ok) {
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
-    authResponse.headers.forEach((value, key) => {
-      if (key.toLowerCase() === "set-cookie") {
-        response.headers.append(key, value);
-      }
-    });
+    forwardAuthCookies(authResponse, response);
     const workspace =
       request.nextUrl.searchParams.get("workspace") ||
       process.env.VIVADEO_DEFAULT_ORG_ID ||

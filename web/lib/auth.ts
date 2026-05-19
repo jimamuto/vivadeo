@@ -135,11 +135,6 @@ if (databaseUrl && authBaseUrl && authSecret) {
     organization: {
       enabled: true,
     },
-    cookies: {
-      sessionToken: {
-        name: "vivadeo_session",
-      },
-    },
   } as never);
 
   authHandler = auth.handler as AuthHandler;
