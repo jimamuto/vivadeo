@@ -165,13 +165,8 @@ The default `docker-compose.yml` uses prebuilt GHCR images:
 - `ghcr.io/jimamuto/vivadeo-web:latest`
 
 The API and worker mount Modal credentials from `VIVADEO_MODAL_CONFIG_PATH`.
-The default is `./.modal.toml`, which works on Linux, macOS, Windows, and WSL
-as long as you place or copy your Modal config there. On Windows you can also
-set an absolute path in `.env`, for example:
-
-```text
-VIVADEO_MODAL_CONFIG_PATH=C:\Users\you\.modal.toml
-```
+See [docs/modal-credentials-mount.md](docs/modal-credentials-mount.md) for
+platform-specific setup instructions and common pitfalls.
 
 For local development with source mounts and hot reload:
 
