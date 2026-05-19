@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { type FormEvent, useRef, useState } from "react";
+import { AppTopbar } from "@/components/app-topbar";
 
 type SearchResult = {
   chunk_id: string;
@@ -118,24 +118,7 @@ export default function SearchPage() {
 
   return (
     <div className="shell page">
-      <div className="topbar">
-        <div className="topbar-shell">
-          <Link href="/" className="brand">Vivadeo</Link>
-          <div className="nav-center">
-            <Link href="/" className="nav-link">Home</Link>
-            <Link href="/dashboard" className="nav-link">Dashboard</Link>
-            <Link href="/jobs" className="nav-link">Jobs</Link>
-            <Link href="/settings" className="nav-link">Settings</Link>
-          </div>
-          <div className="nav-spacer" />
-          <div className="nav-actions">
-            <Link href="/settings" className="nav-user" aria-label="Profile">V</Link>
-            <form action="/api/auth/sign-out" method="post">
-              <button className="nav-logout" type="submit">Log out</button>
-            </form>
-          </div>
-        </div>
-      </div>
+      <AppTopbar />
 
       <section className="search-shell fade-in">
         <aside className="search-filters card">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { AppTopbar } from "@/components/app-topbar";
 import { auth } from "@/lib/auth";
 
 export default async function SettingsPage() {
@@ -11,13 +12,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="shell page">
-      <div className="topbar">
-        <Link href="/" className="brand">Vivadeo</Link>
-        <div className="nav-actions">
-          <Link href="/dashboard" className="button-secondary">Dashboard</Link>
-          <Link href="/" className="button-secondary">Landing</Link>
-        </div>
-      </div>
+      <AppTopbar profileInitial={initial} />
 
       <div className="split fade-in">
         <article className="card">

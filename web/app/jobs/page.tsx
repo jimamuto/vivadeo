@@ -1,9 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AppTopbar } from "@/components/app-topbar";
 
-type Job = { id: string; organization_id: string; kind: string; status: string; progress: number; message?: string | null; error?: string | null };
+type Job = {
+  id: string;
+  organization_id: string;
+  kind: string;
+  status: string;
+  progress: number;
+  message?: string | null;
+  error?: string | null;
+};
 
 export default function JobsPage() {
   const [jobId, setJobId] = useState("");
@@ -40,24 +48,7 @@ export default function JobsPage() {
 
   return (
     <div className="shell page">
-      <div className="topbar">
-        <div className="topbar-shell">
-          <Link href="/" className="brand">Vivadeo</Link>
-          <div className="nav-center">
-            <Link href="/" className="nav-link">Home</Link>
-            <Link href="/dashboard" className="nav-link">Dashboard</Link>
-            <Link href="/search" className="nav-link">Search</Link>
-            <Link href="/settings" className="nav-link">Settings</Link>
-          </div>
-          <div className="nav-spacer" />
-          <div className="nav-actions">
-            <Link href="/settings" className="nav-user" aria-label="Profile">V</Link>
-            <form action="/api/auth/sign-out" method="post">
-              <button className="nav-logout" type="submit">Log out</button>
-            </form>
-          </div>
-        </div>
-      </div>
+      <AppTopbar />
 
       <section className="card fade-in">
         <h1>Job polling</h1>
@@ -65,7 +56,12 @@ export default function JobsPage() {
         <div className="form">
           <div className="field">
             <label htmlFor="jobId">Job ID</label>
-            <input id="jobId" value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="job_123" />
+            <input
+              id="jobId"
+              value={jobId}
+              onChange={(event) => setJobId(event.target.value)}
+              placeholder="job_123"
+            />
           </div>
         </div>
 

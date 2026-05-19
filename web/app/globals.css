@@ -47,7 +47,8 @@ main { width: 100%; }
 .page { padding: 28px 0 56px; }
 
 .page > .topbar + section:not(.hero),
-.page > .topbar + .split {
+.page > .topbar + .split,
+.page > .topbar + .dashboard-shell {
   margin-top: 32px;
 }
 

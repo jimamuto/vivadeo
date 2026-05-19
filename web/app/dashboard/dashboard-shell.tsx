@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { AppTopbar } from "@/components/app-topbar";
 
 function NavItem({ href, label }: { href: string; label: string }) {
   const pathname = usePathname();
@@ -23,10 +24,10 @@ export function DashboardShell({
 }>) {
   return (
     <div className="shell page dashboard-wrap">
+      <AppTopbar />
       <div className="dashboard-shell">
         <aside className="dashboard-sidebar card">
           <div className="dashboard-sidebar-brand">
-            <Link href="/" className="brand">Vivadeo</Link>
             <p className="muted">Workspace {workspace}</p>
           </div>
           <nav className="dashboard-nav">
@@ -37,9 +38,9 @@ export function DashboardShell({
             <NavItem href="/dashboard/workspace" label="Workspace" />
           </nav>
           <div className="dashboard-sidebar-foot">
-            <Link href="/" className="button-secondary">Landing</Link>
-            <Link href="/search" className="button-secondary">Search</Link>
-            <Link href="/settings" className="button-secondary">Settings</Link>
+            <Link href="/" className="button-secondary">
+              Landing
+            </Link>
           </div>
         </aside>
         <div className="dashboard-stage">{children}</div>
