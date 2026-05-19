@@ -4,6 +4,47 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import * as authSchema from "@/lib/auth-schema";
 
+// ---------------------------------------------------------------------------
+// Email helper — uses Resend when configured, otherwise logs to console so
+// verification/reset links still work in development without a real API key.
+// ---------------------------------------------------------------------------
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM || "Vivadeo <no-reply@example.com>";
+
+  if (!apiKey || apiKey === "change-me-resend") {
+    // Development fallback: print the email to the server console so the
+    // developer can copy the verification / reset link.
+    const text = html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    console.log("\n[EMAIL] ─────────────────────────────────────────────────");
+    console.log(`[EMAIL] To:      ${to}`);
+    console.log(`[EMAIL] Subject: ${subject}`);
+    console.log(`[EMAIL] ${text}`);
+    console.log("[EMAIL] ─────────────────────────────────────────────────\n");
+    return;
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, to: [to], subject, html }),
+  });
+
+  if (!res.ok) {
+    console.error("[EMAIL] Resend error:", await res.text());
+  }
+}
+
 type AuthHandlers = {
   GET: (request: Request) => Response | Promise<Response>;
   POST: (request: Request) => Response | Promise<Response>;
@@ -19,6 +60,12 @@ const databaseUrl = rawDatabaseUrl
 const authBaseUrl =
   process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 const authSecret = process.env.BETTER_AUTH_SECRET || "";
+
+// Email verification is only enforced when a real email provider is configured.
+// In development (placeholder key) users can sign in immediately after sign-up.
+const resendKey = process.env.RESEND_API_KEY || "";
+const emailVerificationEnabled =
+  resendKey.length > 0 && resendKey !== "change-me-resend";
 
 function createFallbackHandler(): AuthHandler {
   const missing = [
@@ -48,7 +95,41 @@ if (databaseUrl && authBaseUrl && authSecret) {
     database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true,
+      requireEmailVerification: emailVerificationEnabled,
+      sendResetPassword: async ({
+        user,
+        url,
+      }: {
+        user: { email: string; name?: string };
+        url: string;
+      }) => {
+        await sendEmail(
+          user.email,
+          "Reset your Vivadeo password",
+          `<p>Hi ${user.name || user.email},</p>
+           <p>Click the link below to reset your password. This link expires in 1 hour.</p>
+           <p><a href="${url}">${url}</a></p>
+           <p>If you did not request a password reset, you can safely ignore this email.</p>`,
+        );
+      },
+    },
+    emailVerification: {
+      sendVerificationEmail: async ({
+        user,
+        url,
+      }: {
+        user: { email: string; name?: string };
+        url: string;
+      }) => {
+        await sendEmail(
+          user.email,
+          "Verify your Vivadeo email address",
+          `<p>Hi ${user.name || user.email},</p>
+           <p>Click the link below to verify your email address and activate your account:</p>
+           <p><a href="${url}">${url}</a></p>
+           <p>This link expires in 24 hours. If you did not create an account, you can safely ignore this email.</p>`,
+        );
+      },
     },
     organization: {
       enabled: true,
