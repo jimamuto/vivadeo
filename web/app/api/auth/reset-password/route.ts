@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { postAuthEndpoint } from "@/lib/auth";
 
+export async function GET(request: NextRequest) {
+  return NextResponse.redirect(new URL("/reset-password", request.url));
+}
+
 export async function POST(request: NextRequest) {
   const form = await request.formData();
   const authResponse = await postAuthEndpoint(request, "/reset-password", {

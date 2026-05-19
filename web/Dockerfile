@@ -13,6 +13,8 @@ COPY app ./app
 COPY lib ./lib
 
 RUN npm run build
+RUN mkdir -p .next/standalone/.next \
+  && cp -r .next/static .next/standalone/.next/static
 
 EXPOSE 3000
 
