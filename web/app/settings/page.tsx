@@ -11,7 +11,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="shell page">
-      <div className="topbar" style={{ marginBottom: 18 }}>
+      <div className="topbar">
         <Link href="/" className="brand">Vivadeo</Link>
         <div className="nav-actions">
           <Link href="/dashboard" className="button-secondary">Dashboard</Link>

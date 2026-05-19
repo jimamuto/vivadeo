@@ -46,6 +46,11 @@ main { width: 100%; }
 
 .page { padding: 28px 0 56px; }
 
+.page > .topbar + section:not(.hero),
+.page > .topbar + .split {
+  margin-top: 32px;
+}
+
 .topbar {
   display: flex;
   align-items: center;
