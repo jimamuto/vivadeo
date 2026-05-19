@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authHandlers } from "@/lib/auth";
+import { postAuthEndpoint } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
-  const authResponse = await authHandlers.POST(request.clone());
-  const response = authResponse.status !== 501
-    ? new NextResponse(authResponse.body, { status: authResponse.status, headers: authResponse.headers })
-    : NextResponse.redirect(new URL("/", request.url));
+  const authResponse = await postAuthEndpoint(request, "/sign-out", {});
+  const response = NextResponse.redirect(new URL("/", request.url));
+  authResponse.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "set-cookie") {
+      response.headers.append(key, value);
+    }
+  });
   response.cookies.set("vivadeo_session", "", {
     httpOnly: true,
     sameSite: "lax",
