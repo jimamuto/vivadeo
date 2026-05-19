@@ -1,7 +1,7 @@
 """Modal deployment for Qwen/Qwen3-VL-Embedding-2B.
 
 Deploy:
-  modal deploy sentrysearch/modal_app.py
+  modal deploy vivadeo/modal_app.py
 """
 
 import os
@@ -14,7 +14,7 @@ import modal
 MODEL_ID = "Qwen/Qwen3-VL-Embedding-2B"
 DIMENSIONS = 768
 
-app = modal.App("sentrysearch-qwen3-vl-embedding-2b")
+app = modal.App("vivadeo-qwen3-vl-embedding-2b")
 model_volume = modal.Volume.from_name("qwen3-vl-embedding-2b-cache", create_if_missing=True)
 
 image = (
@@ -227,7 +227,7 @@ class QwenEmbedder:
                 stderr=subprocess.DEVNULL,
                 check=True,
             )
-            print("sentrysearch: embedding video chunk as single extracted frame", flush=True)
+            print("vivadeo: embedding video chunk as single extracted frame", flush=True)
             return self._embed_conversation([
                 {
                     "role": "system",
@@ -252,7 +252,7 @@ class QwenEmbedder:
     @modal.method()
     def embed_videos(self, items: list[tuple[bytes, str]]) -> list[list[float]]:
         print(
-            f"sentrysearch: embedding video batch of {len(items)} chunks as extracted frames",
+            f"vivadeo: embedding video batch of {len(items)} chunks as extracted frames",
             flush=True,
         )
         return [

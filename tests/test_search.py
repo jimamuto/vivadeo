@@ -1,10 +1,10 @@
-"""Tests for sentrysearch.search."""
+"""Tests for vivadeo.search."""
 
 import math
 
 import pytest
 
-from sentrysearch.search import search_footage
+from vivadeo.search import search_footage
 
 
 def _make_embedding(seed: float, dim: int = 768) -> list[float]:

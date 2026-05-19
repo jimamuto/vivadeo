@@ -1,8 +1,8 @@
-"""Tests for sentrysearch.store."""
+"""Tests for vivadeo.store."""
 
 import math
 
-from sentrysearch.store import COLLECTION_NAME, VideoStore, _make_chunk_id
+from vivadeo.store import COLLECTION_NAME, VideoStore, _make_chunk_id
 
 
 class TestMakeChunkId:

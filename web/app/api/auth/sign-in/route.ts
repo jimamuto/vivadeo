@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
         response.headers.append(key, value);
       }
     });
-    const workspace = request.nextUrl.searchParams.get("workspace") || process.env.SENTRYSEARCH_DEFAULT_ORG_ID || "default-workspace";
+    const workspace = request.nextUrl.searchParams.get("workspace") || process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace";
     response.cookies.set("vivadeo_workspace", workspace, {
       httpOnly: true,
       sameSite: "lax",

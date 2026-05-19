@@ -1,4 +1,4 @@
-# SentrySearch
+# Vivadeo
 
 Semantic search over video footage using a Modal-hosted
 `Qwen/Qwen3-VL-Embedding-2B` service. Index videos locally, store vectors in
@@ -10,7 +10,7 @@ local ChromaDB, then search by text or image and trim matching clips.
 local videos
   -> ffmpeg chunks/preprocessing
   -> Modal remote Qwen3-VL-Embedding-2B methods
-  -> local ChromaDB at ~/.sentrysearch/db
+  -> local ChromaDB at ~/.vivadeo/db
 
 text/image query
   -> same Modal remote methods
@@ -38,7 +38,7 @@ modal setup
 Deploy the Qwen3-VL-Embedding-2B remote class:
 
 ```bash
-modal deploy sentrysearch/modal_app.py
+modal deploy vivadeo/modal_app.py
 ```
 
 That is the only deploy step. The local CLI calls the deployed class through
@@ -52,7 +52,7 @@ deploy may take longer while the model downloads into that Volume.
 ## Index Footage
 
 ```bash
-sentrysearch index /path/to/video/footage
+vivadeo index /path/to/video/footage
 ```
 
 Options:
@@ -73,22 +73,22 @@ Supported video extensions: `.mp4`, `.mov`.
 Use `yt-dlp` to save a lightweight local MP4 from a supported video URL:
 
 ```bash
-sentrysearch download-url "https://youtu.be/..." --max-height 480
+vivadeo download-url "https://youtu.be/..." --max-height 480
 ```
 
 Save and index in one step:
 
 ```bash
-sentrysearch download-url "https://youtu.be/..." --index
+vivadeo download-url "https://youtu.be/..." --index
 ```
 
-Downloads are saved to `~/sentrysearch_downloads` by default. Only download
+Downloads are saved to `~/vivadeo_downloads` by default. Only download
 videos you have the right to use.
 
 ## Search
 
 ```bash
-sentrysearch search "red truck running a stop sign"
+vivadeo search "red truck running a stop sign"
 ```
 
 Useful flags:
@@ -102,7 +102,7 @@ Useful flags:
 ## Search By Image
 
 ```bash
-sentrysearch img /path/to/reference.jpg
+vivadeo img /path/to/reference.jpg
 ```
 
 The image is embedded into the same retrieval space as text queries and video
@@ -111,15 +111,15 @@ chunks.
 ## Manage The Index
 
 ```bash
-sentrysearch stats
-sentrysearch remove video-name-or-path-substring
-sentrysearch reset
+vivadeo stats
+vivadeo remove video-name-or-path-substring
+vivadeo reset
 ```
 
 Embeddings are stored locally in:
 
 ```text
-~/.sentrysearch/db
+~/.vivadeo/db
 ```
 
 ChromaDB stores vectors and metadata only. Original videos are not copied; the
@@ -130,14 +130,14 @@ index points back to source paths for trimming.
 Chunks that fail repeatedly during indexing are recorded in:
 
 ```text
-~/.sentrysearch/dlq.json
+~/.vivadeo/dlq.json
 ```
 
 Inspect or clear them:
 
 ```bash
-sentrysearch dlq list
-sentrysearch dlq clear
+vivadeo dlq list
+vivadeo dlq clear
 ```
 
 ## Development
@@ -155,8 +155,26 @@ MinIO:
 ```bash
 cp .env.example .env
 # edit API keys and BETTER_AUTH_SECRET before exposing the service
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
+
+The default `docker-compose.yml` uses prebuilt GHCR images:
+
+- `ghcr.io/jimamuto/vivadeo-api:latest`
+- `ghcr.io/jimamuto/vivadeo-web:latest`
+
+For local development with source mounts and hot reload:
+
+```bash
+docker compose -f docker-compose.dev.yml pull
+docker compose -f docker-compose.dev.yml up
+```
+
+The dev stack runs FastAPI with `uvicorn --reload` and Next.js with
+`npm run dev`, so Python API and web changes do not require rebuilding the
+containers. The Celery worker also sees mounted source, but still needs a
+container restart for code changes to take effect.
 
 The current production architecture is documented in `ARCHITECTURE.md`.
 
@@ -179,21 +197,21 @@ The FastAPI service stays on the Compose network. Core backend endpoints are:
 Public browser requests go through Next.js. Direct API access requires:
 
 ```text
-X-API-Key: <SENTRYSEARCH_API_KEY>
+X-API-Key: <VIVADEO_API_KEY>
 ```
 
 Next.js uses `X-Internal-Service-Key` plus `X-Workspace-ID` when it proxies
-backend calls. The default workspace ID is `SENTRYSEARCH_DEFAULT_ORG_ID`.
+backend calls. The default workspace ID is `VIVADEO_DEFAULT_ORG_ID`.
 Media URLs are also served through the proxy at `/api/proxy/v1/media/...`.
 
 To point the CLI at the production API:
 
 ```bash
-export SENTRYSEARCH_API_URL=http://localhost:3000/api/proxy
-export SENTRYSEARCH_API_KEY=<your-api-key>
-sentrysearch stats
-sentrysearch index /path/to/video.mp4
-sentrysearch search "red truck"
+export VIVADEO_API_URL=http://localhost:3000/api/proxy
+export VIVADEO_API_KEY=<your-api-key>
+vivadeo stats
+vivadeo index /path/to/video.mp4
+vivadeo search "red truck"
 ```
 
 In API mode, indexing a single file uploads it to MinIO and queues an indexing

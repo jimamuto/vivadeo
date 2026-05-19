@@ -1,4 +1,4 @@
-"""Tests for sentrysearch.chunker."""
+"""Tests for vivadeo.chunker."""
 
 import os
 import shutil
@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sentrysearch.chunker import (
+from vivadeo.chunker import (
     _get_ffmpeg_executable,
     _get_video_duration,
     _parse_duration_from_ffmpeg_output,
@@ -53,12 +53,12 @@ class TestGetFfmpegExecutable:
         assert isinstance(exe, str)
         assert os.path.isfile(exe)
 
-    @patch("sentrysearch.chunker.shutil.which", return_value=None)
+    @patch("vivadeo.chunker.shutil.which", return_value=None)
     def test_falls_back_to_imageio(self, _mock_which):
         exe = _get_ffmpeg_executable()
         assert os.path.isfile(exe)
 
-    @patch("sentrysearch.chunker.shutil.which", return_value=None)
+    @patch("vivadeo.chunker.shutil.which", return_value=None)
     def test_raises_when_no_ffmpeg(self, _mock_which):
         # Setting a module to None in sys.modules makes import raise ImportError
         with patch.dict(sys.modules, {"imageio_ffmpeg": None}):

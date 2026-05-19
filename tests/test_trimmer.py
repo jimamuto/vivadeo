@@ -1,10 +1,10 @@
-"""Tests for sentrysearch.trimmer."""
+"""Tests for vivadeo.trimmer."""
 
 import os
 
 import pytest
 
-from sentrysearch.trimmer import (
+from vivadeo.trimmer import (
     _fmt_time,
     _safe_filename,
     trim_clip,

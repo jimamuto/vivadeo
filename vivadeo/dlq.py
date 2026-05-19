@@ -9,7 +9,7 @@ import json
 import time
 from pathlib import Path
 
-DEFAULT_DLQ_PATH = Path.home() / ".sentrysearch" / "dlq.json"
+DEFAULT_DLQ_PATH = Path.home() / ".vivadeo" / "dlq.json"
 
 
 class DeadLetterQueue:

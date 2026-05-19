@@ -1,6 +1,6 @@
 const internalUrl = process.env.API_INTERNAL_URL || "http://api:8000";
-const internalServiceKey = process.env.SENTRYSEARCH_INTERNAL_SERVICE_KEY || "change-me";
-const workspaceId = process.env.SENTRYSEARCH_DEFAULT_ORG_ID || "default-workspace";
+const internalServiceKey = process.env.VIVADEO_INTERNAL_SERVICE_KEY || "change-me";
+const workspaceId = process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace";
 
 export function getBackendUrl(path: string): string {
   return new URL(path, internalUrl.endsWith("/") ? internalUrl : `${internalUrl}/`).toString();

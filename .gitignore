@@ -5,7 +5,7 @@ node_modules/
 *.tsbuildinfo
 
 test_footage/
-sentrysearch.egg-info/
+vivadeo.egg-info/
 clips_output/
 
 notebooks/

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sentrysearch.downloader import VideoDownloadError, download_video_url
+from vivadeo.downloader import VideoDownloadError, download_video_url
 
 
 @patch("yt_dlp.YoutubeDL")

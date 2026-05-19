@@ -8,7 +8,7 @@ import modal
 from .base_embedder import BaseEmbedder
 
 
-APP_NAME = "sentrysearch-qwen3-vl-embedding-2b"
+APP_NAME = "vivadeo-qwen3-vl-embedding-2b"
 CLS_NAME = "QwenEmbedder"
 DIMENSIONS = 768
 
@@ -43,7 +43,7 @@ class ModalEmbedder(BaseEmbedder):
             raise ModalEmbedderError(
                 "Could not connect to the deployed Modal embedder.\n\n"
                 "Deploy it first:\n"
-                "  modal deploy sentrysearch/modal_app.py\n\n"
+                "  modal deploy vivadeo/modal_app.py\n\n"
                 "Make sure your Modal credentials are configured with "
                 "`modal setup` or MODAL_TOKEN_ID/MODAL_TOKEN_SECRET."
             ) from exc

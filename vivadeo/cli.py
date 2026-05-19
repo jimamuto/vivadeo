@@ -38,17 +38,17 @@ def _open_file(path: str) -> None:
 
 
 def _api_configured() -> bool:
-    return bool(os.environ.get("SENTRYSEARCH_API_URL"))
+    return bool(os.environ.get("VIVADEO_API_URL"))
 
 
 def _api_request(method: str, path: str, payload: dict | None = None) -> dict | list:
-    """Call the production API when SENTRYSEARCH_API_URL is configured."""
-    base_url = os.environ.get("SENTRYSEARCH_API_URL")
-    api_key = os.environ.get("SENTRYSEARCH_API_KEY")
+    """Call the production API when VIVADEO_API_URL is configured."""
+    base_url = os.environ.get("VIVADEO_API_URL")
+    api_key = os.environ.get("VIVADEO_API_KEY")
     if not base_url:
-        raise click.ClickException("SENTRYSEARCH_API_URL is not configured.")
+        raise click.ClickException("VIVADEO_API_URL is not configured.")
     if not api_key:
-        raise click.ClickException("SENTRYSEARCH_API_KEY is required for API mode.")
+        raise click.ClickException("VIVADEO_API_KEY is required for API mode.")
 
     url = urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
     data = json.dumps(payload).encode() if payload is not None else None
@@ -58,7 +58,7 @@ def _api_request(method: str, path: str, payload: dict | None = None) -> dict | 
         method=method,
         headers={
             "X-API-Key": api_key,
-            "X-Workspace-ID": os.environ.get("SENTRYSEARCH_DEFAULT_ORG_ID", "default-workspace"),
+            "X-Workspace-ID": os.environ.get("VIVADEO_DEFAULT_ORG_ID", "default-workspace"),
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
@@ -75,16 +75,16 @@ def _api_request(method: str, path: str, payload: dict | None = None) -> dict | 
 
 
 def _api_upload(path: str) -> dict:
-    base_url = os.environ.get("SENTRYSEARCH_API_URL")
-    api_key = os.environ.get("SENTRYSEARCH_API_KEY")
+    base_url = os.environ.get("VIVADEO_API_URL")
+    api_key = os.environ.get("VIVADEO_API_KEY")
     if not base_url:
-        raise click.ClickException("SENTRYSEARCH_API_URL is not configured.")
+        raise click.ClickException("VIVADEO_API_URL is not configured.")
     if not api_key:
-        raise click.ClickException("SENTRYSEARCH_API_KEY is required for API mode.")
+        raise click.ClickException("VIVADEO_API_KEY is required for API mode.")
 
     filename = os.path.basename(path)
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    boundary = "----sentrysearchupload"
+    boundary = "----vivadeoupload"
     with open(path, "rb") as f:
         file_bytes = f.read()
     body = b"".join(
@@ -106,7 +106,7 @@ def _api_upload(path: str) -> dict:
         method="POST",
         headers={
             "X-API-Key": api_key,
-            "X-Workspace-ID": os.environ.get("SENTRYSEARCH_DEFAULT_ORG_ID", "default-workspace"),
+            "X-Workspace-ID": os.environ.get("VIVADEO_DEFAULT_ORG_ID", "default-workspace"),
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Accept": "application/json",
         },
@@ -181,7 +181,7 @@ def cli():
 
 @cli.command("download-url")
 @click.argument("url")
-@click.option("-o", "--output-dir", default="~/sentrysearch_downloads", show_default=True,
+@click.option("-o", "--output-dir", default="~/vivadeo_downloads", show_default=True,
               help="Directory to save the downloaded video.")
 @click.option("--max-height", default=480, show_default=True,
               help="Maximum video height to download.")
@@ -470,7 +470,7 @@ def index(directory, chunk_duration, overlap, preprocess, target_resolution,
 @click.argument("query")
 @click.option("-n", "--results", "n_results", default=5, show_default=True,
               help="Number of results to return.")
-@click.option("-o", "--output-dir", default="~/sentrysearch_clips", show_default=True,
+@click.option("-o", "--output-dir", default="~/vivadeo_clips", show_default=True,
               help="Directory to save trimmed clips.")
 @click.option("--trim/--no-trim", default=True, show_default=True,
               help="Auto-trim the top result.")
@@ -510,7 +510,7 @@ def search(query, n_results, output_dir, trim, save_top, threshold, verbose):
     try:
         store = VideoStore()
         if store.get_stats()["total_chunks"] == 0:
-            click.echo("No indexed footage found. Run `sentrysearch index <directory>` first.")
+            click.echo("No indexed footage found. Run `vivadeo index <directory>` first.")
             return
 
         get_embedder()
@@ -534,7 +534,7 @@ def _present_results(results, threshold, trim, save_top, output_dir, verbose):
             "Suggestions:\n"
             "  - Try a broader or different query\n"
             "  - Re-index with smaller --chunk-duration for finer granularity\n"
-            "  - Check `sentrysearch stats` to see what's indexed"
+            "  - Check `vivadeo stats` to see what's indexed"
         )
         return
 
@@ -574,7 +574,7 @@ def _present_results(results, threshold, trim, save_top, output_dir, verbose):
 @click.argument("image", type=click.Path(exists=True, dir_okay=False))
 @click.option("-n", "--results", "n_results", default=5, show_default=True,
               help="Number of results to return.")
-@click.option("-o", "--output-dir", default="~/sentrysearch_clips", show_default=True,
+@click.option("-o", "--output-dir", default="~/vivadeo_clips", show_default=True,
               help="Directory to save trimmed clips.")
 @click.option("--trim/--no-trim", default=True, show_default=True,
               help="Trim and save the top result as a clip.")
@@ -594,7 +594,7 @@ def img(image, n_results, output_dir, trim, save_top, threshold, verbose):
     try:
         store = VideoStore()
         if store.get_stats()["total_chunks"] == 0:
-            click.echo("No indexed footage found. Run `sentrysearch index <directory>` first.")
+            click.echo("No indexed footage found. Run `vivadeo index <directory>` first.")
             return
 
         get_embedder()
@@ -624,7 +624,7 @@ def stats():
     store = VideoStore()
     s = store.get_stats()
     if s["total_chunks"] == 0:
-        click.echo("Index is empty. Run `sentrysearch index <directory>` first.")
+        click.echo("Index is empty. Run `vivadeo index <directory>` first.")
         return
 
     click.echo(f"Total chunks:  {s['total_chunks']}")

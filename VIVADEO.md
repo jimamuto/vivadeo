@@ -21,29 +21,29 @@ For the current service topology, tenant boundaries, and deployment model, see
 Required environment values:
 
 ```text
-SENTRYSEARCH_API_KEY=<secret API key>
-SENTRYSEARCH_INTERNAL_SERVICE_KEY=<secret internal service key>
-SENTRYSEARCH_DEFAULT_ORG_ID=default-workspace
-DATABASE_URL=postgresql+psycopg://sentrysearch:sentrysearch@postgres:5432/sentrysearch
-AUTH_DATABASE_URL=postgres://sentrysearch:sentrysearch@postgres:5432/sentrysearch
+VIVADEO_API_KEY=<secret API key>
+VIVADEO_INTERNAL_SERVICE_KEY=<secret internal service key>
+VIVADEO_DEFAULT_ORG_ID=default-workspace
+DATABASE_URL=postgresql+psycopg://vivadeo:vivadeo@postgres:5432/vivadeo
+AUTH_DATABASE_URL=postgres://vivadeo:vivadeo@postgres:5432/vivadeo
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=<secret auth signing key>
 REDIS_URL=redis://redis:6379/0
 S3_ENDPOINT_URL=http://minio:9000
 S3_PUBLIC_ENDPOINT_URL=http://localhost:3000/api/proxy/v1/media
-S3_BUCKET=sentrysearch
+S3_BUCKET=vivadeo
 S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
 S3_REGION=us-east-1
-SENTRYSEARCH_MODAL_APP=sentrysearch-qwen3-vl-embedding-2b
-SENTRYSEARCH_MODAL_CLASS=QwenEmbedder
-SENTRYSEARCH_CHUNK_DURATION=30
-SENTRYSEARCH_CHUNK_OVERLAP=5
-SENTRYSEARCH_BATCH_SIZE=4
-SENTRYSEARCH_PREPROCESS=true
-SENTRYSEARCH_TARGET_RESOLUTION=480
-SENTRYSEARCH_TARGET_FPS=5
-SENTRYSEARCH_SKIP_STILL=false
+VIVADEO_MODAL_APP=vivadeo-qwen3-vl-embedding-2b
+VIVADEO_MODAL_CLASS=QwenEmbedder
+VIVADEO_CHUNK_DURATION=30
+VIVADEO_CHUNK_OVERLAP=5
+VIVADEO_BATCH_SIZE=4
+VIVADEO_PREPROCESS=true
+VIVADEO_TARGET_RESOLUTION=480
+VIVADEO_TARGET_FPS=5
+VIVADEO_SKIP_STILL=false
 ```
 
 Do not commit real API keys or Modal credentials.
@@ -62,7 +62,7 @@ The Docker stack runs these services:
 
 Modal runs the GPU embedder outside Docker:
 
-- Modal app: `sentrysearch-qwen3-vl-embedding-2b`
+- Modal app: `vivadeo-qwen3-vl-embedding-2b`
 - Modal class: `QwenEmbedder`
 - Model: `Qwen/Qwen3-VL-Embedding-2B`
 - GPU: `L40S`
@@ -76,7 +76,7 @@ Create the environment file:
 cp .env.example .env
 ```
 
-Edit `SENTRYSEARCH_API_KEY` and `SENTRYSEARCH_INTERNAL_SERVICE_KEY` before exposing the stack.
+Edit `VIVADEO_API_KEY` and `VIVADEO_INTERNAL_SERVICE_KEY` before exposing the stack.
 
 Authenticate Modal if this machine has not been configured yet:
 
@@ -87,7 +87,7 @@ uv run modal setup
 Deploy the Modal embedder:
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run modal deploy sentrysearch/modal_app.py
+UV_CACHE_DIR=/tmp/uv-cache uv run modal deploy vivadeo/modal_app.py
 ```
 
 Start the containers:
@@ -140,10 +140,10 @@ docker compose logs --tail=80 worker
 The worker log should show Celery ready and registered tasks such as:
 
 ```text
-sentrysearch.ingest_url
-sentrysearch.ingest_uploaded_object
-sentrysearch.ingest_local_path
-sentrysearch.trim_clip
+vivadeo.ingest_url
+vivadeo.ingest_uploaded_object
+vivadeo.ingest_local_path
+vivadeo.trim_clip
 ```
 
 ## Ingest A YouTube Video
@@ -153,7 +153,7 @@ Queue a YouTube URL through the API:
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   -d "{\"url\":\"https://youtu.be/NYSYiiqk8SY?si=ckNcsYxEo49zbs3k\",\"max_height\":480}" \
   http://localhost:8000/v1/videos/url'
 ```
@@ -174,7 +174,7 @@ Poll the job until it reaches `succeeded` or `failed`:
 
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   http://localhost:8000/v1/jobs/<job-id>'
 ```
 
@@ -193,7 +193,7 @@ Verify the video is ready:
 
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   http://localhost:8000/v1/videos/<video-id>'
 ```
 
@@ -219,7 +219,7 @@ Upload it:
 
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   -F "file=@/tmp/video.mp4;type=video/mp4" \
   http://localhost:8000/v1/videos/upload'
 ```
@@ -233,7 +233,7 @@ Search all indexed videos:
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   -d "{\"query\":\"neovim editor setup\",\"results\":5}" \
   http://localhost:8000/v1/search'
 ```
@@ -243,7 +243,7 @@ Search one specific video:
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   -d "{\"query\":\"neovim editor setup\",\"results\":5,\"video_id\":\"<video-id>\"}" \
   http://localhost:8000/v1/search'
 ```
@@ -270,15 +270,15 @@ Search results include timestamp ranges and similarity scores:
 Use Modal logs to confirm the remote embedder loaded and processed chunks:
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run modal app logs sentrysearch-qwen3-vl-embedding-2b
+UV_CACHE_DIR=/tmp/uv-cache uv run modal app logs vivadeo-qwen3-vl-embedding-2b
 ```
 
 Healthy embedding logs include lines like:
 
 ```text
 Loading weights: 100%
-sentrysearch: embedding video batch of 4 chunks as extracted frames
-sentrysearch: embedding video chunk as single extracted frame
+vivadeo: embedding video batch of 4 chunks as extracted frames
+vivadeo: embedding video chunk as single extracted frame
 ```
 
 A Hugging Face warning about unauthenticated requests is not fatal, but setting
@@ -369,7 +369,7 @@ Check indexed counts:
 
 ```bash
 docker compose exec -T api sh -c 'curl -sS \
-  -H "X-API-Key: $SENTRYSEARCH_API_KEY" \
+  -H "X-API-Key: $VIVADEO_API_KEY" \
   http://localhost:8000/v1/stats'
 ```
 

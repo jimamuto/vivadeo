@@ -10,7 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .config import Settings, get_settings
+from .config import Settings, get_settings as get_runtime_settings
 from .db import Base, Clip, Job, Organization, OrganizationSetting, SessionLocal, Video, make_engine, new_id
 from .embedder import get_embedder, reset_embedder
 from .object_store import ObjectStore, video_object_key
@@ -33,7 +33,7 @@ from .schemas import (
 from .worker import ingest_local_path, ingest_uploaded_object, ingest_url, trim_clip_task
 
 
-app = FastAPI(title="SentrySearch", version="0.1.0")
+app = FastAPI(title="Vivadeo", version="0.1.0")
 
 
 @app.on_event("startup")
@@ -49,13 +49,13 @@ def _startup() -> None:
                 "VALUES (:id, :slug, :name) "
                 "ON CONFLICT (id) DO NOTHING"
             ),
-            {"id": get_settings().default_org_id, "slug": "default", "name": "Default workspace"},
+            {"id": get_runtime_settings().default_org_id, "slug": "default", "name": "Default workspace"},
         )
     ObjectStore().ensure_bucket()
 
 
 def settings_dep() -> Settings:
-    return get_settings()
+    return get_runtime_settings()
 
 
 def require_api_key(
@@ -161,7 +161,10 @@ def create_workspace(request: WorkspaceCreateRequest, session: Session = Depends
 
 
 @app.get("/v1/settings", response_model=WorkspaceSettingsResponse, dependencies=[Depends(require_api_key)])
-def get_settings(session: Session = Depends(db_dep), organization_id: str = Depends(workspace_dep)) -> WorkspaceSettingsResponse:
+def get_workspace_settings(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+) -> WorkspaceSettingsResponse:
     _get_workspace(session, organization_id)
     settings = session.get(OrganizationSetting, organization_id)
     return WorkspaceSettingsResponse(organization_id=organization_id, settings=(settings.settings if settings else {}))

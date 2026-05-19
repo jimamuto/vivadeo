@@ -48,13 +48,13 @@ Browser requests should not call FastAPI directly. They call Next.js routes:
 
 Next.js attaches:
 
-- `X-Internal-Service-Key` from `SENTRYSEARCH_INTERNAL_SERVICE_KEY`.
+- `X-Internal-Service-Key` from `VIVADEO_INTERNAL_SERVICE_KEY`.
 - `X-Workspace-ID` from the selected organization/workspace.
 
 FastAPI still supports direct API-key access for operator and CLI flows using:
 
 ```text
-X-API-Key: <SENTRYSEARCH_API_KEY>
+X-API-Key: <VIVADEO_API_KEY>
 ```
 
 ## Tenancy Model
@@ -124,9 +124,9 @@ clip request
 
 Root `.env` is shared by Compose services. Important production variables:
 
-- `SENTRYSEARCH_API_KEY`: direct API/CLI credential.
-- `SENTRYSEARCH_INTERNAL_SERVICE_KEY`: private web-to-api credential.
-- `SENTRYSEARCH_DEFAULT_ORG_ID`: fallback workspace for operator flows.
+- `VIVADEO_API_KEY`: direct API/CLI credential.
+- `VIVADEO_INTERNAL_SERVICE_KEY`: private web-to-api credential.
+- `VIVADEO_DEFAULT_ORG_ID`: fallback workspace for operator flows.
 - `DATABASE_URL`: Python SQLAlchemy/Postgres URL.
 - `AUTH_DATABASE_URL`: Node/Postgres URL for Better Auth.
 - `BETTER_AUTH_URL`: public origin for auth callbacks and redirects.
@@ -137,11 +137,12 @@ Root `.env` is shared by Compose services. Important production variables:
 
 ## Deployment Notes
 
-- Build and run with `docker compose up -d --build`.
+- Pull and run the prebuilt GHCR images with `docker compose pull` and
+  `docker compose up -d`.
 - The Next.js image uses `output: "standalone"` and starts with
   `node .next/standalone/server.js`.
 - Modal must be configured on the host and the embedder deployed separately with
-  `uv run modal deploy sentrysearch/modal_app.py`.
+  `uv run modal deploy vivadeo/modal_app.py`.
 - Database migrations run through Alembic from the Python services.
 - MinIO and Postgres state are persisted in Docker volumes.
 

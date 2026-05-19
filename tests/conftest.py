@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset_embedder_globals():
     """Reset embedder module-level state so tests don't leak."""
-    import sentrysearch.embedder as emb
+    import vivadeo.embedder as emb
 
     emb.reset_embedder()
     yield
@@ -23,7 +23,7 @@ def _reset_embedder_globals():
 @pytest.fixture(autouse=True)
 def _reset_ffmpeg_cache():
     """Clear the lru_cache on _get_ffmpeg_executable between tests."""
-    from sentrysearch.chunker import _get_ffmpeg_executable
+    from vivadeo.chunker import _get_ffmpeg_executable
 
     _get_ffmpeg_executable.cache_clear()
     yield
@@ -45,7 +45,7 @@ def _fake_embedding(dim: int = 768) -> list[float]:
 def mock_embed_query(monkeypatch):
     """Patch embed_query to return a deterministic vector without API calls."""
     fake = _fake_embedding()
-    monkeypatch.setattr("sentrysearch.search.embed_query", lambda *a, **kw: fake)
+    monkeypatch.setattr("vivadeo.search.embed_query", lambda *a, **kw: fake)
     return fake
 
 
@@ -54,7 +54,7 @@ def mock_embed_video_chunk(monkeypatch):
     """Patch embed_video_chunk to return a deterministic vector."""
     fake = _fake_embedding()
     monkeypatch.setattr(
-        "sentrysearch.embedder.embed_video_chunk", lambda *a, **kw: fake
+        "vivadeo.embedder.embed_video_chunk", lambda *a, **kw: fake
     )
     return fake
 
@@ -66,7 +66,7 @@ def mock_embed_video_chunk(monkeypatch):
 @pytest.fixture
 def tmp_store(tmp_path):
     """Create a SentryStore backed by a temporary directory."""
-    from sentrysearch.store import SentryStore
+    from vivadeo.store import SentryStore
 
     return SentryStore(db_path=tmp_path / "test_db")
 

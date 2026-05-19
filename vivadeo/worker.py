@@ -20,7 +20,7 @@ from .trimmer import trim_clip
 
 settings = get_settings()
 celery_app = Celery(
-    "sentrysearch",
+    "vivadeo",
     broker=settings.redis_url,
     backend=settings.redis_url,
 )
@@ -179,7 +179,7 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
             shutil.rmtree(os.path.dirname(chunks[0]["chunk_path"]), ignore_errors=True)
 
 
-@celery_app.task(name="sentrysearch.ingest_local_path")
+@celery_app.task(name="vivadeo.ingest_local_path")
 def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: str) -> None:
     try:
         _update_job(job_id, status="running", progress=0.02, message="Uploading original")
@@ -203,9 +203,9 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
         raise
 
 
-@celery_app.task(name="sentrysearch.ingest_uploaded_object")
+@celery_app.task(name="vivadeo.ingest_uploaded_object")
 def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> None:
-    tmp_dir = tempfile.mkdtemp(prefix="sentrysearch_upload_")
+    tmp_dir = tempfile.mkdtemp(prefix="vivadeo_upload_")
     try:
         store = ObjectStore()
         with session_scope() as session:
@@ -228,9 +228,9 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-@celery_app.task(name="sentrysearch.ingest_url")
+@celery_app.task(name="vivadeo.ingest_url")
 def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_height: int = 480) -> None:
-    tmp_dir = tempfile.mkdtemp(prefix="sentrysearch_url_")
+    tmp_dir = tempfile.mkdtemp(prefix="vivadeo_url_")
     try:
         _update_job(job_id, status="running", progress=0.02, message="Downloading URL")
         path = download_video_url(url, output_dir=tmp_dir, max_height=max_height)
@@ -257,9 +257,9 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-@celery_app.task(name="sentrysearch.trim_clip")
+@celery_app.task(name="vivadeo.trim_clip")
 def trim_clip_task(job_id: str, clip_id: str, organization_id: str) -> None:
-    tmp_dir = tempfile.mkdtemp(prefix="sentrysearch_clip_")
+    tmp_dir = tempfile.mkdtemp(prefix="vivadeo_clip_")
     try:
         store = ObjectStore()
         with session_scope() as session:

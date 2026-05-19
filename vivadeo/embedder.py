@@ -14,7 +14,7 @@ def get_embedder(backend: str = "modal", **kwargs) -> BaseEmbedder:
         from .modal_embedder import ModalEmbedder
 
         _current_embedder = ModalEmbedder(
-            app_name=kwargs.get("app_name", "sentrysearch-qwen3-vl-embedding-2b"),
+            app_name=kwargs.get("app_name", "vivadeo-qwen3-vl-embedding-2b"),
             cls_name=kwargs.get("cls_name", "QwenEmbedder"),
             timeout=kwargs.get("timeout", 600),
         )

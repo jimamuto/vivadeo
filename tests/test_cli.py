@@ -1,11 +1,11 @@
-"""Tests for sentrysearch.cli."""
+"""Tests for vivadeo.cli."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
-from sentrysearch.cli import _fmt_time, cli
+from vivadeo.cli import _fmt_time, cli
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ class TestCliGroup:
 
 class TestStatsCommand:
     def test_stats_empty(self, runner):
-        with patch("sentrysearch.store.VideoStore") as MockStore:
+        with patch("vivadeo.store.VideoStore") as MockStore:
             inst = MagicMock()
             inst.get_stats.return_value = {
                 "total_chunks": 0,
@@ -43,7 +43,7 @@ class TestStatsCommand:
             assert "empty" in result.output.lower()
 
     def test_stats_with_data(self, runner):
-        with patch("sentrysearch.store.VideoStore") as MockStore:
+        with patch("vivadeo.store.VideoStore") as MockStore:
             inst = MagicMock()
             inst.get_stats.return_value = {
                 "total_chunks": 10,
@@ -59,7 +59,7 @@ class TestStatsCommand:
 
 class TestSearchCommand:
     def test_search_empty_index(self, runner):
-        with patch("sentrysearch.store.VideoStore") as MockStore:
+        with patch("vivadeo.store.VideoStore") as MockStore:
             inst = MagicMock()
             inst.get_stats.return_value = {"total_chunks": 0}
             MockStore.return_value = inst
@@ -72,8 +72,8 @@ class TestIndexCommand:
     def test_index_no_supported_videos(self, runner, tmp_path):
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
-        with patch("sentrysearch.embedder.get_embedder", return_value=MagicMock()), \
-             patch("sentrysearch.store.VideoStore") as MockStore:
+        with patch("vivadeo.embedder.get_embedder", return_value=MagicMock()), \
+             patch("vivadeo.store.VideoStore") as MockStore:
             MockStore.return_value = MagicMock()
             result = runner.invoke(cli, ["index", str(empty_dir)])
             assert result.exit_code == 0
@@ -100,15 +100,15 @@ class TestIndexCommand:
         mock_embedder = MagicMock()
         mock_embedder.embed_video_chunks.return_value = [[0.1] * 768]
 
-        with patch("sentrysearch.store.VideoStore", return_value=mock_store), \
-             patch("sentrysearch.embedder.get_embedder", return_value=mock_embedder), \
-             patch("sentrysearch.chunker.chunk_video", return_value=[{
+        with patch("vivadeo.store.VideoStore", return_value=mock_store), \
+             patch("vivadeo.embedder.get_embedder", return_value=mock_embedder), \
+             patch("vivadeo.chunker.chunk_video", return_value=[{
                  "chunk_path": str(chunk_path),
                  "source_file": str(source.resolve()),
                  "start_time": 0.0,
                  "end_time": 1.0,
              }]), \
-             patch("sentrysearch.chunker.is_still_frame_chunk", return_value=False):
+             patch("vivadeo.chunker.is_still_frame_chunk", return_value=False):
             result = runner.invoke(cli, ["index", str(d), "--no-preprocess"])
 
         assert result.exit_code == 0
@@ -139,20 +139,20 @@ class TestIndexCommand:
         mock_embedder = MagicMock()
         mock_embedder.embed_video_chunks.side_effect = RuntimeError("CUDA out of memory")
 
-        from sentrysearch.dlq import DeadLetterQueue
+        from vivadeo.dlq import DeadLetterQueue
 
         dlq_instance = DeadLetterQueue(tmp_path / "dlq.json")
 
-        with patch("sentrysearch.store.VideoStore", return_value=mock_store), \
-             patch("sentrysearch.embedder.get_embedder", return_value=mock_embedder), \
-             patch("sentrysearch.dlq.DeadLetterQueue", return_value=dlq_instance), \
-             patch("sentrysearch.chunker.chunk_video", return_value=[{
+        with patch("vivadeo.store.VideoStore", return_value=mock_store), \
+             patch("vivadeo.embedder.get_embedder", return_value=mock_embedder), \
+             patch("vivadeo.dlq.DeadLetterQueue", return_value=dlq_instance), \
+             patch("vivadeo.chunker.chunk_video", return_value=[{
                  "chunk_path": str(chunk_path),
                  "source_file": str(source.resolve()),
                  "start_time": 0.0,
                  "end_time": 30.0,
              }]), \
-             patch("sentrysearch.chunker.is_still_frame_chunk", return_value=False):
+             patch("vivadeo.chunker.is_still_frame_chunk", return_value=False):
             result = runner.invoke(cli, ["index", str(d), "--no-preprocess"])
 
         assert result.exit_code == 0
@@ -172,7 +172,7 @@ class TestIndexCommand:
 class TestDownloadUrlCommand:
     def test_download_url_prints_path(self, runner, tmp_path):
         out = tmp_path / "video.mp4"
-        with patch("sentrysearch.downloader.download_video_url", return_value=str(out)) as mock_download:
+        with patch("vivadeo.downloader.download_video_url", return_value=str(out)) as mock_download:
             result = runner.invoke(cli, [
                 "download-url",
                 "https://youtu.be/example",
@@ -194,10 +194,10 @@ class TestDownloadUrlCommand:
     def test_download_url_can_index_after_download(self, runner, tmp_path):
         out = tmp_path / "video.mp4"
         out.write_bytes(b"video")
-        with patch("sentrysearch.downloader.download_video_url", return_value=str(out)), \
-             patch("sentrysearch.embedder.get_embedder", return_value=MagicMock()), \
-             patch("sentrysearch.store.VideoStore") as MockStore, \
-             patch("sentrysearch.chunker.chunk_video", return_value=[]):
+        with patch("vivadeo.downloader.download_video_url", return_value=str(out)), \
+             patch("vivadeo.embedder.get_embedder", return_value=MagicMock()), \
+             patch("vivadeo.store.VideoStore") as MockStore, \
+             patch("vivadeo.chunker.chunk_video", return_value=[]):
             MockStore.return_value = MagicMock()
             result = runner.invoke(cli, [
                 "download-url",

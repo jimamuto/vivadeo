@@ -3,7 +3,7 @@
 from pathlib import Path
 
 
-DEFAULT_DOWNLOAD_DIR = Path.home() / "sentrysearch_downloads"
+DEFAULT_DOWNLOAD_DIR = Path.home() / "vivadeo_downloads"
 
 
 class VideoDownloadError(RuntimeError):

@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from sentrysearch.api import app
+from vivadeo.api import app
 
 
 class _FakeConn:
@@ -29,9 +29,9 @@ class _FakeObjectStore:
 
 
 def _disable_startup_io(monkeypatch):
-    monkeypatch.setattr("sentrysearch.api.make_engine", lambda: _FakeEngine())
-    monkeypatch.setattr("sentrysearch.api.ObjectStore", lambda: _FakeObjectStore())
-    monkeypatch.setattr("sentrysearch.api.Base.metadata.create_all", lambda bind: None)
+    monkeypatch.setattr("vivadeo.api.make_engine", lambda: _FakeEngine())
+    monkeypatch.setattr("vivadeo.api.ObjectStore", lambda: _FakeObjectStore())
+    monkeypatch.setattr("vivadeo.api.Base.metadata.create_all", lambda bind: None)
 
 
 def test_healthz_without_api_key(monkeypatch):

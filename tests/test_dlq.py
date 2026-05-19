@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from sentrysearch.dlq import DeadLetterQueue
+from vivadeo.dlq import DeadLetterQueue
 
 
 @pytest.fixture

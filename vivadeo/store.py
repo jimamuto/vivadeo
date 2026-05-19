@@ -7,7 +7,7 @@ from pathlib import Path
 import chromadb
 
 
-DEFAULT_DB_PATH = Path.home() / ".sentrysearch" / "db"
+DEFAULT_DB_PATH = Path.home() / ".vivadeo" / "db"
 COLLECTION_NAME = "video_chunks_modal_qwen3_vl_2b"
 
 
