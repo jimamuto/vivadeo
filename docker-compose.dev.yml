@@ -137,9 +137,9 @@ services:
       MINIO_INTERNAL_URL: http://minio:9000
       VIVADEO_INTERNAL_SERVICE_KEY: ${VIVADEO_INTERNAL_SERVICE_KEY:-change-me}
       VIVADEO_DEFAULT_ORG_ID: ${VIVADEO_DEFAULT_ORG_ID:-default-workspace}
-      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
       EMAIL_FROM: ${EMAIL_FROM:-Vivadeo <no-reply@example.com>}
-      RESEND_API_KEY: ${RESEND_API_KEY:-change-me-resend}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       NODE_ENV: development
       WATCHPACK_POLLING: ${WATCHPACK_POLLING:-true}
       CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
