@@ -6,6 +6,9 @@ export default async function WorkspacePage() {
   const cookieStore = await cookies();
   const activeWorkspace =
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
+  const { stats } = await import("../dashboard-data").then((mod) =>
+    mod.fetchDashboardData(activeWorkspace),
+  );
 
   return (
     <DashboardShell workspace={activeWorkspace}>
@@ -23,7 +26,7 @@ export default async function WorkspacePage() {
             <strong>{activeWorkspace}</strong>
             <p className="muted">Current org context for uploads, jobs, and clips.</p>
           </article>
-          <WorkspacePanel activeWorkspace={activeWorkspace} />
+          <WorkspacePanel activeWorkspace={activeWorkspace} stats={stats} />
         </div>
       </div>
     </DashboardShell>

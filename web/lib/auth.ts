@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
 import * as authSchema from "@/lib/auth-schema";
+import { getWorkspaceRoleOverrides } from "@/lib/workspace-role-overrides";
 
 // ---------------------------------------------------------------------------
 // Email helper — uses Resend when configured, otherwise logs to console so
@@ -85,7 +86,7 @@ function createFallbackHandler(): AuthHandler {
 }
 
 let authHandler: AuthHandler = createFallbackHandler();
-export let auth: ReturnType<typeof betterAuth>;
+export let auth: ReturnType<typeof betterAuth> | any;
 
 if (databaseUrl && authBaseUrl && authSecret) {
   const sql = postgres(databaseUrl, { max: 1 });
@@ -132,6 +133,27 @@ if (databaseUrl && authBaseUrl && authSecret) {
         );
       },
     },
+    user: {
+      deleteUser: {
+        enabled: true,
+        sendDeleteAccountVerification: async ({
+          user,
+          url,
+        }: {
+          user: { email: string; name?: string };
+          url: string;
+        }) => {
+          await sendEmail(
+            user.email,
+            "Confirm your Vivadeo account deletion",
+            `<p>Hi ${user.name || user.email},</p>
+             <p>Click the link below to permanently delete your account:</p>
+             <p><a href="${url}">${url}</a></p>
+             <p>If you did not request account deletion, you can safely ignore this email.</p>`,
+          );
+        },
+      },
+    },
     organization: {
       enabled: true,
     },
@@ -143,7 +165,7 @@ if (databaseUrl && authBaseUrl && authSecret) {
     api: {
       getSession: async () => null,
     },
-  } as ReturnType<typeof betterAuth>;
+  };
 }
 
 const authHandlers: AuthHandlers = {
@@ -186,4 +208,51 @@ async function postAuthEndpoint(
   return authHandlers.POST(createAuthEndpointRequest(request, path, body));
 }
 
-export { authHandlers, postAuthEndpoint };
+type WorkspaceRole = "owner" | "admin" | "editor" | "viewer";
+
+function normalizeWorkspaceRole(role: string | null | undefined): WorkspaceRole {
+  if (role === "owner" || role === "admin" || role === "editor" || role === "viewer") {
+    return role;
+  }
+  if (role === "member") return "editor";
+  return "viewer";
+}
+
+async function getWorkspaceRoleForRequest(
+  request: Request,
+  organizationId: string,
+): Promise<WorkspaceRole> {
+  const sessionResponse = await authHandlers.GET(
+    createAuthEndpointRequest(request, "/get-session"),
+  );
+  if (!sessionResponse.ok) return "viewer";
+  const sessionPayload = (await sessionResponse.json()) as {
+    user?: { email?: string | null };
+  };
+  const email = sessionPayload.user?.email;
+  if (!email) return "viewer";
+
+  const overrides = await getWorkspaceRoleOverrides(organizationId);
+  const overrideRole = overrides.workspaceRoles[email] || overrides.inviteRoles[email];
+  if (overrideRole) return overrideRole;
+
+  const membersUrl = new URL(
+    `/api/auth/organization/list-members?organizationId=${encodeURIComponent(organizationId)}`,
+    request.url,
+  );
+  const membersResponse = await fetch(membersUrl, {
+    headers: {
+      cookie: request.headers.get("cookie") || "",
+      accept: "application/json",
+    },
+    cache: "no-store",
+  });
+  if (!membersResponse.ok) return "viewer";
+  const membersPayload = (await membersResponse.json()) as {
+    members?: Array<{ role?: string | null; user?: { email?: string | null } }>;
+  };
+  const membership = membersPayload.members?.find((member) => member.user?.email === email);
+  return normalizeWorkspaceRole(membership?.role);
+}
+
+export { authHandlers, getWorkspaceRoleForRequest, normalizeWorkspaceRole, postAuthEndpoint };

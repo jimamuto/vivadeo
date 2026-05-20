@@ -1,15 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
+import { getWorkspaceRoleForRequest } from "@/lib/auth";
+
+function requiresEditorAccess(method: string, targetPath: string) {
+  if (method === "GET" || method === "HEAD") return false;
+  if (!targetPath.startsWith("/v1/")) return false;
+  return true;
+}
 
 async function forward(
   request: NextRequest,
   path: string[],
 ): Promise<NextResponse> {
   const targetPath = `/${path.join("/")}`;
+  const workspace = request.cookies.get("vivadeo_workspace")?.value;
+  if (requiresEditorAccess(request.method, targetPath)) {
+    const role = await getWorkspaceRoleForRequest(
+      request,
+      workspace || "default-workspace",
+    );
+    if (role === "viewer") {
+      return NextResponse.json(
+        { detail: "Viewer role cannot modify workspace content." },
+        { status: 403 },
+      );
+    }
+  }
   const backendUrl = getBackendUrl(targetPath);
   const headers = getBackendHeaders(
     undefined,
-    request.cookies.get("vivadeo_workspace")?.value,
+    workspace,
   );
   const method = request.method;
   let body: BodyInit | undefined;

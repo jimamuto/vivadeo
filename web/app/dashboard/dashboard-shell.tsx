@@ -9,7 +9,7 @@ function NavItem({ href, label }: { href: string; label: string }) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
-    <Link className={`dash-nav-item${active ? " is-active" : ""}`} href={href}>
+    <Link className={`dash-nav-item${active ? " is-active" : ""}`} href={href as any}>
       {label}
     </Link>
   );
@@ -33,6 +33,7 @@ export function DashboardShell({
           <nav className="dashboard-nav">
             <NavItem href="/dashboard" label="Overview" />
             <NavItem href="/dashboard/ingest" label="Ingest" />
+            <NavItem href="/dashboard/library" label="Library" />
             <NavItem href="/dashboard/clip-studio" label="Clip studio" />
             <NavItem href="/dashboard/jobs" label="Jobs" />
             <NavItem href="/dashboard/workspace" label="Workspace" />

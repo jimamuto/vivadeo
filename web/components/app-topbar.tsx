@@ -21,6 +21,9 @@ export function AppTopbar({ profileInitial = "V" }: AppTopbarProps) {
           <Link href="/search" className="nav-link">
             Search
           </Link>
+          <Link href={"/dashboard/library" as any} className="nav-link">
+            Library
+          </Link>
           <Link href="/jobs" className="nav-link">
             Jobs
           </Link>

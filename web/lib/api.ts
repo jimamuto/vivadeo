@@ -17,6 +17,8 @@ export type Job = {
   error?: string | null;
   video_id?: string | null;
   clip_id?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Video = {
@@ -29,6 +31,21 @@ export type Video = {
   duration?: number | null;
   object_key?: string | null;
   url?: string | null;
+  error?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VideoChunk = {
+  id: string;
+  organization_id: string;
+  video_id: string;
+  start_time: number;
+  end_time: number;
+  embedding_backend: string;
+  embedding_model: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
 };
 
 export type SearchResult = {
@@ -41,6 +58,18 @@ export type SearchResult = {
   end_time: number;
   similarity_score: number;
   distance?: number;
+};
+
+export type Clip = {
+  id: string;
+  organization_id: string;
+  video_id: string;
+  status: string;
+  start_time: number;
+  end_time: number;
+  object_key?: string | null;
+  url?: string | null;
+  job_id?: string | null;
 };
 
 export async function apiGet<T>(path: string): Promise<T> {

@@ -877,6 +877,13 @@ main { width: 100%; }
   gap: 16px;
 }
 
+.dashboard-split-panel {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+  align-items: start;
+}
+
 .dashboard-panel-head {
   display: grid;
   gap: 6px;
@@ -1162,9 +1169,37 @@ main { width: 100%; }
 
 .search-query { padding: 20px; }
 
+.search-chip-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.search-chip-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+
+.search-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .search-feed {
   display: grid;
   gap: 16px;
+}
+
+.search-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  align-items: start;
 }
 
 .search-result {
@@ -1175,6 +1210,18 @@ main { width: 100%; }
   background: rgba(255, 251, 245, 0.9);
   border: 1px solid rgba(124, 47, 58, 0.1);
   box-shadow: 0 12px 28px rgba(79, 58, 44, 0.08);
+}
+
+.search-result-button {
+  width: 100%;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result-button.is-active {
+  border-color: rgba(118, 50, 63, 0.28);
+  box-shadow: 0 16px 32px rgba(79, 58, 44, 0.12);
 }
 
 .search-top {
@@ -1242,6 +1289,42 @@ main { width: 100%; }
 .search-actions { display: flex; gap: 10px; }
 
 .search-meta h3 { margin: 0 0 6px; }
+
+.search-preview {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+}
+
+.ingest-dropzone {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1.5px dashed rgba(118, 50, 63, 0.3);
+  background: rgba(255, 251, 245, 0.78);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.ingest-dropzone strong {
+  font-size: 1rem;
+}
+
+.ingest-dropzone span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.ingest-dropzone:hover,
+.ingest-dropzone.is-active {
+  border-color: rgba(118, 50, 63, 0.7);
+  background: rgba(255, 248, 241, 0.95);
+  transform: translateY(-1px);
+}
 
 .nav a:not(.button):not(.button-secondary) {
   padding: 10px 14px;
@@ -1341,6 +1424,7 @@ main { width: 100%; }
   margin: 0 0 16px;
 }
 
+.notice-soft { background: rgba(215, 206, 199, 0.35); color: var(--text); }
 .notice-good { background: rgba(124, 47, 58, 0.08); color: var(--text); }
 .notice-bad { background: rgba(143, 54, 68, 0.12); color: var(--danger); }
 
@@ -1401,6 +1485,10 @@ main { width: 100%; }
   border: 1px solid rgba(86, 86, 86, 0.12);
   color: var(--muted);
   background: rgba(255, 252, 247, 0.74);
+}
+
+.pill-button {
+  cursor: pointer;
 }
 
 .table { width: 100%; border-collapse: collapse; }
@@ -1504,6 +1592,144 @@ main { width: 100%; }
   font-weight: 700;
 }
 
+.job-history-list,
+.library-list {
+  display: grid;
+  gap: 12px;
+}
+
+.job-history-item,
+.library-item {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(86, 86, 86, 0.08);
+  background: rgba(255, 251, 245, 0.82);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.job-history-item.is-active,
+.library-item.is-active {
+  border-color: rgba(118, 50, 63, 0.18);
+  background: rgba(118, 50, 63, 0.08);
+}
+
+.job-history-item strong,
+.library-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.job-history-item p,
+.library-item p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.job-history-meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.job-stage-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.job-stage {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(86, 86, 86, 0.08);
+  background: rgba(255, 251, 245, 0.76);
+  text-align: center;
+}
+
+.job-stage strong {
+  text-transform: capitalize;
+  font-size: 0.88rem;
+}
+
+.job-stage-done {
+  border-color: rgba(86, 86, 86, 0.14);
+  background: rgba(215, 206, 199, 0.42);
+}
+
+.job-stage-active {
+  border-color: rgba(118, 50, 63, 0.2);
+  background: rgba(118, 50, 63, 0.08);
+}
+
+.job-stage-failed {
+  border-color: rgba(118, 50, 63, 0.22);
+  background: rgba(118, 50, 63, 0.12);
+  color: var(--danger);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 251, 245, 0.8);
+  border: 1px solid rgba(86, 86, 86, 0.08);
+  display: grid;
+  gap: 6px;
+}
+
+.detail-card span {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+
+.detail-card strong {
+  font-size: 1rem;
+}
+
+.detail-wrap {
+  overflow-wrap: anywhere;
+}
+
+.library-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+}
+
+.library-toolbar input,
+.library-toolbar select {
+  width: 100%;
+  padding: 13px 15px;
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 252, 247, 0.88);
+  border: 1px solid rgba(86, 86, 86, 0.12);
+}
+
+.empty-state {
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 251, 245, 0.7);
+  border: 1px dashed rgba(118, 50, 63, 0.22);
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
 .fade-in { animation: rise 620ms ease both; }
 
 @keyframes rise {
@@ -1523,7 +1749,7 @@ main { width: 100%; }
   .hero-home .hero-copy { max-width: none; }
   .hero-actions { justify-content: flex-start; }
   .dashboard-hero, .dashboard-layout, .dashboard-ledger { grid-template-columns: 1fr; }
-  .dashboard-shell, .dashboard-module-grid { grid-template-columns: 1fr; }
+  .dashboard-shell, .dashboard-module-grid, .dashboard-split-panel, .search-layout { grid-template-columns: 1fr; }
   .dashboard-sidebar { position: static; }
   .stats-band, .service-grid, .benefits-band, .pricing-grid, .integration-band, .footer { grid-template-columns: 1fr; }
   .benefits-visual { min-height: 300px; }
@@ -1531,8 +1757,10 @@ main { width: 100%; }
   .search-filters { position: static; }
   .search-top { grid-template-columns: 120px 1fr; }
   .search-score { grid-column: 1 / -1; justify-self: start; }
+  .search-preview { position: static; }
   .dashboard-summary-row, .workspace-grid { grid-template-columns: 1fr; }
   .dashboard-module-grid-ingest { grid-template-columns: 1fr; }
+  .job-stage-list, .detail-grid, .library-toolbar { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {

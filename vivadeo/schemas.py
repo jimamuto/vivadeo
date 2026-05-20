@@ -1,5 +1,7 @@
 """Pydantic API schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -34,6 +36,8 @@ class JobResponse(BaseModel):
     error: str | None = None
     video_id: str | None = None
     clip_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class VideoResponse(BaseModel):
@@ -46,6 +50,35 @@ class VideoResponse(BaseModel):
     duration: float | None = None
     object_key: str | None = None
     url: str | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class VideoChunkResponse(BaseModel):
+    id: str
+    organization_id: str
+    video_id: str
+    start_time: float
+    end_time: float
+    embedding_backend: str
+    embedding_model: str
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime
+
+
+class DeadLetterEntryResponse(BaseModel):
+    id: str
+    organization_id: str
+    video_id: str | None = None
+    chunk_id: str
+    source_uri: str
+    start_time: float
+    end_time: float
+    error: str
+    attempts: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class UrlIngestRequest(BaseModel):

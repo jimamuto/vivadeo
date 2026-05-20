@@ -7,11 +7,11 @@ export default async function DashboardPage() {
   const cookieStore = await cookies();
   const activeWorkspace =
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
-  const { videos, jobs } = await fetchDashboardData(activeWorkspace);
+  const { videos, jobs, stats } = await fetchDashboardData(activeWorkspace);
 
   return (
     <DashboardShell workspace={activeWorkspace}>
-      <OverviewPanel activeWorkspace={activeWorkspace} videos={videos} jobs={jobs} />
+      <OverviewPanel activeWorkspace={activeWorkspace} videos={videos} jobs={jobs} stats={stats} />
     </DashboardShell>
   );
 }

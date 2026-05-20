@@ -26,11 +26,14 @@ celery_app = Celery(
 )
 celery_app.conf.update(task_track_started=True, worker_prefetch_multiplier=1)
 
+class JobCanceled(Exception):
+    pass
+
 
 def _update_job(job_id: str, **values) -> None:
     with session_scope() as session:
         job = session.get(Job, job_id)
-        if job:
+        if job and job.status != "canceled":
             for key, value in values.items():
                 setattr(job, key, value)
 
@@ -38,9 +41,20 @@ def _update_job(job_id: str, **values) -> None:
 def _mark_video(video_id: str, **values) -> None:
     with session_scope() as session:
         video = session.get(Video, video_id)
-        if video:
+        if video and video.status != "canceled":
             for key, value in values.items():
                 setattr(video, key, value)
+
+
+def _job_canceled(job_id: str) -> bool:
+    with session_scope() as session:
+        job = session.get(Job, job_id)
+        return bool(job and job.status == "canceled")
+
+
+def _raise_if_canceled(job_id: str) -> None:
+    if _job_canceled(job_id):
+        raise JobCanceled(f"Job canceled: {job_id}")
 
 
 def _record_dlq(video_id: str, chunk_id: str, source_uri: str, start: float, end: float, error: str) -> None:
@@ -105,6 +119,7 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
 
         processed = 0
         for chunk in chunks:
+            _raise_if_canceled(job_id)
             chunk_path = chunk["chunk_path"]
             files_to_cleanup.append(chunk_path)
             processed += 1
@@ -138,6 +153,7 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
             )
             if len(batch) >= settings.batch_size:
                 try:
+                    _raise_if_canceled(job_id)
                     flush_batch()
                 except Exception as exc:
                     failed_count += len(batch)
@@ -153,6 +169,7 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                     batch.clear()
         if batch:
             try:
+                _raise_if_canceled(job_id)
                 flush_batch()
             except Exception as exc:
                 failed_count += len(batch)
@@ -182,6 +199,7 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
 @celery_app.task(name="vivadeo.ingest_local_path")
 def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: str) -> None:
     try:
+        _raise_if_canceled(job_id)
         _update_job(job_id, status="running", progress=0.02, message="Uploading original")
         store = ObjectStore()
         with session_scope() as session:
@@ -194,9 +212,13 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
             video.duration = _get_video_duration(path)
             video.status = "indexing"
 
+        _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
+    except JobCanceled:
+        _mark_video(video_id, status="canceled", error="Canceled by user")
+        _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
@@ -207,6 +229,7 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
 def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> None:
     tmp_dir = tempfile.mkdtemp(prefix="vivadeo_upload_")
     try:
+        _raise_if_canceled(job_id)
         store = ObjectStore()
         with session_scope() as session:
             video = session.get(Video, video_id)
@@ -216,10 +239,14 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
             object_key = video.object_key
         _update_job(job_id, status="running", progress=0.05, message="Downloading original")
         store.download_file(object_key, local_path)
+        _raise_if_canceled(job_id)
         _mark_video(video_id, status="indexing", duration=_get_video_duration(local_path))
         _index_file(video_id, organization_id, local_path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
+    except JobCanceled:
+        _mark_video(video_id, status="canceled", error="Canceled by user")
+        _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
@@ -232,6 +259,7 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
 def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_height: int = 480) -> None:
     tmp_dir = tempfile.mkdtemp(prefix="vivadeo_url_")
     try:
+        _raise_if_canceled(job_id)
         _update_job(job_id, status="running", progress=0.02, message="Downloading URL")
         path = download_video_url(url, output_dir=tmp_dir, max_height=max_height)
         filename = Path(path).name
@@ -246,9 +274,13 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
             video.object_key = object_key
             video.duration = _get_video_duration(path)
             video.status = "indexing"
+        _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
+    except JobCanceled:
+        _mark_video(video_id, status="canceled", error="Canceled by user")
+        _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
@@ -261,6 +293,7 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
 def trim_clip_task(job_id: str, clip_id: str, organization_id: str) -> None:
     tmp_dir = tempfile.mkdtemp(prefix="vivadeo_clip_")
     try:
+        _raise_if_canceled(job_id)
         store = ObjectStore()
         with session_scope() as session:
             clip = session.get(Clip, clip_id)
@@ -277,6 +310,7 @@ def trim_clip_task(job_id: str, clip_id: str, organization_id: str) -> None:
 
         _update_job(job_id, status="running", progress=0.2, message="Downloading source")
         store.download_file(object_key, local_video)
+        _raise_if_canceled(job_id)
         trim_clip(local_video, start_time, end_time, local_clip)
         clip_key = clip_object_key(clip_id)
         store.upload_file(local_clip, clip_key, "video/mp4")
@@ -290,6 +324,17 @@ def trim_clip_task(job_id: str, clip_id: str, organization_id: str) -> None:
                 job.status = "succeeded"
                 job.progress = 1.0
                 job.message = "Clip ready"
+    except JobCanceled:
+        with session_scope() as session:
+            clip = session.get(Clip, clip_id)
+            job = session.get(Job, job_id)
+            if clip:
+                clip.status = "canceled"
+                clip.error = "Canceled by user"
+            if job:
+                job.status = "canceled"
+                job.message = "Canceled by user"
+                job.error = None
     except Exception as exc:
         with session_scope() as session:
             clip = session.get(Clip, clip_id)

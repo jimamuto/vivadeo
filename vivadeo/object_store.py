@@ -74,6 +74,13 @@ class ObjectStore:
         self.client.download_file(self.bucket, key, str(path))
         return str(path)
 
+    def object_size(self, key: str) -> int:
+        response = self.client.head_object(Bucket=self.bucket, Key=key)
+        return int(response.get("ContentLength") or 0)
+
+    def delete_object(self, key: str) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=key)
+
     def presigned_url(self, key: str, expires_in: int | None = None) -> str:
         base = (
             self.settings.s3_public_endpoint_url or self.settings.s3_endpoint_url

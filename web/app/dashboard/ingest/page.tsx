@@ -31,7 +31,7 @@ export default async function IngestPage() {
             <strong>One task per view</strong>
           </article>
         </div>
-        <IngestPanel />
+        <IngestPanel workspace={activeWorkspace} />
       </div>
     </DashboardShell>
   );

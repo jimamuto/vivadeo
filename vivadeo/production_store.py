@@ -3,7 +3,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .db import Video, VideoChunk, new_id
+from .db import Clip, Video, VideoChunk, new_id
+from .object_store import ObjectStore
 
 
 class PostgresVideoStore:
@@ -81,7 +82,7 @@ class PostgresVideoStore:
             for chunk, video, dist in rows
         ]
 
-    def stats(self, organization_id: str | None = None) -> dict:
+    def stats(self, organization_id: str | None = None, object_store: ObjectStore | None = None) -> dict:
         video_stmt = select(func.count()).select_from(Video)
         chunk_stmt = select(func.count()).select_from(VideoChunk)
         if organization_id:
@@ -89,4 +90,31 @@ class PostgresVideoStore:
             chunk_stmt = chunk_stmt.where(VideoChunk.organization_id == organization_id)
         video_count = self.session.scalar(video_stmt) or 0
         chunk_count = self.session.scalar(chunk_stmt) or 0
-        return {"total_videos": video_count, "total_chunks": chunk_count}
+        storage_bytes = 0
+        if object_store is not None:
+            keys = list(
+                self.session.scalars(
+                    select(Video.object_key).where(
+                        Video.organization_id == organization_id,
+                        Video.object_key.is_not(None),
+                    )
+                ).all()
+            )
+            keys.extend(
+                self.session.scalars(
+                    select(Clip.object_key).where(
+                        Clip.organization_id == organization_id,
+                        Clip.object_key.is_not(None),
+                    )
+                ).all()
+            )
+            for key in keys:
+                try:
+                    storage_bytes += object_store.object_size(key)
+                except Exception:
+                    continue
+        return {
+            "total_videos": video_count,
+            "total_chunks": chunk_count,
+            "total_storage_bytes": storage_bytes,
+        }
