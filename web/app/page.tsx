@@ -74,33 +74,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="stats-band" aria-label="Vivadeo overview" id="about">
-        <article className="stats-card stats-image">
-          <SubjectPlaceholder tone="tan" />
-          <p className="placeholder-note">Place hero image or product art here.</p>
-        </article>
-        <article className="stats-card stats-dark">
-          <span>Workspace</span>
-          <strong>Northwind</strong>
-          <p>Workspace summary or status goes here.</p>
-        </article>
-        <article className="stats-card stats-prop">
-          <span>Search</span>
-          <strong>Ready</strong>
-          <p>Search result summary or key metric goes here.</p>
-        </article>
-        <article className="stats-card stats-light">
-          <span>Library</span>
-          <strong>Organized</strong>
-          <p>Library count or upload status goes here.</p>
-        </article>
-        <article className="stats-card stats-dark">
-          <span>Review</span>
-          <strong>Inline</strong>
-          <p>Review status or clip queue goes here.</p>
-        </article>
-      </section>
-
       <section className="service-band" id="features">
         <div className="section-heading">
           <p className="eyebrow eyebrow-dark">Efficient and integrated video services</p>
@@ -121,9 +94,9 @@ export default async function HomePage() {
       <section className="benefits-band">
         <div className="benefits-visual">
           <div className="benefits-stat card">
-            <span>Total Projects</span>
-            <strong>Sample</strong>
-            <p>Place a real KPI or summary here.</p>
+            <span>Workspace focus</span>
+            <strong>Sample archive</strong>
+            <p>A tactile block for a real workload summary or key visual.</p>
           </div>
           <div className="benefits-bars">
             <span />
@@ -153,14 +126,14 @@ export default async function HomePage() {
         </div>
         <div className="pricing-grid">
           <article className="pricing-card">
-            <h3>Starter</h3>
+            <h3>Studio</h3>
             <p>For small teams getting started with searchable archives.</p>
-            <strong>Sample</strong>
-            <span>Pricing placeholder for layout.</span>
+            <strong>Launch</strong>
+            <span>Simple onboarding and a focused workspace.</span>
             <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary pricing-cta">Get started</Link>
           </article>
           <article className="pricing-card">
-            <h3>Enterprise</h3>
+            <h3>Archive</h3>
             <p>For larger teams that need multiple workspaces and tighter controls.</p>
             <strong>Custom</strong>
             <span>Audit, admin, and rollout support.</span>
@@ -183,7 +156,7 @@ export default async function HomePage() {
         <div className="integration-orbit">
           <span>API</span>
           <span>Storage</span>
-          <span>Modal</span>
+          <span>Review</span>
           <span>Auth</span>
           <span>Jobs</span>
           <span>Media</span>

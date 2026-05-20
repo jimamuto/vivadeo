@@ -17,14 +17,16 @@ function NavItem({ href, label }: { href: string; label: string }) {
 
 export function DashboardShell({
   workspace,
+  profileInitial,
   children,
 }: Readonly<{
   workspace: string;
+  profileInitial: string;
   children: ReactNode;
 }>) {
   return (
     <div className="shell page dashboard-wrap">
-      <AppTopbar />
+      <AppTopbar profileInitial={profileInitial} />
       <div className="dashboard-shell">
         <aside className="dashboard-sidebar card">
           <div className="dashboard-sidebar-brand">

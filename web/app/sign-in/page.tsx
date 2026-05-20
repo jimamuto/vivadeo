@@ -47,9 +47,7 @@ export default async function SignInPage({
           </div>
           <div className="nav-center">
             <Link href="/" className="nav-link">Home</Link>
-            <Link href="/" className="nav-link">About</Link>
-            <Link href="/" className="nav-link">Services</Link>
-            <Link href="/" className="nav-link">Contact</Link>
+            <Link href="/dashboard" className="nav-link">Dashboard</Link>
           </div>
           <div className="nav-spacer" />
           <div className="nav-actions">

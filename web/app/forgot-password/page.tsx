@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function ForgotPasswordPage() {
   return (
-    <div className="shell" style={{ padding: "28px 0 48px" }}>
+    <div className="shell page">
       <div className="topbar">
         <div className="brand">
           <span className="brand-mark" />
