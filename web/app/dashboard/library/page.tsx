@@ -10,7 +10,7 @@ export default async function LibraryPage() {
   const { videos, jobs } = await fetchDashboardData(activeWorkspace);
 
   return (
-    <DashboardShell workspace={activeWorkspace}>
+      <DashboardShell workspace={activeWorkspace}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head">
           <div>
@@ -19,20 +19,6 @@ export default async function LibraryPage() {
             <p className="muted">Status, source metadata, upload time, quick hop into job or clip flow.</p>
           </div>
         </section>
-        <div className="dashboard-summary-row">
-          <article className="summary-chip">
-            <span>Library size</span>
-            <strong>{videos.length}</strong>
-          </article>
-          <article className="summary-chip">
-            <span>Ready videos</span>
-            <strong>{videos.filter((video) => video.status === "ready").length}</strong>
-          </article>
-          <article className="summary-chip">
-            <span>Failed ingest</span>
-            <strong>{jobs.filter((job) => job.status === "failed").length}</strong>
-          </article>
-        </div>
         <LibraryPanel videos={videos} jobs={jobs} />
       </div>
     </DashboardShell>

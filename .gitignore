@@ -16,5 +16,6 @@ notebooks/
 htmlcov/
 coverage.xml
 .coverage
+.playwright-mcp/
 
 CLAUDE.md

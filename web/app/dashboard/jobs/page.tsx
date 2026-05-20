@@ -10,7 +10,7 @@ export default async function JobsPage() {
   const { jobs } = await fetchDashboardData(activeWorkspace);
 
   return (
-    <DashboardShell workspace={activeWorkspace}>
+      <DashboardShell workspace={activeWorkspace}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head">
           <div>
@@ -19,20 +19,6 @@ export default async function JobsPage() {
             <p className="muted">Progress table lives here, not buried in mixed dashboard content.</p>
           </div>
         </section>
-        <div className="dashboard-summary-row">
-          <article className="summary-chip">
-            <span>Total jobs</span>
-            <strong>{jobs.length}</strong>
-          </article>
-          <article className="summary-chip">
-            <span>Active focus</span>
-            <strong>Queue health</strong>
-          </article>
-          <article className="summary-chip">
-            <span>View mode</span>
-            <strong>Compact table</strong>
-          </article>
-        </div>
         <JobsPanel jobs={jobs} />
       </div>
     </DashboardShell>

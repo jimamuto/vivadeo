@@ -372,16 +372,22 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
           <StatusLine status={urlStatus} />
         </form>
       </article>
-      <article className="card dash-stack">
+      <details className="card dash-stack dash-expandable ingest-history-panel">
+        <summary className="ingest-history-summary">
         <div>
           <h3>Interrupted ingests</h3>
           <p className="muted">Retry canceled or failed ingest jobs from this workspace without re-entering everything.</p>
         </div>
+        <div className="ingest-history-meta">
+          <span className="pill">{interruptedJobs.length} queued for recovery</span>
+          <span className="pill">{recoveryStatus.state === "loading" ? "Working" : "Tap to expand"}</span>
+        </div>
+        </summary>
         <StatusLine status={recoveryStatus} />
         {interruptedJobs.length === 0 ? (
           <p className="muted">No interrupted ingests found.</p>
         ) : (
-          <div className="job-history-list">
+          <div className="job-history-list ingest-history-list">
             {interruptedJobs.map((job) => (
               <article key={job.id} className="detail-card">
                 <span>{job.kind.replace(/_/g, " ")}</span>
@@ -395,7 +401,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
             ))}
           </div>
         )}
-      </article>
+      </details>
     </section>
   );
 }
@@ -537,8 +543,8 @@ export function ClipStudioPanel({
   }
 
   return (
-    <section className="dashboard-clip-panel">
-      <article className="card dash-stack dash-primary">
+    <section className="dashboard-split-panel dashboard-clip-panel">
+      <article className="card dash-stack dash-primary library-detail-panel">
         <PlaceholderBlock label="Clip frame" tone="oxblood" />
         <div>
           <h3>Clip desk</h3>
@@ -571,7 +577,7 @@ export function ClipStudioPanel({
           <StatusLine status={status} />
         </form>
       </article>
-      <article className="card dashboard-panel">
+      <article className="card dashboard-panel library-detail-panel">
         <div className="dashboard-panel-head">
           <h2>Preview before export</h2>
           <p className="muted">Check source range first, then export generated clip when worker finishes.</p>
@@ -620,9 +626,15 @@ export function ClipStudioPanel({
               </div>
             ) : null}
             {savedClips.filter((item) => item.video_id === sourcePreview.videoId).length > 0 ? (
-              <div className="dashboard-stack">
-                <h3>Recent clips from this source</h3>
-                <div className="job-history-list">
+              <details className="chunk-browser-panel">
+                <summary className="chunk-browser-summary">
+                  <div>
+                    <h3>Recent clips from this source</h3>
+                    <p className="muted">Saved clips and metadata tied to the current range.</p>
+                  </div>
+                  <span className="pill">{savedClips.filter((item) => item.video_id === sourcePreview.videoId).length} clips</span>
+                </summary>
+                <div className="job-history-list chunk-browser-list">
                   {savedClips
                     .filter((item) => item.video_id === sourcePreview.videoId)
                     .map((item) => (
@@ -633,7 +645,7 @@ export function ClipStudioPanel({
                       </article>
                     ))}
                 </div>
-              </div>
+              </details>
             ) : null}
           </div>
         )}
@@ -1062,7 +1074,7 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
         </div>
         <StatusLine status={actionStatus} />
         {!selectedVideo ? <p className="muted">Select video to inspect details.</p> : (
-          <div className="dashboard-stack">
+          <div className="dashboard-stack library-detail-body">
             <PlaceholderBlock label="Video detail" tone="grain" />
             <div className="detail-grid">
               <article className="detail-card">
@@ -1121,14 +1133,17 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
                 ))}
               </div>
             ) : null}
-            <div className="dashboard-stack">
-              <div className="dashboard-panel-head">
-                <h3>Chunk browser</h3>
-                <p className="muted">Ordered searchable segments from this source video.</p>
-              </div>
+            <details className="chunk-browser-panel" open>
+              <summary className="chunk-browser-summary">
+                <div>
+                  <h3>Chunk browser</h3>
+                  <p className="muted">Ordered searchable segments from this source video.</p>
+                </div>
+                <span className="pill">{chunks.length} chunks</span>
+              </summary>
               <StatusLine status={chunksStatus} />
               {chunks.length > 0 ? (
-                <div className="job-history-list">
+                <div className="job-history-list chunk-browser-list">
                   {chunks.map((chunk) => (
                     <article key={chunk.id} className="detail-card">
                       <span>Chunk {fmt(chunk.start_time)} - {fmt(chunk.end_time)}</span>
@@ -1140,7 +1155,7 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
               ) : chunksStatus.state === "ok" ? (
                 <p className="muted">No indexed chunks yet for this video.</p>
               ) : null}
-            </div>
+            </details>
             {clipsForSelectedVideo.length > 0 ? (
               <div className="dashboard-stack">
                 <h3>Clips from this video</h3>

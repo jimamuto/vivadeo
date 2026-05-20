@@ -8,7 +8,7 @@ export default async function IngestPage() {
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
 
   return (
-    <DashboardShell workspace={activeWorkspace}>
+      <DashboardShell workspace={activeWorkspace}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head">
           <div>
@@ -17,20 +17,6 @@ export default async function IngestPage() {
             <p className="muted">Upload file or queue URL without loading clip or job tables at same time.</p>
           </div>
         </section>
-        <div className="dashboard-summary-row">
-          <article className="summary-chip">
-            <span>Primary lane</span>
-            <strong>Upload first</strong>
-          </article>
-          <article className="summary-chip">
-            <span>Secondary lane</span>
-            <strong>URL queue</strong>
-          </article>
-          <article className="summary-chip">
-            <span>Focus</span>
-            <strong>One task per view</strong>
-          </article>
-        </div>
         <IngestPanel workspace={activeWorkspace} />
       </div>
     </DashboardShell>
