@@ -30,6 +30,19 @@ export async function POST(request: NextRequest) {
   if (authResponse.ok) {
     const workspaceId =
       workspace?.id || String(form.get("workspace") || "new-workspace");
+    const email = String(form.get("email") || "").trim().toLowerCase();
+
+    if (workspace?.id && email) {
+      await fetch(getBackendUrl(`/v1/workspaces/${encodeURIComponent(workspace.id)}/bootstrap-auth`), {
+        method: "POST",
+        headers: getBackendHeaders({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          email,
+        }),
+      });
+    }
 
     const resendKey = process.env.RESEND_API_KEY || "";
     const emailVerificationEnabled =

@@ -15,6 +15,8 @@ from .db import (
     Base,
     Clip,
     DeadLetterEntry,
+    AuthMembership,
+    AuthUser,
     Job,
     Organization,
     OrganizationSetting,
@@ -242,6 +244,51 @@ def create_workspace(
     session.add(org)
     session.commit()
     return WorkspaceResponse(id=org.id, slug=org.slug, name=org.name, plan=org.plan)
+
+
+@app.post(
+    "/v1/workspaces/{organization_id}/bootstrap-auth",
+    dependencies=[Depends(require_api_key)],
+)
+def bootstrap_workspace_auth(
+    organization_id: str,
+    request: dict,
+    session: Session = Depends(db_dep),
+):
+    email = str(request.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    org = _get_workspace(session, organization_id)
+    user = session.scalars(select(AuthUser).where(AuthUser.email == email)).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="Auth user not found")
+
+    membership = session.scalars(
+        select(AuthMembership).where(
+            AuthMembership.organization_id == org.id,
+            AuthMembership.user_id == user.id,
+        )
+    ).first()
+    if membership is None:
+        session.add(
+            AuthMembership(
+                organization_id=org.id,
+                user_id=user.id,
+                role="owner",
+            )
+        )
+
+    session.execute(
+        text(
+            "INSERT INTO organization (id, slug, name) "
+            "VALUES (:id, :slug, :name) "
+            "ON CONFLICT (id) DO NOTHING"
+        ),
+        {"id": org.id, "slug": org.slug, "name": org.name},
+    )
+    session.commit()
+    return {"organization_id": org.id, "email": email}
 
 
 @app.get(

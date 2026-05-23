@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
 import * as authSchema from "@/lib/auth-schema";
 import { getWorkspaceRoleOverrides } from "@/lib/workspace-role-overrides";
 
@@ -95,6 +96,7 @@ if (databaseUrl && authBaseUrl && authSecret) {
     baseURL: authBaseUrl,
     secret: authSecret,
     database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
+    plugins: [organization()],
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: emailVerificationEnabled,
@@ -153,9 +155,6 @@ if (databaseUrl && authBaseUrl && authSecret) {
           );
         },
       },
-    },
-    organization: {
-      enabled: true,
     },
   } as never);
 
