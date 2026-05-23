@@ -1,6 +1,7 @@
 """FastAPI production API."""
 
 from pathlib import Path
+import re
 import tempfile
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
@@ -229,6 +230,20 @@ def list_workspaces(session: Session = Depends(db_dep)) -> list[WorkspaceRespons
     ]
 
 
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "workspace"
+
+
+def _unique_workspace_slug(session: Session, base_slug: str) -> str:
+    slug = base_slug
+    suffix = 2
+    while session.scalars(select(Organization.id).where(Organization.slug == slug)).first():
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
+    return slug
+
+
 @app.post(
     "/v1/workspaces",
     response_model=WorkspaceResponse,
@@ -237,7 +252,11 @@ def list_workspaces(session: Session = Depends(db_dep)) -> list[WorkspaceRespons
 def create_workspace(
     request: WorkspaceCreateRequest, session: Session = Depends(db_dep)
 ) -> WorkspaceResponse:
-    slug = request.slug or request.name.lower().replace(" ", "-")
+    owner_part = ""
+    if request.owner_email and not request.slug:
+        owner_part = f"-{request.owner_email.split('@', 1)[0]}"
+    base_slug = _slugify(request.slug or f"{request.name}{owner_part}")
+    slug = _unique_workspace_slug(session, base_slug)
     org = Organization(id=new_id(), slug=slug, name=request.name)
     session.add(org)
     session.commit()

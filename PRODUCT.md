@@ -13,6 +13,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 ## Auth And Workspace
 
 - Workspace roles are app-level `owner/admin/editor/viewer`.
+- Sign-up workspace creation sends the normalized email as `owner_email`; backend workspace slugs are slugified from workspace name plus email local-part, then suffixed (`-2`, `-3`, etc.) on collision so duplicate display names do not break registration.
 - Better Auth native `member` is normalized to `editor`.
 - `editor/viewer` role overrides persist through `web/lib/workspace-role-overrides.ts`.
 - Server enforcement happens in `/api/proxy/[...path]`, which blocks mutating Vivadeo API calls for `viewer`.

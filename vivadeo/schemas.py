@@ -15,6 +15,7 @@ class WorkspaceResponse(BaseModel):
 class WorkspaceCreateRequest(BaseModel):
     name: str
     slug: str | None = None
+    owner_email: str | None = None
 
 
 class WorkspaceSettingsResponse(BaseModel):
