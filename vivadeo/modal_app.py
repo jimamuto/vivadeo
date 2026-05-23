@@ -273,7 +273,15 @@ class QwenEmbedder:
 whisper_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .uv_pip_install("faster-whisper>=1.1.0", "huggingface_hub")
+    .uv_pip_install(
+        "faster-whisper>=1.1.0",
+        "huggingface_hub",
+        "nvidia-cublas-cu12",
+        "nvidia-cudnn-cu12",
+    )
+    .env({
+        "LD_LIBRARY_PATH": "/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH",
+    })
 )
 
 
