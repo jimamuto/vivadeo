@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { DashboardShell } from "../dashboard-shell";
 import { ClipStudioPanel } from "../dashboard-ui";
+import { auth } from "@/lib/auth";
 
 export default async function ClipStudioPage({
   searchParams,
@@ -10,6 +12,9 @@ export default async function ClipStudioPage({
   const cookieStore = await cookies();
   const activeWorkspace =
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
+  const session = await auth.api.getSession({ headers: await headers() });
+  const displayName = session?.user?.name || session?.user?.email || "V";
+  const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const params = (await searchParams) ?? {};
   const clipId = typeof params.clip_id === "string" ? params.clip_id : "";
   const videoId = typeof params.video_id === "string" ? params.video_id : "";
@@ -17,7 +22,7 @@ export default async function ClipStudioPage({
   const endTime = typeof params.end_time === "string" ? params.end_time : "";
 
   return (
-    <DashboardShell workspace={activeWorkspace}>
+    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
       <div className="dashboard-solo dashboard-clip-stage">
         <section className="dashboard-section-head">
           <div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppTopbar } from "@/components/app-topbar";
 
@@ -76,7 +76,7 @@ function JobStages({ job }: { job: Job }) {
   );
 }
 
-export default function JobsPage() {
+function JobsContent() {
   const searchParams = useSearchParams();
   const [jobId, setJobId] = useState(searchParams.get("job") ?? "");
   const [job, setJob] = useState<Job | null>(null);
@@ -255,5 +255,13 @@ export default function JobsPage() {
         ) : null}
       </section>
     </div>
+  );
+}
+
+export default function JobsPage() {
+  return (
+    <Suspense fallback={null}>
+      <JobsContent />
+    </Suspense>
   );
 }

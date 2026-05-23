@@ -259,8 +259,15 @@ def test_stats_includes_storage_bytes(monkeypatch):
                 "total_storage_bytes": 1048576,
             }
 
+    class FakeObjectStore:
+        def ensure_bucket(self):
+            return None
+
+        def __eq__(self, other):
+            return other == "object-store"
+
     monkeypatch.setattr(api, "PostgresVideoStore", FakeStore)
-    monkeypatch.setattr(api, "ObjectStore", lambda: "object-store")
+    monkeypatch.setattr(api, "ObjectStore", FakeObjectStore)
 
     with TestClient(app) as client:
         response = client.get("/v1/stats", headers={"X-API-Key": "test-key"})
