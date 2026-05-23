@@ -36,7 +36,6 @@ export function DashboardShell({
             <NavItem href="/dashboard" label="Overview" />
             <NavItem href="/dashboard/ingest" label="Ingest" />
             <NavItem href="/dashboard/library" label="Library" />
-            <NavItem href="/dashboard/clip-studio" label="Clip studio" />
             <NavItem href="/dashboard/jobs" label="Jobs" />
             <NavItem href="/dashboard/workspace" label="Workspace" />
           </nav>

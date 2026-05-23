@@ -28,14 +28,12 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Search
 
-- Saved and recent searches are client-only in `localStorage` under `vivadeo.saved-searches` and `vivadeo.recent-searches`; there is no server sync or workspace scoping yet.
-- Search permalink support is URL-based in `/search` query params: `q`, `source`, `status`, `score`, and `result`.
-- Search permalink sharing is copy-to-clipboard only; no server-stored shared search objects exist.
-- Search preview seeks the source player to the selected match start time on selection and via `Jump to match`.
-- Search preview depends on browser media seek support against `/api/proxy/v1/media/:object_key`.
-- Search supports image-query mode through `/api/proxy/v1/search/image` with multipart upload.
-- Backend image search writes the uploaded image to a temp file for the embedder, then deletes it.
-- Search rail includes current workspace context plus source, status, time-range, and clip-type filters.
+- Search is moving to a transcript-grounded chat surface on `/search`.
+- Search chat sends conversation history to backend `/v1/search/chat` through `/api/proxy/v1/search/chat`.
+- Search chat retrieves relevant video chunks, attaches overlapping transcript segments, and asks Modal-hosted Gemma E4B through Modal remote functions, not HTTP model endpoints.
+- Search answers return transcript citations with video filename, source URI, and timestamp ranges.
+- Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
+- Recent searches are client-only in `localStorage` under `vivadeo.recent-searches`; there is no server sync or workspace scoping yet.
 - Workspace value in search is derived from the `vivadeo_workspace` cookie on the client.
 
 ## Ingest And Jobs
@@ -54,15 +52,10 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Clips
 
-- Clip workflow hands off from search results and library detail into `/dashboard/clip-studio` through query params: `video_id`, `start_time`, and `end_time`.
-- Keep the clip studio query-param contract stable if route params change.
-- Clip studio fetches source video metadata through `/api/proxy/v1/videos/:id`.
-- Clip studio polls `/api/proxy/v1/clips/:id`.
-- Clip studio previews source media from `/api/proxy/v1/media/:object_key`.
-- Clip studio exposes direct original and clip download links when available.
-- Clip registry is client-only in `web/lib/clip-registry.ts`.
-- Library clip lists, multiple clips per source, and clip metadata edits are local browser state, not backend persistence.
-- Clip collections/folders and share links are client-side only through `web/lib/clip-registry.ts` and `/dashboard/clip-studio` query params.
+- Clip studio UI is removed for the current phase while `/search` becomes a transcript-grounded chat surface.
+- Backend clip APIs and stored clip objects may still exist for compatibility, but the product no longer links users into `/dashboard/clip-studio`.
+- Future clip extraction should use answer citation ranges as evidence, but this is not active yet.
+- Clip registry remains client-only in `web/lib/clip-registry.ts` for legacy local clip metadata.
 - There is no server-side sharing object or public embed endpoint yet.
 
 ## Library And Usage

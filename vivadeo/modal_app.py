@@ -1,6 +1,11 @@
-"""Modal deployment for Qwen/Qwen3-VL-Embedding-2B.
+"""Modal deployment for Vivadeo remote inference.
 
-Deploy:
+Includes:
+- Qwen/Qwen3-VL-Embedding-2B embeddings
+- faster-whisper transcription
+- Gemma answer generation
+
+Deploy all:
   modal deploy vivadeo/modal_app.py
 """
 
@@ -12,10 +17,14 @@ from pathlib import Path
 import modal
 
 MODEL_ID = "Qwen/Qwen3-VL-Embedding-2B"
+GEMMA_MODEL_ID = "google/gemma-3-4b-it"
+WHISPER_MODEL_SIZE = "small"
 DIMENSIONS = 768
 
 app = modal.App("vivadeo-qwen3-vl-embedding-2b")
 model_volume = modal.Volume.from_name("qwen3-vl-embedding-2b-cache", create_if_missing=True)
+whisper_volume = modal.Volume.from_name("vivadeo-faster-whisper-cache", create_if_missing=True)
+gemma_volume = modal.Volume.from_name("vivadeo-gemma-e4b-cache", create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -259,3 +268,126 @@ class QwenEmbedder:
             self._embed_video_bytes(video_bytes, filename)
             for video_bytes, filename in items
         ]
+
+
+whisper_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
+    .uv_pip_install("faster-whisper>=1.1.0", "huggingface_hub")
+)
+
+
+@app.function(
+    image=whisper_image,
+    gpu="L4",
+    memory=16384,
+    timeout=1800,
+    scaledown_window=300,
+    volumes={"/models": whisper_volume},
+)
+def transcribe(media_bytes: bytes, filename: str = "video.mp4") -> list[dict]:
+    from faster_whisper import WhisperModel
+
+    os.environ["HF_HOME"] = "/models/huggingface"
+    suffix = Path(filename).suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(media_bytes)
+        path = tmp.name
+    try:
+        model = WhisperModel(
+            WHISPER_MODEL_SIZE,
+            device="cuda",
+            compute_type="float16",
+            download_root="/models/faster-whisper",
+        )
+        segments, _info = model.transcribe(
+            path,
+            beam_size=5,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500},
+            condition_on_previous_text=False,
+        )
+        return [
+            {"start_time": float(segment.start), "end_time": float(segment.end), "text": segment.text.strip()}
+            for segment in segments
+            if segment.text and segment.text.strip()
+        ]
+    finally:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+
+gemma_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .uv_pip_install("accelerate", "torch>=2.0", "transformers>=4.53", "huggingface_hub")
+)
+
+
+def _format_context(context: list[dict]) -> str:
+    lines = []
+    for index, item in enumerate(context, 1):
+        lines.append(
+            f"[{index}] {item.get('filename')} "
+            f"{item.get('start_time'):.1f}-{item.get('end_time'):.1f}s: "
+            f"{item.get('text')}"
+        )
+    return "\n".join(lines)
+
+
+@app.function(
+    image=gemma_image,
+    gpu="L40S",
+    memory=32768,
+    timeout=900,
+    scaledown_window=300,
+    volumes={"/models": gemma_volume},
+)
+def answer(messages: list[dict], context: list[dict]) -> dict:
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    os.environ["HF_HOME"] = "/models/huggingface"
+    tokenizer = AutoTokenizer.from_pretrained(GEMMA_MODEL_ID, cache_dir="/models/huggingface")
+    model = AutoModelForCausalLM.from_pretrained(
+        GEMMA_MODEL_ID,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+        cache_dir="/models/huggingface",
+    )
+
+    history = [
+        {"role": msg.get("role", "user"), "content": str(msg.get("content", ""))}
+        for msg in messages[-10:]
+        if msg.get("content")
+    ]
+    system = (
+        "You are Vivadeo, a transcript-grounded video archive assistant. "
+        "Answer only from the transcript evidence. If evidence is insufficient, say so. "
+        "Cite evidence with bracket numbers like [1]. Be concise and specific."
+    )
+    prompt_messages = [
+        {"role": "system", "content": system},
+        *history[:-1],
+        {
+            "role": "user",
+            "content": (
+                f"Transcript evidence:\n{_format_context(context)}\n\n"
+                f"Question: {history[-1]['content'] if history else ''}"
+            ),
+        },
+    ]
+    prompt = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        output = model.generate(
+            **inputs,
+            max_new_tokens=512,
+            do_sample=False,
+            temperature=0.0,
+            repetition_penalty=1.05,
+        )
+    generated = output[0][inputs["input_ids"].shape[-1]:]
+    text = tokenizer.decode(generated, skip_special_tokens=True).strip()
+    return {"answer": text}

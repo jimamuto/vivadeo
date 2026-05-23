@@ -22,15 +22,20 @@ from .db import (
     SessionLocal,
     Video,
     VideoChunk,
+    VideoTranscriptSegment,
     make_engine,
     new_id,
     utcnow,
 )
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
+from .modal_gemma import ModalGemmaChat
 from .object_store import ObjectStore, video_object_key
 from .production_store import PostgresVideoStore
 from .schemas import (
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
     ClipRequest,
     ClipResponse,
     DeadLetterEntryResponse,
@@ -635,6 +640,7 @@ def delete_video(
     if clip_ids:
         session.execute(delete(Job).where(Job.clip_id.in_(clip_ids)))
     session.execute(delete(Clip).where(Clip.video_id == video_id, Clip.organization_id == organization_id))
+    session.execute(delete(VideoTranscriptSegment).where(VideoTranscriptSegment.video_id == video_id, VideoTranscriptSegment.organization_id == organization_id))
     session.execute(delete(VideoChunk).where(VideoChunk.video_id == video_id, VideoChunk.organization_id == organization_id))
     session.execute(delete(Job).where(Job.video_id == video_id, Job.organization_id == organization_id))
     session.delete(video)
@@ -834,6 +840,89 @@ def search(
     if request.threshold is not None:
         results = [r for r in results if r["similarity_score"] >= request.threshold]
     return SearchResponse(results=results)
+
+
+@app.post(
+    "/v1/search/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def search_chat(
+    request: ChatRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    question = next(
+        (message.content.strip() for message in reversed(request.messages) if message.role == "user" and message.content.strip()),
+        "",
+    )
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+
+    try:
+        embedding = get_embedder().embed_query(question)
+        chunk_hits = PostgresVideoStore(session).search(
+            embedding,
+            n_results=request.results,
+            organization_id=organization_id,
+            video_id=request.video_id,
+        )
+    finally:
+        reset_embedder()
+
+    citations = []
+    seen_segment_ids: set[str] = set()
+    for hit in chunk_hits:
+        stmt = (
+            select(VideoTranscriptSegment, Video)
+            .join(Video, Video.id == VideoTranscriptSegment.video_id)
+            .where(
+                VideoTranscriptSegment.organization_id == organization_id,
+                VideoTranscriptSegment.video_id == hit["video_id"],
+                VideoTranscriptSegment.end_time >= hit["start_time"],
+                VideoTranscriptSegment.start_time <= hit["end_time"],
+            )
+            .order_by(VideoTranscriptSegment.start_time.asc())
+            .limit(6)
+        )
+        for segment, video in session.execute(stmt).all():
+            if segment.id in seen_segment_ids:
+                continue
+            seen_segment_ids.add(segment.id)
+            citations.append(
+                {
+                    "segment_id": segment.id,
+                    "video_id": video.id,
+                    "filename": video.filename,
+                    "source_uri": video.source_uri,
+                    "start_time": segment.start_time,
+                    "end_time": segment.end_time,
+                    "text": segment.text,
+                    "similarity_score": hit.get("similarity_score"),
+                }
+            )
+            if len(citations) >= request.results:
+                break
+        if len(citations) >= request.results:
+            break
+
+    if not citations:
+        return ChatResponse(
+            answer="No transcript evidence is available yet. Reindex or ingest videos with transcription enabled, then ask again.",
+            citations=[],
+        )
+
+    settings = get_runtime_settings()
+    messages = [message.model_dump() for message in request.messages[-10:]]
+    try:
+        answer = ModalGemmaChat(
+            app_name=settings.modal_gemma_app,
+            function_name=settings.modal_gemma_function,
+            timeout=settings.modal_timeout,
+        ).answer(messages, citations)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return ChatResponse(answer=answer, citations=citations)
 
 
 @app.post(

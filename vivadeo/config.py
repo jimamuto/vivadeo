@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     )
     modal_class: str = Field("QwenEmbedder", alias="VIVADEO_MODAL_CLASS")
     modal_timeout: int = Field(900, alias="VIVADEO_MODAL_TIMEOUT")
+    modal_whisper_app: str = Field("vivadeo-qwen3-vl-embedding-2b", alias="VIVADEO_MODAL_WHISPER_APP")
+    modal_whisper_function: str = Field("transcribe", alias="VIVADEO_MODAL_WHISPER_FUNCTION")
+    modal_gemma_app: str = Field("vivadeo-qwen3-vl-embedding-2b", alias="VIVADEO_MODAL_GEMMA_APP")
+    modal_gemma_function: str = Field("answer", alias="VIVADEO_MODAL_GEMMA_FUNCTION")
+    chat_context_segments: int = Field(8, alias="VIVADEO_CHAT_CONTEXT_SEGMENTS")
 
     chunk_duration: int = Field(30, alias="VIVADEO_CHUNK_DURATION")
     chunk_overlap: int = Field(5, alias="VIVADEO_CHUNK_OVERLAP")

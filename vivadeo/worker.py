@@ -1,18 +1,20 @@
 """Celery worker tasks for production ingestion and clip generation."""
 
+import json
 import os
 import shutil
 import tempfile
 from pathlib import Path
 
 from celery import Celery
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
 from .config import get_settings
-from .db import Clip, DeadLetterEntry, Job, Video, new_id, session_scope
+from .db import Clip, DeadLetterEntry, Job, Video, VideoTranscriptSegment, new_id, session_scope
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
+from .modal_whisper import ModalWhisperTranscriber
 from .object_store import ObjectStore, clip_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
@@ -72,6 +74,50 @@ def _record_dlq(video_id: str, chunk_id: str, source_uri: str, start: float, end
                 attempts=1,
             )
         )
+
+
+def _transcript_object_key(video_id: str) -> str:
+    return f"transcripts/{video_id}.json"
+
+
+def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
+    settings = get_settings()
+    _update_job(job_id, status="running", progress=0.08, message="Transcribing audio")
+    segments = ModalWhisperTranscriber(
+        app_name=settings.modal_whisper_app,
+        function_name=settings.modal_whisper_function,
+        timeout=settings.modal_timeout,
+    ).transcribe(file_path)
+    store = ObjectStore()
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    try:
+        json.dump({"video_id": video_id, "segments": segments}, tmp, ensure_ascii=False)
+        tmp.close()
+        store.upload_file(tmp.name, _transcript_object_key(video_id), "application/json")
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+    with session_scope() as session:
+        session.execute(
+            delete(VideoTranscriptSegment).where(
+                VideoTranscriptSegment.video_id == video_id,
+                VideoTranscriptSegment.organization_id == organization_id,
+            )
+        )
+        for segment in segments:
+            session.add(
+                VideoTranscriptSegment(
+                    id=new_id(),
+                    organization_id=organization_id,
+                    video_id=video_id,
+                    start_time=float(segment["start_time"]),
+                    end_time=float(segment["end_time"]),
+                    text=str(segment["text"]),
+                )
+            )
 
 
 def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
@@ -213,6 +259,8 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
             video.status = "indexing"
 
         _raise_if_canceled(job_id)
+        _transcribe_file(video_id, organization_id, path, job_id)
+        _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
@@ -241,6 +289,8 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
         store.download_file(object_key, local_path)
         _raise_if_canceled(job_id)
         _mark_video(video_id, status="indexing", duration=_get_video_duration(local_path))
+        _transcribe_file(video_id, organization_id, local_path, job_id)
+        _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, local_path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
@@ -274,6 +324,8 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
             video.object_key = object_key
             video.duration = _get_video_duration(path)
             video.status = "indexing"
+        _raise_if_canceled(job_id)
+        _transcribe_file(video_id, organization_id, path, job_id)
         _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)

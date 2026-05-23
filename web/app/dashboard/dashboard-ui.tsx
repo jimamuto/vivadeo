@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { appendActivity, readActivityLog, type ActivityEntry } from "@/lib/activity-log";
-import type { Clip } from "@/lib/api";
-import { readSavedClips, upsertSavedClip, writeSavedClips, type SavedClip } from "@/lib/clip-registry";
+import { readSavedClips, writeSavedClips, type SavedClip } from "@/lib/clip-registry";
 import { readVideoLabels, writeVideoLabels } from "@/lib/video-labels";
 import { useWorkspacePermissions } from "@/lib/workspace-permissions";
 import type { Job, Video, VideoChunk } from "./dashboard-data";
@@ -406,254 +405,6 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   );
 }
 
-export function ClipStudioPanel({
-  initialClipId = "",
-  initialVideoId = "",
-  initialStartTime = "",
-  initialEndTime = "",
-  workspace = "default-workspace",
-}: {
-  initialClipId?: string;
-  initialVideoId?: string;
-  initialStartTime?: string;
-  initialEndTime?: string;
-  workspace?: string;
-}) {
-  const permissions = useWorkspacePermissions(workspace);
-  const videoIdRef = useRef<HTMLInputElement>(null);
-  const startRef = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<FetchStatus>({ state: "idle" });
-  const [video, setVideo] = useState<Video | null>(null);
-  const [clip, setClip] = useState<Clip | null>(null);
-  const [savedClips, setSavedClips] = useState<SavedClip[]>([]);
-  const [sourcePreview, setSourcePreview] = useState({
-    videoId: initialVideoId,
-    startTime: initialStartTime,
-    endTime: initialEndTime,
-  });
-
-  useEffect(() => {
-    setSavedClips(readSavedClips());
-  }, []);
-
-  useEffect(() => {
-    if (!initialClipId) return;
-    let mounted = true;
-    void (async () => {
-      try {
-        const response = await fetch(`/api/proxy/v1/clips/${initialClipId}`);
-        if (!response.ok) throw new Error(`Clip lookup failed (${response.status})`);
-        const payload = (await response.json()) as Clip;
-        if (!mounted) return;
-        setClip(payload);
-        setSourcePreview({
-          videoId: payload.video_id,
-          startTime: String(payload.start_time),
-          endTime: String(payload.end_time),
-        });
-      } catch {
-        return;
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [initialClipId]);
-
-  useEffect(() => {
-    const videoId = sourcePreview.videoId.trim();
-    if (!videoId) {
-      setVideo(null);
-      return;
-    }
-    let mounted = true;
-    void (async () => {
-      try {
-        const response = await fetch(`/api/proxy/v1/videos/${videoId}`);
-        if (!response.ok) throw new Error(`Video lookup failed (${response.status})`);
-        const payload = (await response.json()) as Video;
-        if (mounted) setVideo(payload);
-      } catch {
-        if (mounted) setVideo(null);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [sourcePreview.videoId]);
-
-  useEffect(() => {
-    if (!clip?.id) return;
-    let mounted = true;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    const poll = async () => {
-      try {
-        const response = await fetch(`/api/proxy/v1/clips/${clip.id}`);
-        if (!response.ok) throw new Error(`Clip lookup failed (${response.status})`);
-        const payload = (await response.json()) as Clip;
-        if (mounted) {
-          setClip(payload);
-          const existing = savedClips.find((item) => item.id === payload.id);
-          const nextSaved = upsertSavedClip(payload, existing);
-          setSavedClips((current) => [nextSaved, ...current.filter((item) => item.id !== nextSaved.id)]);
-        }
-        if (payload.status === "ready" || payload.status === "failed") return;
-        timeoutId = setTimeout(poll, 2500);
-      } catch {
-        return;
-      }
-    };
-
-    poll();
-    return () => {
-      mounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [clip?.id, savedClips]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setStatus({ state: "loading" });
-    setClip(null);
-    const payload = {
-      video_id: videoIdRef.current?.value,
-      start_time: parseFloat(startRef.current?.value ?? "0"),
-      end_time: parseFloat(endRef.current?.value ?? "0"),
-    };
-    try {
-      const nextClip = await proxyPost<Clip>(
-        "/v1/clips",
-        JSON.stringify(payload),
-      );
-      setSourcePreview({
-        videoId: payload.video_id ?? "",
-        startTime: String(payload.start_time),
-        endTime: String(payload.end_time),
-      });
-      setClip(nextClip);
-      const nextSaved = upsertSavedClip(nextClip);
-      setSavedClips((current) => [nextSaved, ...current.filter((item) => item.id !== nextSaved.id)]);
-      appendActivity(workspace, "clip.created", `${payload.video_id} ${payload.start_time}-${payload.end_time}`);
-      setStatus({ state: "ok", message: `Clip queued - job ${nextClip.job_id ?? "pending"}` });
-    } catch (e: unknown) {
-      setStatus({ state: "error", message: `Failed: ${(e as Error).message}` });
-    }
-  }
-
-  return (
-    <section className="dashboard-split-panel dashboard-clip-panel">
-      <article className="card dash-stack dash-primary library-detail-panel">
-        <PlaceholderBlock label="Clip frame" tone="oxblood" />
-        <div>
-          <h3>Clip desk</h3>
-          <p className="muted">Trim source ranges in dedicated flow. Search and library can prefill exact ranges here.</p>
-        </div>
-        <form className="form" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="video_id">Video ID</label>
-            <input ref={videoIdRef} id="video_id" name="video_id" placeholder="video_123" defaultValue={initialVideoId} />
-          </div>
-          <div className="split">
-            <div className="field"><label htmlFor="start_time">Start time</label><input ref={startRef} id="start_time" type="number" min="0" step="0.1" placeholder="12.5" defaultValue={initialStartTime} /></div>
-            <div className="field"><label htmlFor="end_time">End time</label><input ref={endRef} id="end_time" type="number" min="0" step="0.1" placeholder="34.0" defaultValue={initialEndTime} /></div>
-          </div>
-          <button
-            className="button-secondary"
-            type="button"
-            onClick={() =>
-              setSourcePreview({
-                videoId: videoIdRef.current?.value ?? "",
-                startTime: startRef.current?.value ?? "",
-                endTime: endRef.current?.value ?? "",
-              })
-            }
-          >
-            Preview range
-          </button>
-          {!permissions.canEdit ? <p className="muted">Viewer role cannot create clips.</p> : null}
-          <button className="button" type="submit" disabled={status.state === "loading" || !permissions.canEdit}>Create clip</button>
-          <StatusLine status={status} />
-        </form>
-      </article>
-      <article className="card dashboard-panel library-detail-panel">
-        <div className="dashboard-panel-head">
-          <h2>Preview before export</h2>
-          <p className="muted">Check source range first, then export generated clip when worker finishes.</p>
-        </div>
-        {!video?.object_key ? (
-          <div className="empty-state">
-            <h3>No source preview yet</h3>
-            <p className="muted">Enter video and range, then use preview range.</p>
-          </div>
-        ) : (
-          <div className="dashboard-stack">
-            <video
-              src={`/api/proxy/v1/media/${video.object_key}`}
-              controls
-              muted
-              playsInline
-              preload="metadata"
-              className="search-video"
-            />
-            <div className="detail-grid">
-              <article className="detail-card">
-                <span>Video</span>
-                <strong>{video.filename}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Range</span>
-                <strong>{sourcePreview.startTime || "0.0"} - {sourcePreview.endTime || "0.0"}</strong>
-              </article>
-            </div>
-            <article className="detail-card">
-              <span>Source attribution</span>
-              <strong className="detail-wrap">{video.source_uri}</strong>
-            </article>
-            {clip ? (
-              <div className="dashboard-stack">
-                <article className="detail-card">
-                  <span>Clip status</span>
-                  <strong>{clip.status}</strong>
-                </article>
-                <div className="dashboard-panel-links">
-                  {clip.url ? (
-                    <a href={clip.url} className="button" target="_blank" rel="noreferrer">Download clip</a>
-                  ) : null}
-                  <a href={`/api/proxy/v1/media/${video.object_key}`} className="button-secondary" target="_blank" rel="noreferrer">Open original</a>
-                </div>
-              </div>
-            ) : null}
-            {savedClips.filter((item) => item.video_id === sourcePreview.videoId).length > 0 ? (
-              <details className="chunk-browser-panel">
-                <summary className="chunk-browser-summary">
-                  <div>
-                    <h3>Recent clips from this source</h3>
-                    <p className="muted">Saved clips and metadata tied to the current range.</p>
-                  </div>
-                  <span className="pill">{savedClips.filter((item) => item.video_id === sourcePreview.videoId).length} clips</span>
-                </summary>
-                <div className="job-history-list chunk-browser-list">
-                  {savedClips
-                    .filter((item) => item.video_id === sourcePreview.videoId)
-                    .map((item) => (
-                      <article key={item.id} className="detail-card">
-                        <span>{item.name}</span>
-                        <strong>{fmt(item.start_time)} - {fmt(item.end_time)}</strong>
-                        <p className="muted">{video.source_uri}</p>
-                      </article>
-                    ))}
-                </div>
-              </details>
-            ) : null}
-          </div>
-        )}
-      </article>
-    </section>
-  );
-}
-
 export function JobsPanel({ jobs }: { jobs: Job[]; }) {
   const permissions = useWorkspacePermissions();
   const [items, setItems] = useState(jobs);
@@ -955,16 +706,6 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
     });
   }
 
-  async function copyClipLink(clip: SavedClip) {
-    const url = new URL(window.location.origin);
-    url.pathname = "/dashboard/clip-studio";
-    url.searchParams.set("clip_id", clip.id);
-    url.searchParams.set("video_id", clip.video_id);
-    url.searchParams.set("start_time", clip.start_time.toFixed(1));
-    url.searchParams.set("end_time", clip.end_time.toFixed(1));
-    await navigator.clipboard.writeText(url.toString());
-  }
-
   function addLabel() {
     if (!selectedVideo || !labelDraft.trim()) return;
     const next = {
@@ -1070,7 +811,7 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
       <article className="card dashboard-panel">
         <div className="dashboard-panel-head">
           <h2>Video detail</h2>
-          <p className="muted">Source metadata, latest ingest state, direct path into jobs and clip flow.</p>
+          <p className="muted">Source metadata, latest ingest state, searchable chunks, and transcript-ready answers.</p>
         </div>
         <StatusLine status={actionStatus} />
         {!selectedVideo ? <p className="muted">Select video to inspect details.</p> : (
@@ -1187,7 +928,6 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
                       ) : (
                         <div className="dashboard-panel-links">
                           <button type="button" className="button-secondary" onClick={() => setEditingClipId(clip.id)} disabled={!permissions.canEdit}>Edit metadata</button>
-                          <button type="button" className="button-secondary" onClick={() => void copyClipLink(clip)}>Copy share link</button>
                           {clip.url ? <a href={clip.url} className="button-secondary" target="_blank" rel="noreferrer">Open clip</a> : null}
                         </div>
                       )}
@@ -1199,19 +939,7 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
             ) : null}
             <div className="dashboard-panel-links">
               <Link href={`/jobs?job=${encodeURIComponent(latestJobByVideo.get(selectedVideo.id)?.id ?? "")}`} className="button-secondary">Open latest job</Link>
-              <Link
-                href={{
-                  pathname: "/dashboard/clip-studio",
-                  query: {
-                    video_id: selectedVideo.id,
-                    start_time: "0.0",
-                    end_time: selectedVideo.duration != null ? Math.min(selectedVideo.duration, 30).toFixed(1) : "30.0",
-                  },
-                }}
-                className="button-secondary"
-              >
-                Create clip
-              </Link>
+              <Link href="/search" className="button-secondary">Ask about this video</Link>
             </div>
           </div>
         )}

@@ -137,6 +137,18 @@ class VideoChunk(Base):
     video: Mapped[Video] = relationship(back_populates="chunks")
 
 
+class VideoTranscriptSegment(Base):
+    __tablename__ = "video_transcript_segments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False, default="default-workspace")
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id"), nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 

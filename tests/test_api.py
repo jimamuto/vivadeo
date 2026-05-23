@@ -165,6 +165,79 @@ def test_video_chunk_response_includes_metadata():
     assert response.created_at == now
 
 
+def test_search_chat_answers_with_transcript_citations(monkeypatch):
+    now = datetime.now(timezone.utc)
+    segment = SimpleNamespace(
+        id="segment-1",
+        video_id="video-1",
+        start_time=10.0,
+        end_time=18.0,
+        text="The launch timeline is next Friday.",
+    )
+    video = SimpleNamespace(
+        id="video-1",
+        filename="townhall.mp4",
+        source_uri="s3://videos/townhall.mp4",
+    )
+
+    class FakeEmbedder:
+        def embed_query(self, query):
+            assert query == "When is launch?"
+            return [0.1, 0.2]
+
+    class FakeStore:
+        def __init__(self, session):
+            self.session = session
+
+        def search(self, embedding, n_results, organization_id, video_id):
+            assert embedding == [0.1, 0.2]
+            assert n_results == 4
+            assert organization_id == "default-workspace"
+            assert video_id is None
+            return [
+                {
+                    "video_id": "video-1",
+                    "start_time": 9.0,
+                    "end_time": 20.0,
+                    "similarity_score": 0.87,
+                }
+            ]
+
+    class FakeRows:
+        def all(self):
+            return [(segment, video)]
+
+    class FakeSession:
+        def execute(self, stmt):
+            return FakeRows()
+
+    class FakeGemma:
+        def __init__(self, app_name, function_name, timeout):
+            assert app_name == "gemma-app"
+            assert function_name == "answer"
+
+        def answer(self, messages, context):
+            assert messages[-1]["content"] == "When is launch?"
+            assert context[0]["text"] == "The launch timeline is next Friday."
+            return "Launch is next Friday."
+
+    monkeypatch.setattr(api, "get_embedder", lambda: FakeEmbedder())
+    monkeypatch.setattr(api, "reset_embedder", lambda: None)
+    monkeypatch.setattr(api, "PostgresVideoStore", FakeStore)
+    monkeypatch.setattr(api, "ModalGemmaChat", FakeGemma)
+    monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(modal_gemma_app="gemma-app", modal_gemma_function="answer", modal_timeout=30))
+
+    response = api.search_chat(
+        api.ChatRequest(messages=[api.ChatMessage(role="user", content="When is launch?")], results=4),
+        session=FakeSession(),
+        organization_id="default-workspace",
+    )
+
+    assert response.answer == "Launch is next Friday."
+    assert response.citations[0].text == "The launch timeline is next Friday."
+    assert response.citations[0].similarity_score == 0.87
+
+
 def test_search_by_image_returns_search_results(monkeypatch):
     _disable_startup_io(monkeypatch)
     monkeypatch.setattr(

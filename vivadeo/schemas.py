@@ -113,6 +113,33 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    results: int = Field(8, ge=1, le=30)
+    video_id: str | None = None
+
+
+class ChatCitation(BaseModel):
+    segment_id: str
+    video_id: str
+    filename: str
+    source_uri: str
+    start_time: float
+    end_time: float
+    text: str
+    similarity_score: float | None = None
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    citations: list[ChatCitation]
+
+
 class ClipRequest(BaseModel):
     video_id: str
     start_time: float
