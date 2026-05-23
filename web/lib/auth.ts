@@ -194,7 +194,7 @@ function createAuthEndpointRequest(
   }
 
   return new Request(url, {
-    method: body ? "POST" : request.method,
+    method: body ? "POST" : "GET",
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -247,12 +247,12 @@ async function getWorkspaceRoleForRequest(
     },
     cache: "no-store",
   });
-  if (!membersResponse.ok) return "viewer";
+  if (!membersResponse.ok) return organizationId === "default-workspace" ? "editor" : "viewer";
   const membersPayload = (await membersResponse.json()) as {
     members?: Array<{ role?: string | null; user?: { email?: string | null } }>;
   };
   const membership = membersPayload.members?.find((member) => member.user?.email === email);
-  return normalizeWorkspaceRole(membership?.role);
+  return membership ? normalizeWorkspaceRole(membership.role) : organizationId === "default-workspace" ? "editor" : "viewer";
 }
 
 export { authHandlers, getWorkspaceRoleForRequest, normalizeWorkspaceRole, postAuthEndpoint };

@@ -53,12 +53,15 @@ export function useWorkspacePermissions(workspace?: string) {
         const membersResponse = await fetch(
           `/api/auth/organization/list-members?organizationId=${encodeURIComponent(activeWorkspace)}`,
         );
-        if (!membersResponse.ok) throw new Error("members");
+        if (!membersResponse.ok) {
+          setRole(activeWorkspace === "default-workspace" ? "editor" : "viewer");
+          return;
+        }
         const membersPayload = (await membersResponse.json()) as {
           members: Array<{ role: string; user?: { email?: string | null } }>;
         };
         const member = membersPayload.members.find((item) => item.user?.email === email);
-        setRole(normalizeRole(member?.role));
+        setRole(member ? normalizeRole(member.role) : activeWorkspace === "default-workspace" ? "editor" : "viewer");
       } catch {
         setRole("viewer");
       } finally {
