@@ -44,7 +44,7 @@ async function forward(
     } else if (contentType.includes("application/json")) {
       body = await request.text();
       headers.set("Content-Type", "application/json");
-    } else {
+    } else if (contentType) {
       const form = await request.formData();
       const payload = Object.fromEntries(form.entries());
       body = JSON.stringify(payload);
@@ -61,7 +61,8 @@ async function forward(
     duplex: "half",
   });
   const text = await response.text();
-  return new NextResponse(text, {
+  const responseBody = response.status === 204 || response.status === 304 ? null : text;
+  return new NextResponse(responseBody, {
     status: response.status,
     headers: {
       "content-type":
