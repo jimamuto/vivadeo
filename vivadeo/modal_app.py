@@ -20,7 +20,7 @@ model_volume = modal.Volume.from_name("qwen3-vl-embedding-2b-cache", create_if_m
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .pip_install(
+    .uv_pip_install(
         "accelerate",
         "huggingface_hub",
         "qwen-vl-utils",
