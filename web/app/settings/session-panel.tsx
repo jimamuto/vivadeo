@@ -68,7 +68,7 @@ export function SessionPanel() {
   }
 
   return (
-    <article className="card dashboard-panel">
+    <article className="surface-section dashboard-panel">
       <div className="dashboard-panel-head">
         <h3>Sessions</h3>
         <p className="muted">Review active sessions and revoke anything you do not trust.</p>

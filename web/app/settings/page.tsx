@@ -18,14 +18,14 @@ export default async function SettingsPage() {
     <div className="shell page">
       <AppTopbar profileInitial={initial} />
 
-      <div className="split fade-in">
+      <div className="split settings-surface fade-in">
         <AccountSettingsPanel
           email={email}
           displayName={displayName}
           emailVerified={emailVerified}
         />
 
-        <article className="card">
+        <article className="surface-section">
           <h3>Admin controls</h3>
           <p className="muted">Workspace roles, invites, and billing settings are scoped to the active organization.</p>
           <ul>
@@ -39,11 +39,11 @@ export default async function SettingsPage() {
         </article>
       </div>
 
-      <div className="fade-in" style={{ marginTop: 18 }}>
+      <div className="settings-surface fade-in" style={{ marginTop: 18 }}>
         <SessionPanel />
       </div>
 
-      <div className="fade-in" style={{ marginTop: 18 }}>
+      <div className="settings-surface fade-in" style={{ marginTop: 18 }}>
         <DeleteAccountPanel />
       </div>
     </div>

@@ -14,7 +14,10 @@
   --accent: #76323F;
   --accent-2: #C09F80;
   --danger: #76323F;
-  --shadow: 0 22px 60px rgba(86, 86, 86, 0.12);
+  --shadow: 0 14px 34px rgba(86, 86, 86, 0.08);
+  --shadow-soft: 0 8px 20px rgba(86, 86, 86, 0.055);
+  --surface: rgba(255, 251, 245, 0.72);
+  --surface-rail: rgba(247, 240, 232, 0.82);
   --radius: 28px;
   --radius-sm: 18px;
   --max: 1240px;
@@ -28,8 +31,9 @@ html, body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(192, 159, 128, 0.18), transparent 23%),
-    radial-gradient(circle at right center, rgba(118, 50, 63, 0.12), transparent 24%),
+    linear-gradient(90deg, rgba(215, 206, 199, 0.28) 0 1px, transparent 1px 100%) 0 0 / 96px 96px,
+    radial-gradient(circle at top left, rgba(192, 159, 128, 0.14), transparent 23%),
+    radial-gradient(circle at right center, rgba(118, 50, 63, 0.08), transparent 24%),
     linear-gradient(180deg, #F8F4EF 0%, #F1E7DE 45%, #E6D9CC 100%);
   color: var(--text);
   font-family: var(--font-ui);
@@ -114,9 +118,9 @@ main { width: 100%; }
   min-width: 0;
   padding: 14px 22px;
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(86, 86, 86, 0.12);
-  box-shadow: 0 12px 28px rgba(86, 86, 86, 0.08);
+  background: rgba(255, 251, 245, 0.9);
+  border: 1px solid rgba(86, 86, 86, 0.14);
+  box-shadow: var(--shadow-soft);
   flex-wrap: wrap;
   justify-content: space-between;
 }
@@ -337,10 +341,10 @@ main { width: 100%; }
 }
 
 .panel, .card, .feature {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(86, 86, 86, 0.14);
   border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  background: var(--surface);
+  box-shadow: none;
   position: relative;
   overflow: hidden;
 }
@@ -351,8 +355,21 @@ main { width: 100%; }
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.68), transparent 30%),
-    radial-gradient(circle at top right, rgba(118, 50, 63, 0.05), transparent 28%);
+    linear-gradient(135deg, rgba(255,255,255,0.42), transparent 30%),
+    radial-gradient(circle at top right, rgba(118, 50, 63, 0.035), transparent 28%);
+}
+
+.surface-frame {
+  border: 1px solid rgba(86, 86, 86, 0.14);
+  border-radius: 32px;
+  background: var(--surface-rail);
+  box-shadow: var(--shadow-soft);
+}
+
+.surface-section {
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 251, 245, 0.58);
 }
 
 .dashboard-card { padding: 20px; }
@@ -464,6 +481,7 @@ main { width: 100%; }
   top: 4%;
   width: 54%;
   z-index: 2;
+  background: rgba(255, 251, 245, 0.68);
 }
 
 .benefits-bars {
@@ -668,6 +686,8 @@ main { width: 100%; }
   display: grid;
   gap: 14px;
   padding: 18px;
+  background: rgba(255, 251, 245, 0.7);
+  box-shadow: var(--shadow-soft);
 }
 
 .dashboard-sidebar-brand {
@@ -700,8 +720,30 @@ main { width: 100%; }
 
 .dashboard-stage {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
+}
+
+.dashboard-stage > .dashboard-stack,
+.search-main,
+.settings-panel,
+.auth-panel {
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  border-radius: 34px;
+  background: rgba(247, 240, 232, 0.42);
+  padding: 18px;
+}
+
+.dashboard-panel,
+.dash-primary,
+.dash-secondary,
+.summary-chip,
+.detail-card,
+.job-history-item,
+.library-item,
+.search-result,
+.search-citation-card {
+  box-shadow: none;
 }
 
 .dashboard-section-head h1 {
@@ -816,9 +858,9 @@ main { width: 100%; }
 .summary-chip {
   padding: 15px 16px;
   border-radius: 24px;
-  background: rgba(255, 251, 245, 0.9);
-  border: 1px solid rgba(86, 86, 86, 0.08);
-  box-shadow: 0 10px 28px rgba(79, 58, 44, 0.06);
+  background: rgba(255, 251, 245, 0.62);
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  box-shadow: none;
 }
 
 .summary-chip span {
@@ -1103,10 +1145,10 @@ main { width: 100%; }
 
 .stat-strip {
   padding: 15px 16px;
-  border-radius: 24px;
-  background: rgba(255, 251, 245, 0.85);
+  border-radius: 20px;
+  background: rgba(255, 251, 245, 0.58);
   border: 1px solid rgba(124, 47, 58, 0.1);
-  box-shadow: 0 10px 28px rgba(79, 58, 44, 0.08);
+  box-shadow: none;
 }
 
 .stat-strip span {
@@ -1297,8 +1339,12 @@ main { width: 100%; }
 
 .search-shell {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 280px 1fr;
   gap: 18px;
+  padding: 18px;
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  border-radius: 34px;
+  background: rgba(247, 240, 232, 0.42);
 }
 
 .search-filters {
@@ -1367,10 +1413,10 @@ main { width: 100%; }
   display: grid;
   gap: 14px;
   padding: 18px;
-  border-radius: 28px;
-  background: rgba(255, 251, 245, 0.9);
+  border-radius: 22px;
+  background: rgba(255, 251, 245, 0.58);
   border: 1px solid rgba(124, 47, 58, 0.1);
-  box-shadow: 0 12px 28px rgba(79, 58, 44, 0.08);
+  box-shadow: none;
 }
 
 .search-result-button {
@@ -1382,7 +1428,8 @@ main { width: 100%; }
 
 .search-result-button.is-active {
   border-color: rgba(118, 50, 63, 0.28);
-  box-shadow: 0 16px 32px rgba(79, 58, 44, 0.12);
+  background: rgba(118, 50, 63, 0.075);
+  box-shadow: none;
 }
 
 .search-top {
@@ -1673,8 +1720,15 @@ main { width: 100%; }
   .search-score { grid-column: 1 / -1; justify-self: start; }
 }
 
-.feature, .card {
+.feature, .card, .surface-section {
   padding: 24px;
+}
+
+.settings-surface {
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  border-radius: 34px;
+  background: rgba(247, 240, 232, 0.42);
+  padding: 18px;
 }
 
 .feature h3, .card h3 { margin-top: 0; letter-spacing: -0.02em; }
@@ -1738,10 +1792,10 @@ main { width: 100%; }
 .job-card {
   margin-top: 18px;
   padding: 22px;
-  border-radius: 28px;
-  background: rgba(255, 251, 245, 0.9);
-  border: 1px solid rgba(86, 86, 86, 0.08);
-  box-shadow: 0 12px 28px rgba(79, 58, 44, 0.08);
+  border-radius: 22px;
+  background: rgba(255, 251, 245, 0.58);
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  box-shadow: none;
   display: grid;
   gap: 16px;
 }
@@ -1835,9 +1889,9 @@ main { width: 100%; }
 .library-item {
   width: 100%;
   padding: 16px 18px;
-  border-radius: 20px;
-  border: 1px solid rgba(86, 86, 86, 0.08);
-  background: rgba(255, 251, 245, 0.82);
+  border-radius: 16px;
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  background: rgba(255, 251, 245, 0.56);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1915,9 +1969,9 @@ main { width: 100%; }
 
 .detail-card {
   padding: 16px;
-  border-radius: 20px;
-  background: rgba(255, 251, 245, 0.8);
-  border: 1px solid rgba(86, 86, 86, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 251, 245, 0.56);
+  border: 1px solid rgba(86, 86, 86, 0.1);
   display: grid;
   gap: 6px;
 }

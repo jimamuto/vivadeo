@@ -95,7 +95,7 @@ export function AccountSettingsPanel({
   }
 
   return (
-    <article className="card dashboard-panel">
+    <article className="surface-section dashboard-panel">
       <div className="dashboard-panel-head">
         <h1>Account settings</h1>
         <p className="muted">Profile, password, email verification, and session controls live here.</p>

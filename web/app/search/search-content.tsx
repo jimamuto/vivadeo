@@ -124,7 +124,7 @@ export function SearchContent({ profileInitial }: { profileInitial: string }) {
       <AppTopbar profileInitial={profileInitial} />
 
       <section className="search-shell fade-in">
-        <aside className="search-filters card">
+        <aside className="search-filters surface-section">
           <h1>Ask Vivadeo</h1>
           <p className="muted">Transcript-grounded answers from workspace videos. Clip evidence arrives later.</p>
           <div className="field">
@@ -150,7 +150,7 @@ export function SearchContent({ profileInitial }: { profileInitial: string }) {
         </aside>
 
         <div className="search-main">
-          <section className="card search-query">
+          <section className="surface-section search-query">
             <form className="form" onSubmit={submit}>
               <div className="field">
                 <label htmlFor="query">Ask about your videos</label>
@@ -231,7 +231,7 @@ export function SearchContent({ profileInitial }: { profileInitial: string }) {
               )}
             </section>
 
-            <aside className="card search-preview">
+            <aside className="surface-section search-preview">
               <div className="dashboard-panel-head">
                 <h2>Evidence mode</h2>
                 <p className="muted">Answers cite exact transcript ranges. Video clip extraction is intentionally disabled for this phase.</p>

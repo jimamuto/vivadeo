@@ -24,7 +24,7 @@ export function DeleteAccountPanel() {
   }
 
   return (
-    <article className="card dashboard-panel">
+    <article className="surface-section dashboard-panel">
       <div className="dashboard-panel-head">
         <h3>Delete account</h3>
         <p className="muted">Starts verified deletion flow. Better Auth sends confirmation email before deleting user.</p>
