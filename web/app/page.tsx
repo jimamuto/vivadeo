@@ -3,12 +3,12 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
 const services = [
-  { title: "Search", body: "Ranked retrieval across footage, text, and image prompts." },
-  { title: "Ingest", body: "Upload files or queue URLs into the indexing pipeline." },
-  { title: "Clip review", body: "Preview matching moments and trim exact ranges." },
-  { title: "Workspaces", body: "Keep teams, jobs, and libraries isolated by org." },
-  { title: "Automation", body: "Background processing keeps heavier tasks off the front end." },
-  { title: "Admin", body: "Invite users, switch workspaces, and review settings." },
+  { title: "Search", body: "Ask about footage and get transcript-grounded answers with timestamp citations.", meta: "Cited answers" },
+  { title: "Ingest", body: "Upload files or queue URLs, then watch every indexing stage move toward ready.", meta: "Live pipeline" },
+  { title: "Clip review", body: "Use cited moments as the starting point for faster editorial review.", meta: "Evidence first" },
+  { title: "Workspaces", body: "Keep teams, jobs, libraries, and permissions isolated by organization.", meta: "Role aware" },
+  { title: "Automation", body: "Background processing keeps heavier video tasks off the front end.", meta: "Async jobs" },
+  { title: "Admin", body: "Invite users, switch workspaces, and review operational settings.", meta: "Controlled ops" },
 ];
 
 export default async function HomePage() {
@@ -52,13 +52,41 @@ export default async function HomePage() {
 
       <section className="hero hero-home fade-in">
         <div className="hero-copy">
+          <p className="eyebrow">Transcript-grounded video search</p>
           <h1>Search footage with clarity and keep review in one place.</h1>
           <p className="hero-lead">
-            Vivadeo gives teams a clear place to search footage, review clips, and keep archive work organized.
+            Vivadeo gives teams a clear place to search footage, review cited moments, and keep archive work moving.
           </p>
           <div className="hero-actions">
             <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button">Open console</Link>
             <Link href="#features" className="button-secondary">See services</Link>
+          </div>
+        </div>
+        <div className="hero-product-demo" aria-label="Vivadeo workflow preview">
+          <div className="demo-toolbar">
+            <span className="demo-live-dot" />
+            <strong>Archive search</strong>
+            <span>Workspace ready</span>
+          </div>
+          <div className="demo-question">What did the team decide about launch timing?</div>
+          <div className="demo-answer">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="demo-citation demo-citation-one">
+            <strong>00:42-01:08</strong>
+            <span>Launch shifts after final accessibility pass.</span>
+          </div>
+          <div className="demo-citation demo-citation-two">
+            <strong>03:14-03:38</strong>
+            <span>Archive owner confirms review window.</span>
+          </div>
+          <div className="demo-pipeline" aria-label="Ingest pipeline stages">
+            <span>Upload</span>
+            <span>Chunk</span>
+            <span>Embed</span>
+            <span>Ready</span>
           </div>
         </div>
       </section>
@@ -72,7 +100,7 @@ export default async function HomePage() {
         <div className="service-grid">
           {services.map((service) => (
             <article className="service-card" key={service.title}>
-              <span>↗</span>
+              <span>{service.meta}</span>
               <h3>{service.title}</h3>
               <p>{service.body}</p>
             </article>
@@ -81,20 +109,23 @@ export default async function HomePage() {
       </section>
 
       <section className="benefits-band">
-        <div className="benefits-visual">
-          <div className="benefits-stat card">
-            <span>Workspace focus</span>
-            <strong>Sample archive</strong>
-            <p>A tactile block for a real workload summary or key visual.</p>
+        <div className="benefits-visual workflow-preview" aria-label="Indexing workflow preview">
+          <div className="workflow-card workflow-card-active">
+            <span>01</span>
+            <strong>Upload source</strong>
+            <p>Drop a video or queue a permitted URL.</p>
           </div>
-          <div className="benefits-bars">
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
+          <div className="workflow-card">
+            <span>02</span>
+            <strong>Index transcript</strong>
+            <p>Chunks, embeddings, and job status stay visible.</p>
           </div>
+          <div className="workflow-card">
+            <span>03</span>
+            <strong>Ask and cite</strong>
+            <p>Answers point back to the exact footage range.</p>
+          </div>
+          <div className="workflow-rail"><span /></div>
         </div>
         <div className="benefits-copy">
           <p className="eyebrow">Key benefits</p>
