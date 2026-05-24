@@ -26,7 +26,7 @@ export default async function WorkspacePage() {
           </div>
         </section>
         <div className="workspace-grid">
-          <article className="summary-chip summary-chip-large">
+          <article className="summary-chip summary-chip-large workspace-summary-card">
             <span>Active workspace</span>
             <strong>{activeWorkspace}</strong>
             <p className="muted">Current org context for uploads, jobs, and clips.</p>

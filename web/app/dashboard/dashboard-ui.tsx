@@ -759,11 +759,14 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
   }
 
   return (
-    <section className="dashboard-split-panel">
-      <article className="card dashboard-panel">
-        <div className="dashboard-panel-head">
-          <h2>Video library</h2>
-          <p className="muted">Browse workspace videos with status, duration, upload time, source type.</p>
+    <section className="dashboard-split-panel library-workbench">
+      <article className="card dashboard-panel library-list-panel">
+        <div className="dashboard-panel-head library-panel-head">
+          <div>
+            <h2>Video library</h2>
+            <p className="muted">Browse workspace videos with status, duration, upload time, source type.</p>
+          </div>
+          <span className="pill">{filteredVideos.length} videos</span>
         </div>
         <div className="library-toolbar">
           <input
@@ -808,24 +811,29 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
         )}
       </article>
 
-      <article className="card dashboard-panel">
-        <div className="dashboard-panel-head">
-          <h2>Video detail</h2>
-          <p className="muted">Source metadata, latest ingest state, searchable chunks, and transcript-ready answers.</p>
+      <article className="card dashboard-panel library-detail-panel">
+        <div className="dashboard-panel-head library-panel-head">
+          <div>
+            <h2>Video detail</h2>
+            <p className="muted">Source metadata, latest ingest state, searchable chunks, and transcript-ready answers.</p>
+          </div>
+          {selectedVideo ? <span className={`job-status job-status-${statusTone(selectedVideo.status)}`}>{selectedVideo.status}</span> : null}
         </div>
         <StatusLine status={actionStatus} />
         {!selectedVideo ? <p className="muted">Select video to inspect details.</p> : (
           <div className="dashboard-stack library-detail-body">
-            <PlaceholderBlock label="Video detail" tone="grain" />
+            <div className="library-detail-hero">
+              <div>
+                <p className="eyebrow">Selected source</p>
+                <h3>{selectedVideo.filename}</h3>
+                <p className="muted detail-wrap">{selectedVideo.source_uri}</p>
+              </div>
+              <div className="library-detail-stats" aria-label="Selected video summary">
+                <span>{fmt(selectedVideo.duration)} duration</span>
+                <span>{chunks.length} chunks</span>
+              </div>
+            </div>
             <div className="detail-grid">
-              <article className="detail-card">
-                <span>Filename</span>
-                <strong>{selectedVideo.filename}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Status</span>
-                <strong>{selectedVideo.status}</strong>
-              </article>
               <article className="detail-card">
                 <span>Duration</span>
                 <strong>{fmt(selectedVideo.duration)}</strong>
@@ -834,22 +842,22 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
                 <span>Uploaded</span>
                 <strong>{fmtDate(selectedVideo.created_at)}</strong>
               </article>
+              <article className="detail-card">
+                <span>Source type</span>
+                <strong>{sourceLabel(selectedVideo.source_type)}</strong>
+              </article>
+              <article className="detail-card">
+                <span>Chunks</span>
+                <strong>{chunks.length}</strong>
+              </article>
             </div>
             <article className="detail-card">
               <span>Source URI</span>
               <strong className="detail-wrap">{selectedVideo.source_uri}</strong>
             </article>
             <article className="detail-card">
-              <span>Source type</span>
-              <strong>{sourceLabel(selectedVideo.source_type)}</strong>
-            </article>
-            <article className="detail-card">
               <span>Labels</span>
               <strong>{labelsForSelectedVideo.length > 0 ? labelsForSelectedVideo.join(", ") : "No labels yet"}</strong>
-            </article>
-            <article className="detail-card">
-              <span>Chunks</span>
-              <strong>{chunks.length}</strong>
             </article>
             {selectedVideo.error ? <p className="notice notice-bad">Video error: {selectedVideo.error}</p> : null}
             {latestJobByVideo.get(selectedVideo.id) ? (
@@ -1047,12 +1055,12 @@ export function WorkspacePanel({
   }
 
   return (
-    <section className="card dashboard-panel">
-      <div className="dashboard-panel-head">
+    <section className="card dashboard-panel workspace-management-panel">
+      <div className="dashboard-panel-head workspace-management-head">
         <h2>Workspace</h2>
         <p className="muted">Switch org, invite users, review members, manage pending invites.</p>
       </div>
-      <form className="form" action="/api/workspace/select" method="post">
+      <form className="form workspace-switch-card" action="/api/workspace/select" method="post">
         <div className="field">
           <label htmlFor="workspace">Workspace ID</label>
           <select id="workspace" name="workspace" defaultValue={activeWorkspace}>
@@ -1064,7 +1072,7 @@ export function WorkspacePanel({
         </div>
         <button className="button-secondary" type="submit">Switch workspace</button>
       </form>
-      <div className="detail-grid">
+      <div className="detail-grid workspace-stat-grid">
         <article className="detail-card">
           <span>Workspace videos</span>
           <strong>{stats.total_videos}</strong>
@@ -1079,7 +1087,7 @@ export function WorkspacePanel({
         </article>
       </div>
       {!permissions.canManageWorkspace ? <p className="muted">Current role: {permissions.role}. Only owners and admins can manage invites and workspace roles.</p> : null}
-      <form className="form" onSubmit={inviteMember}>
+      <form className="form workspace-invite-card" onSubmit={inviteMember}>
         <div className="field">
           <label htmlFor="invite_email">Invite by email</label>
           <input id="invite_email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="teammate@example.com" />
@@ -1096,7 +1104,7 @@ export function WorkspacePanel({
         <button className="button" type="submit" disabled={!permissions.canManageWorkspace}>Send invite</button>
         <StatusLine status={status} />
       </form>
-      <div className="dashboard-stack">
+      <div className="dashboard-stack workspace-members-card">
         <div className="dashboard-panel-head">
           <h3>Members</h3>
           <p className="muted">Update roles for current workspace members.</p>
@@ -1120,7 +1128,7 @@ export function WorkspacePanel({
           </div>
         )}
       </div>
-      <div className="dashboard-stack">
+      <div className="dashboard-stack workspace-invites-card">
         <div className="dashboard-panel-head">
           <h3>Pending invites</h3>
           <p className="muted">Track invitations that still need acceptance.</p>
@@ -1140,7 +1148,7 @@ export function WorkspacePanel({
           </div>
         )}
       </div>
-      <div className="dashboard-stack">
+      <div className="dashboard-stack workspace-activity-card">
         <div className="dashboard-panel-head">
           <h3>Workspace activity</h3>
           <p className="muted">Recent product actions in this workspace.</p>
@@ -1157,7 +1165,7 @@ export function WorkspacePanel({
           </div>
         )}
       </div>
-      <div className="dashboard-panel-links">
+      <div className="dashboard-panel-links workspace-actions">
         <Link href={"/dashboard/library" as any} className="button-secondary">Open library</Link>
         <Link href="/settings" className="button-secondary">Open settings</Link>
       </div>

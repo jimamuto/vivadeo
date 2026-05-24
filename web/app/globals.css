@@ -651,13 +651,14 @@ main { width: 100%; }
 }
 
 .dashboard-wrap {
+  width: min(calc(100% - 32px), 1500px);
   padding: 20px 0 40px;
 }
 
 .dashboard-shell {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
   align-items: start;
 }
 
@@ -731,8 +732,85 @@ main { width: 100%; }
 }
 
 .workspace-grid {
-  grid-template-columns: 0.72fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
+}
+
+.workspace-summary-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 0;
+}
+
+.workspace-summary-card strong {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.1rem, 1.5vw, 1.45rem);
+}
+
+.workspace-summary-card p {
+  margin: 0;
+}
+
+.workspace-summary-card::after {
+  content: "";
+  width: 76px;
+  height: 54px;
+  border-radius: 18px;
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  background:
+    radial-gradient(circle at 24% 28%, rgba(118, 50, 63, 0.12), transparent 24%),
+    linear-gradient(135deg, rgba(215, 206, 199, 0.54), rgba(255, 251, 245, 0.78));
+}
+
+.workspace-management-panel {
+  grid-template-columns: minmax(0, 0.95fr) minmax(300px, 1.05fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.workspace-management-head,
+.workspace-invite-card,
+.workspace-activity-card,
+.workspace-actions {
+  grid-column: 1 / -1;
+}
+
+.workspace-switch-card,
+.workspace-stat-grid,
+.workspace-invite-card,
+.workspace-members-card,
+.workspace-invites-card,
+.workspace-activity-card {
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(86, 86, 86, 0.08);
+  background: rgba(255, 251, 245, 0.62);
+}
+
+.workspace-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.workspace-invite-card {
+  grid-template-columns: minmax(0, 1fr) 190px auto;
+  align-items: end;
+}
+
+.workspace-invite-card .notice {
+  grid-column: 1 / -1;
+}
+
+.workspace-activity-card .job-history-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 430px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.workspace-actions {
+  justify-content: flex-end;
 }
 
 .summary-chip {
@@ -764,7 +842,6 @@ main { width: 100%; }
 }
 
 .summary-chip-large {
-  min-height: 100%;
   display: grid;
   align-content: start;
   gap: 6px;
@@ -861,6 +938,64 @@ main { width: 100%; }
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
   gap: 14px;
   align-items: start;
+}
+
+.library-workbench {
+  grid-template-columns: minmax(340px, 0.78fr) minmax(520px, 1.22fr);
+  gap: 18px;
+}
+
+.library-list-panel,
+.library-detail-panel {
+  align-content: start;
+}
+
+.library-list-panel {
+  position: sticky;
+  top: 14px;
+}
+
+.library-panel-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.library-detail-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 22px;
+  border-radius: 26px;
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  background:
+    linear-gradient(135deg, rgba(215, 206, 199, 0.42), rgba(255, 251, 245, 0.86)),
+    radial-gradient(circle at top right, rgba(192, 159, 128, 0.28), transparent 38%);
+}
+
+.library-detail-hero h3 {
+  margin: 4px 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2.4vw, 2.4rem);
+  line-height: 1;
+}
+
+.library-detail-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 170px;
+}
+
+.library-detail-stats span {
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(255, 251, 245, 0.82);
+  border: 1px solid rgba(86, 86, 86, 0.1);
+  color: var(--blackboard);
+  font-weight: 700;
+  font-size: 0.88rem;
 }
 
 .library-detail-panel {
@@ -1856,7 +1991,9 @@ main { width: 100%; }
   .search-top { grid-template-columns: 120px 1fr; }
   .search-score { grid-column: 1 / -1; justify-self: start; }
   .search-preview { position: static; }
-  .dashboard-summary-row, .workspace-grid { grid-template-columns: 1fr; }
+  .dashboard-summary-row, .workspace-grid, .workspace-management-panel, .workspace-invite-card { grid-template-columns: 1fr; }
+  .workspace-summary-card { position: static; }
+  .workspace-stat-grid, .workspace-activity-card .job-history-list { grid-template-columns: 1fr; }
   .dashboard-module-grid-ingest { grid-template-columns: 1fr; }
   .job-stage-list, .detail-grid, .library-toolbar { grid-template-columns: 1fr; }
 }
