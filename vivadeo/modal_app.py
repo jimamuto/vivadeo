@@ -17,7 +17,7 @@ from pathlib import Path
 import modal
 
 MODEL_ID = "Qwen/Qwen3-VL-Embedding-2B"
-GEMMA_MODEL_ID = "google/gemma-3-4b-it"
+GEMMA_MODEL_ID = "google/gemma-4-E4B-it"
 WHISPER_MODEL_SIZE = "small"
 DIMENSIONS = 768
 
