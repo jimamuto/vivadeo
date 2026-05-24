@@ -11,17 +11,6 @@ const services = [
   { title: "Admin", body: "Invite users, switch workspaces, and review settings." },
 ];
 
-function SubjectPlaceholder({ tone = "tan" }: { tone?: "tan" | "oxblood" | "grain" }) {
-  return (
-    <div className={`subject subject-${tone}`}>
-      <div className="subject-cut" />
-      <div className="subject-orb" />
-      <div className="subject-line subject-line-a" />
-      <div className="subject-line subject-line-b" />
-    </div>
-  );
-}
-
 export default async function HomePage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const signedIn = Boolean(session?.user);

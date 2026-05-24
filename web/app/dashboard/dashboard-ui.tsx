@@ -66,15 +66,6 @@ function fmtBytes(bytes: number) {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function PlaceholderBlock({ label, tone = "tan" }: { label: string; tone?: "tan" | "grain" | "oxblood" }) {
-  return (
-    <div className={`dash-placeholder dash-${tone}`}>
-      <div className="dash-placeholder-shape" />
-      <div className="dash-placeholder-tag">{label}</div>
-    </div>
-  );
-}
-
 function StatStrip({ label, value, note }: { label: string; value: string; note: string; }) {
   return (
     <div className="stat-strip">
@@ -146,7 +137,6 @@ export function OverviewPanel({
           </div>
         </div>
         <div className="dashboard-hero-side">
-          <PlaceholderBlock label="Workspace view" tone="grain" />
           <StatStrip label="Jobs" value={`${jobs.length}`} note="Queued, active, or finished." />
           <StatStrip label="Videos" value={`${stats.total_videos}`} note="Indexed items in workspace." />
           <StatStrip label="Chunks" value={`${stats.total_chunks}`} note="Searchable segments in this workspace." />
@@ -303,7 +293,6 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   return (
     <section className="dashboard-module-grid dashboard-module-grid-ingest">
       <article className="card dash-stack dash-primary">
-        <PlaceholderBlock label="Upload lane" tone="tan" />
         <div>
           <h3>File ingest</h3>
           <p className="muted">Upload one source, then jump straight into job detail. Drag a file here or browse from disk.</p>
@@ -357,7 +346,6 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
         </div>
       </article>
       <article className="card dash-stack dash-secondary">
-        <PlaceholderBlock label="URL lane" tone="grain" />
         <div>
           <h3>URL ingest</h3>
           <p className="muted">Queue remote source, keep same jobs flow and retry path. HTTP(S) only. Make sure you have permission to ingest external media before indexing it.</p>
