@@ -27,7 +27,18 @@ class ModalGemmaChat:
         if self._remote is not None:
             return self._remote
         try:
-            self._remote = modal.Function.from_name(self._app_name, self._function_name)
+            if "." in self._function_name:
+                class_name, method_name = self._function_name.split(".", 1)
+                cls = modal.Cls.from_name(self._app_name, class_name)
+                self._remote = getattr(cls(), method_name)
+            else:
+                try:
+                    self._remote = modal.Function.from_name(self._app_name, self._function_name)
+                except Exception:
+                    if self._function_name != "answer":
+                        raise
+                    cls = modal.Cls.from_name(self._app_name, "GemmaAnswerer")
+                    self._remote = cls().answer
             return self._remote
         except Exception as exc:
             raise ModalGemmaError(

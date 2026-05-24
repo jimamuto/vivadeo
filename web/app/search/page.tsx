@@ -39,6 +39,9 @@ function SearchContent() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const workspace = document.cookie
@@ -61,6 +64,14 @@ function SearchContent() {
     window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches));
   }, [recentSearches]);
 
+  useEffect(() => {
+    if (!loading || startedAt === null) return;
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading, startedAt]);
+
   function recordRecentSearch(value: string) {
     const next = value.trim();
     if (!next) return;
@@ -75,8 +86,11 @@ function SearchContent() {
     const nextTurns: ChatTurn[] = [...turns, { role: "user", content: nextQuestion }];
     setTurns(nextTurns);
     setQuestion("");
+    const requestStartedAt = Date.now();
     setLoading(true);
-    setStatus("Searching transcripts and asking Gemma...");
+    setStartedAt(requestStartedAt);
+    setElapsedSeconds(0);
+    setStatus("Finding evidence, then preparing an answer...");
 
     try {
       const response = await fetch("/api/proxy/v1/search/chat", {
@@ -84,7 +98,7 @@ function SearchContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextTurns.map(({ role, content }) => ({ role, content })),
-          results: 8,
+          results: 6,
         }),
       });
       if (!response.ok) {
@@ -92,14 +106,16 @@ function SearchContent() {
         return;
       }
       const payload = (await response.json()) as { answer: string; citations: Citation[] };
+      const seconds = Math.max(1, Math.round((Date.now() - requestStartedAt) / 1000));
       setTurns((current) => [...current, { role: "assistant", content: payload.answer, citations: payload.citations }]);
       recordRecentSearch(nextQuestion);
       appendActivity(activeWorkspace, "search.performed", nextQuestion);
-      setStatus(payload.citations.length ? `${payload.citations.length} transcript citation(s).` : "No transcript citations yet.");
+      setStatus(payload.citations.length ? `Answer ready in ${seconds}s with ${payload.citations.length} cited evidence range(s).` : `Answer ready in ${seconds}s. No cited evidence yet.`);
     } catch (cause) {
       setStatus(cause instanceof Error ? cause.message : "Chat failed");
     } finally {
       setLoading(false);
+      setStartedAt(null);
     }
   }
 
@@ -117,11 +133,11 @@ function SearchContent() {
           </div>
           <div className="detail-card">
             <span>Answer source</span>
-            <strong>faster-whisper transcripts</strong>
+            <strong>Video transcripts</strong>
           </div>
           <div className="detail-card">
-            <span>Model</span>
-            <strong>Gemma E4B on Modal</strong>
+            <span>Answer engine</span>
+            <strong>Vivadeo archive assistant</strong>
           </div>
           {recentSearches.length > 0 ? (
             <div className="search-chip-group">
@@ -151,7 +167,12 @@ function SearchContent() {
                 <button className="button-secondary" type="button" onClick={() => setTurns([])} disabled={loading || turns.length === 0}>Clear chat</button>
               </div>
             </form>
-            {status ? <p className="muted" style={{ marginTop: 12 }}>{status}</p> : null}
+            {status ? (
+              <div className="search-status" aria-live="polite">
+                <span>{status}</span>
+                {loading ? <strong>{elapsedSeconds}s elapsed</strong> : null}
+              </div>
+            ) : null}
           </section>
 
           <section className="search-layout">
@@ -159,37 +180,61 @@ function SearchContent() {
               {turns.length === 0 ? (
                 <article className="search-result">
                   <h3>No questions yet</h3>
-                  <p className="muted">Ask a text question. Vivadeo retrieves transcript evidence, then Gemma answers with citations.</p>
+                  <p className="muted">Ask a text question. Vivadeo finds relevant transcript evidence, then returns a cited answer.</p>
                 </article>
               ) : (
-                turns.map((turn, index) => (
-                  <article key={`${turn.role}-${index}`} className="search-result">
-                    <div className="search-top">
-                      <div className="search-meta">
-                        <p className="pill">{turn.role === "user" ? "You" : "Vivadeo"}</p>
-                        <h3>{turn.content}</h3>
+                turns.map((turn, index) => {
+                  const citations = turn.citations ?? [];
+                  const citationKey = `${turn.role}-${index}`;
+                  const showAll = expandedCitations[citationKey] ?? false;
+                  const visibleCitations = showAll ? citations : citations.slice(0, 3);
+
+                  return (
+                    <article key={citationKey} className={`search-result ${turn.role === "assistant" ? "search-result-answer" : ""}`}>
+                      <div className="search-top">
+                        <div className="search-meta">
+                          <p className="pill">{turn.role === "user" ? "You" : "Vivadeo"}</p>
+                          {turn.role === "assistant" ? (
+                            <p className="search-answer-text">{turn.content}</p>
+                          ) : (
+                            <h3>{turn.content}</h3>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {turn.citations?.length ? (
-                      <div className="dashboard-stack" style={{ marginTop: 12 }}>
-                        {turn.citations.map((citation) => (
-                          <article key={citation.segment_id} className="detail-card">
-                            <span>{citation.filename} • {fmt(citation.start_time)} - {fmt(citation.end_time)}</span>
-                            <strong className="detail-wrap">{citation.text}</strong>
-                            <p className="muted">{citation.source_uri}</p>
-                          </article>
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                ))
+                      {citations.length ? (
+                        <div className="search-citations">
+                          <div className="search-citation-head">
+                            <span>Evidence ranges</span>
+                            <strong>{citations.length} cited</strong>
+                          </div>
+                          {visibleCitations.map((citation) => (
+                            <article key={citation.segment_id} className="detail-card search-citation-card">
+                              <span>{citation.filename} • {fmt(citation.start_time)} - {fmt(citation.end_time)}</span>
+                              <strong className="detail-wrap">{citation.text}</strong>
+                              <p className="muted">{citation.source_uri}</p>
+                            </article>
+                          ))}
+                          {citations.length > 3 ? (
+                            <button
+                              className="button-secondary search-citation-toggle"
+                              type="button"
+                              onClick={() => setExpandedCitations((current) => ({ ...current, [citationKey]: !showAll }))}
+                            >
+                              {showAll ? "Show fewer ranges" : `Show ${citations.length - 3} more ranges`}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })
               )}
             </section>
 
             <aside className="card search-preview">
               <div className="dashboard-panel-head">
                 <h2>Evidence mode</h2>
-                <p className="muted">Answers cite transcript ranges. Video clip extraction is intentionally disabled for this phase.</p>
+                <p className="muted">Answers cite exact transcript ranges. Video clip extraction is intentionally disabled for this phase.</p>
               </div>
               <div className="dashboard-stack">
                 <article className="detail-card">

@@ -344,58 +344,63 @@ def _format_context(context: list[dict]) -> str:
     return "\n".join(lines)
 
 
-@app.function(
+@app.cls(
     image=gemma_image,
     gpu="L40S",
     memory=32768,
     timeout=900,
-    scaledown_window=300,
+    scaledown_window=1800,
     volumes={"/models": gemma_volume},
 )
-def answer(messages: list[dict], context: list[dict]) -> dict:
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+class GemmaAnswerer:
+    @modal.enter()
+    def load(self):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    os.environ["HF_HOME"] = "/models/huggingface"
-    tokenizer = AutoTokenizer.from_pretrained(GEMMA_MODEL_ID, cache_dir="/models/huggingface")
-    model = AutoModelForCausalLM.from_pretrained(
-        GEMMA_MODEL_ID,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        cache_dir="/models/huggingface",
-    )
-
-    history = [
-        {"role": msg.get("role", "user"), "content": str(msg.get("content", ""))}
-        for msg in messages[-10:]
-        if msg.get("content")
-    ]
-    system = (
-        "You are Vivadeo, a transcript-grounded video archive assistant. "
-        "Answer only from the transcript evidence. If evidence is insufficient, say so. "
-        "Cite evidence with bracket numbers like [1]. Be concise and specific."
-    )
-    prompt_messages = [
-        {"role": "system", "content": system},
-        *history[:-1],
-        {
-            "role": "user",
-            "content": (
-                f"Transcript evidence:\n{_format_context(context)}\n\n"
-                f"Question: {history[-1]['content'] if history else ''}"
-            ),
-        },
-    ]
-    prompt = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        output = model.generate(
-            **inputs,
-            max_new_tokens=512,
-            do_sample=False,
-            temperature=0.0,
-            repetition_penalty=1.05,
+        os.environ["HF_HOME"] = "/models/huggingface"
+        self._torch = torch
+        self._tokenizer = AutoTokenizer.from_pretrained(GEMMA_MODEL_ID, cache_dir="/models/huggingface")
+        self._model = AutoModelForCausalLM.from_pretrained(
+            GEMMA_MODEL_ID,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            cache_dir="/models/huggingface",
         )
-    generated = output[0][inputs["input_ids"].shape[-1]:]
-    text = tokenizer.decode(generated, skip_special_tokens=True).strip()
-    return {"answer": text}
+        self._model.eval()
+
+    @modal.method()
+    def answer(self, messages: list[dict], context: list[dict]) -> dict:
+        history = [
+            {"role": msg.get("role", "user"), "content": str(msg.get("content", ""))}
+            for msg in messages[-6:]
+            if msg.get("content")
+        ]
+        system = (
+            "You are Vivadeo, a transcript-grounded video archive assistant. "
+            "Answer only from the transcript evidence. If evidence is insufficient, say so. "
+            "Cite evidence with bracket numbers like [1]. Be concise and specific."
+        )
+        prompt_messages = [
+            {"role": "system", "content": system},
+            *history[:-1],
+            {
+                "role": "user",
+                "content": (
+                    f"Transcript evidence:\n{_format_context(context[:6])}\n\n"
+                    f"Question: {history[-1]['content'] if history else ''}"
+                ),
+            },
+        ]
+        prompt = self._tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
+        inputs = self._tokenizer(prompt, return_tensors="pt").to(self._model.device)
+        with self._torch.no_grad():
+            output = self._model.generate(
+                **inputs,
+                max_new_tokens=224,
+                do_sample=False,
+                repetition_penalty=1.05,
+            )
+        generated = output[0][inputs["input_ids"].shape[-1]:]
+        text = self._tokenizer.decode(generated, skip_special_tokens=True).strip()
+        return {"answer": text}

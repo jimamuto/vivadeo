@@ -1252,7 +1252,7 @@ main { width: 100%; }
 
 .search-top {
   display: grid;
-  grid-template-columns: 150px 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-items: center;
 }
@@ -1315,6 +1315,67 @@ main { width: 100%; }
 .search-actions { display: flex; gap: 10px; }
 
 .search-meta h3 { margin: 0 0 6px; }
+
+.search-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(215, 206, 199, 0.28);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.search-status strong {
+  color: var(--oxblood);
+  white-space: nowrap;
+}
+
+.search-result-answer {
+  gap: 18px;
+}
+
+.search-answer-text {
+  max-width: 68ch;
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.search-citations {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.search-citation-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+
+.search-citation-head strong {
+  color: var(--text);
+}
+
+.search-citation-card {
+  background: rgba(255, 252, 247, 0.72);
+}
+
+.search-citation-toggle {
+  justify-self: start;
+}
 
 .search-preview {
   position: sticky;
