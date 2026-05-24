@@ -27,16 +27,32 @@
 
 * { box-sizing: border-box; }
 
-html, body {
+html {
+  min-height: 100%;
+  background: #E6D9CC;
+  overscroll-behavior-y: none;
+}
+
+body {
   margin: 0;
   min-height: 100%;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  overscroll-behavior-y: none;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     linear-gradient(90deg, rgba(215, 206, 199, 0.28) 0 1px, transparent 1px 100%) 0 0 / 96px 96px,
     radial-gradient(circle at top left, rgba(192, 159, 128, 0.14), transparent 23%),
     radial-gradient(circle at right center, rgba(118, 50, 63, 0.08), transparent 24%),
     linear-gradient(180deg, #F8F4EF 0%, #F1E7DE 45%, #E6D9CC 100%);
-  color: var(--text);
-  font-family: var(--font-ui);
 }
 
 a { color: inherit; text-decoration: none; }
