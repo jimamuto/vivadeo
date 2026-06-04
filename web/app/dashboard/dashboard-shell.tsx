@@ -28,7 +28,7 @@ export function DashboardShell({
     <div className="shell page dashboard-wrap">
       <AppTopbar profileInitial={profileInitial} />
       <div className="dashboard-shell">
-        <aside className="dashboard-sidebar card">
+        <aside className="dashboard-sidebar">
           <div className="dashboard-sidebar-brand">
             <p className="muted">Workspace {workspace}</p>
           </div>
