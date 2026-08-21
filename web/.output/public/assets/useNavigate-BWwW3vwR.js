@@ -1,1 +1,0 @@
-import{c as e,s as t,t as n,u as r}from"./useRouter-C_K-nOkZ.js";var i=r(e(),1);function a(e){let t=n();return i.useCallback(n=>t.navigate({...n,from:n.from??e?.from}),[e?.from,t])}function o(e){let r=n(),o=a(),s=i.useRef(null);return t(()=>{s.current!==e&&(o(e),s.current=e)},[r,e,o]),null}export{a as n,o as t};

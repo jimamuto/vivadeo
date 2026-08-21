@@ -3,19 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build && tsc --noEmit",
-    "start": "node .output/server/index.mjs",
-    "preview": "vite preview"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "node .next/standalone/server.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",
     "@better-auth/drizzle-adapter": "^1.6.11",
-    "@tanstack/react-router": "^1.170.31",
-    "@tanstack/react-start": "^1.168.48",
-    "@tanstack/start-server-core": "^1.169.30",
     "better-auth": "^1.6.11",
     "drizzle-orm": "^0.45.2",
+    "next": "^15.4.0",
     "postgres": "^3.4.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -25,11 +23,6 @@
     "@types/node": "^24.1.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@vitejs/plugin-react": "^6.1.0",
-    "lru-cache": "^11.5.2",
-    "nitro": "^3.0.260610-beta",
-    "typescript": "^5.8.3",
-    "vite": "^8.2.2"
-  },
-  "type": "module"
+    "typescript": "^5.8.3"
+  }
 }

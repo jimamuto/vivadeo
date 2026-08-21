@@ -2,18 +2,26 @@ FROM node:22-alpine AS base
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json ./
+COPY package-lock.json ./
+
 RUN npm ci
 
-COPY vite.config.ts tsconfig.json ./
-COPY src ./src
+COPY next.config.mjs tsconfig.json next-env.d.ts ./
+COPY middleware.ts ./
+COPY styles ./styles
+COPY app ./app
+COPY components ./components
+COPY lib ./lib
 
 RUN npm run build
+RUN mkdir -p .next/standalone/.next \
+  && cp -r .next/static .next/standalone/.next/static
 
 EXPOSE 3000
 
-ENV HOST=0.0.0.0
+ENV HOSTNAME=0.0.0.0
 ENV NODE_ENV=production
 ENV PORT=3000
 
-CMD ["node", ".output/server/index.mjs"]
+CMD ["node", ".next/standalone/server.js"]
