@@ -47,6 +47,7 @@ image = (
     timeout=900,
     scaledown_window=300,
     volumes={"/models": model_volume},
+    secrets=[modal.Secret.from_name("huggingface-secret")],
 )
 class QwenEmbedder:
     @modal.enter()
@@ -292,6 +293,7 @@ whisper_image = (
     timeout=1800,
     scaledown_window=300,
     volumes={"/models": whisper_volume},
+    secrets=[modal.Secret.from_name("huggingface-secret")],
 )
 def transcribe(media_bytes: bytes, filename: str = "video.mp4") -> list[dict]:
     from faster_whisper import WhisperModel
@@ -351,6 +353,7 @@ def _format_context(context: list[dict]) -> str:
     timeout=900,
     scaledown_window=1800,
     volumes={"/models": gemma_volume},
+    secrets=[modal.Secret.from_name("huggingface-secret")],
 )
 class GemmaAnswerer:
     @modal.enter()
