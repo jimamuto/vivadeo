@@ -17,9 +17,9 @@ export default async function JobsPage() {
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
       <div className="dashboard-stack">
-        <section className="dashboard-section-head">
+        <section className="dashboard-section-head jobs-page-head">
           <div>
-            <h1>Queue state only.</h1>
+            <h1>Workspace jobs</h1>
           </div>
         </section>
         <JobsPanel jobs={jobs} />

@@ -18,9 +18,9 @@ export default async function WorkspacePage() {
   return (
     <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
       <div className="dashboard-stack">
-        <section className="dashboard-section-head">
+        <section className="dashboard-section-head workspace-page-head">
           <div>
-            <h1>Switch context, no clutter.</h1>
+            <h1>Workspace</h1>
           </div>
         </section>
         <div className="workspace-grid">

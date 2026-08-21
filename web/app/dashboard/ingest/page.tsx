@@ -15,9 +15,9 @@ export default async function IngestPage() {
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
       <div className="dashboard-stack">
-        <section className="dashboard-section-head">
+        <section className="dashboard-section-head ingest-page-head">
           <div>
-            <h1>One source, one queue.</h1>
+            <h1>Add video</h1>
           </div>
         </section>
         <IngestPanel workspace={activeWorkspace} />

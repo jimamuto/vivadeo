@@ -97,6 +97,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   const [fileStatus, setFileStatus] = useState<FetchStatus>({ state: "idle" });
   const [urlStatus, setUrlStatus] = useState<FetchStatus>({ state: "idle" });
   const [fileWarning, setFileWarning] = useState<string | null>(null);
+  const [ingestMode, setIngestMode] = useState<"file" | "youtube">("file");
   const [isDragActive, setIsDragActive] = useState(false);
   const [interruptedJobs, setInterruptedJobs] = useState<Job[]>([]);
   const [recoveryStatus, setRecoveryStatus] = useState<FetchStatus>({ state: "idle" });
@@ -212,73 +213,53 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
 
   return (
     <section className="dashboard-module-grid dashboard-module-grid-ingest">
-      <article className="card dash-stack dash-primary">
-        <div>
-          <h3>File ingest</h3>
-        </div>
-        <div className="form">
-          <div className="field">
-            <label htmlFor="file">Video file</label>
-            <button
-              type="button"
-              className={`ingest-dropzone${isDragActive ? " is-active" : ""}`}
-              onClick={() => fileRef.current?.click()}
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDragActive(true);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setIsDragActive(true);
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault();
-                const nextTarget = event.relatedTarget;
-                if (!nextTarget || !(event.currentTarget as HTMLElement).contains(nextTarget as Node)) {
-                  setIsDragActive(false);
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                setIsDragActive(false);
-                bindDroppedFile(event.dataTransfer.files?.[0]);
-              }}
-            >
-              <strong>{isDragActive ? "Drop video to upload" : "Drop video here"}</strong>
-              <span>Or click to choose a local source file.</span>
-            </button>
-            <input
-              ref={fileRef}
-              id="file"
-              name="file"
-              type="file"
-              accept="video/*"
-              onChange={(event) => {
-                syncSelectedFile(event.target.files?.[0]);
-              }}
-            />
+      <article className="card dash-stack ingest-source-panel">
+        <div className="ingest-source-head">
+          <div className="ingest-mode-switch" role="tablist" aria-label="Ingest source">
+            <button type="button" className={ingestMode === "file" ? "is-active" : ""} onClick={() => setIngestMode("file")} role="tab" aria-selected={ingestMode === "file"}>Upload file</button>
+            <button type="button" className={ingestMode === "youtube" ? "is-active" : ""} onClick={() => setIngestMode("youtube")} role="tab" aria-selected={ingestMode === "youtube"}>YouTube link</button>
           </div>
-          {fileWarning ? <p className="notice notice-soft">{fileWarning}</p> : null}
-          {!permissions.canEdit ? <p className="muted">Viewer role cannot upload or queue ingest jobs.</p> : null}
-          <button className="button" onClick={handleUpload} disabled={fileStatus.state === "loading" || !permissions.canEdit}>Upload video</button>
-          <StatusLine status={fileStatus} />
         </div>
-      </article>
-      <article className="card dash-stack dash-secondary">
-        <div>
-          <h3>URL ingest</h3>
-          <p className="muted">HTTP(S) URLs only. Confirm you have permission to use the source.</p>
-        </div>
-        <form className="form" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="url">Video URL</label>
-            <input ref={urlRef} id="url" name="url" placeholder="https://youtu.be/..." />
+        {ingestMode === "file" ? (
+          <div className="form">
+            <div className="field">
+              <label htmlFor="file">Video file</label>
+              <button
+                type="button"
+                className={`ingest-dropzone${isDragActive ? " is-active" : ""}`}
+                onClick={() => fileRef.current?.click()}
+                onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }}
+                onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  const nextTarget = event.relatedTarget;
+                  if (!nextTarget || !(event.currentTarget as HTMLElement).contains(nextTarget as Node)) setIsDragActive(false);
+                }}
+                onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}
+              >
+                <strong>{isDragActive ? "Drop video to upload" : "Drop video here"}</strong>
+                <span>Or click to choose a local source file.</span>
+              </button>
+              <input ref={fileRef} id="file" name="file" type="file" accept="video/*" onChange={(event) => syncSelectedFile(event.target.files?.[0])} />
+            </div>
+            {fileWarning ? <p className="notice notice-soft">{fileWarning}</p> : null}
+            {!permissions.canEdit ? <p className="muted">Viewer role cannot upload or queue ingest jobs.</p> : null}
+            <button className="button" onClick={handleUpload} disabled={fileStatus.state === "loading" || !permissions.canEdit}>Upload video</button>
+            <StatusLine status={fileStatus} />
           </div>
-          <button className="button" type="submit" disabled={urlStatus.state === "loading" || !permissions.canEdit}>Queue ingest</button>
-          <StatusLine status={urlStatus} />
-        </form>
+        ) : (
+          <form className="form" onSubmit={handleSubmit}>
+            <div className="field">
+              <label htmlFor="url">YouTube URL</label>
+              <input ref={urlRef} id="url" name="url" placeholder="https://youtu.be/..." />
+            </div>
+            <p className="muted">Confirm you have permission to use the source.</p>
+            <button className="button" type="submit" disabled={urlStatus.state === "loading" || !permissions.canEdit}>Queue video</button>
+            <StatusLine status={urlStatus} />
+          </form>
+        )}
       </article>
-      <details className="card dash-stack dash-expandable ingest-history-panel">
+      {interruptedJobs.length > 0 ? <details className="card dash-stack dash-expandable ingest-history-panel">
         <summary className="ingest-history-summary">
         <div>
           <h3>Interrupted ingests</h3>
@@ -307,7 +288,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
             ))}
           </div>
         )}
-      </details>
+      </details> : null}
     </section>
   );
 }
@@ -367,6 +348,15 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
     })();
   }, []);
 
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historySort, setHistorySort] = useState<"newest" | "oldest" | "status">("newest");
+  const visibleItems = [...items]
+    .filter((job) => `${job.kind} ${job.status} ${job.message || ""}`.toLowerCase().includes(historyQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (historySort === "status") return a.status.localeCompare(b.status);
+      const direction = historySort === "newest" ? -1 : 1;
+      return direction * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    });
   const selectedJob = items.find((job) => job.id === selectedId) ?? items[0] ?? null;
 
   async function retryJob(jobId: string) {
@@ -396,19 +386,28 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
   }
 
   return (
-    <section className="dashboard-split-panel">
+    <section className="dashboard-split-panel job-history-only">
       <article className="card dashboard-panel">
         <div className="dashboard-panel-head">
           <h2>Job history</h2>
         </div>
-        {items.length === 0 ? <p className="muted">No jobs yet.</p> : (
+        <div className="history-toolbar">
+          <label className="sr-only" htmlFor="job-history-search">Search jobs</label>
+          <input id="job-history-search" type="search" placeholder="Search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} />
+          <label className="sr-only" htmlFor="job-history-sort">Sort jobs</label>
+          <select id="job-history-sort" value={historySort} onChange={(event) => setHistorySort(event.target.value as typeof historySort)}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="status">Status</option>
+          </select>
+        </div>
+        {items.length === 0 ? <p className="muted">No jobs yet.</p> : visibleItems.length === 0 ? <p className="muted">No matching jobs.</p> : (
           <div className="job-history-list">
-            {items.map((job) => (
+            {visibleItems.map((job) => (
               <button
                 key={job.id}
                 type="button"
-                className={`job-history-item${job.id === selectedJob?.id ? " is-active" : ""}`}
-                onClick={() => setSelectedId(job.id)}
+                className="job-history-item"
               >
                 <div>
                   <strong>{job.kind.replace(/_/g, " ")}</strong>
@@ -667,9 +666,6 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
     <section className="dashboard-split-panel library-workbench">
       <article className="card dashboard-panel library-list-panel">
         <div className="dashboard-panel-head library-panel-head">
-          <div>
-            <h2>Video library</h2>
-          </div>
           <span className="pill">{filteredVideos.length} videos</span>
         </div>
         <div className="library-toolbar">
@@ -689,28 +685,36 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
         {filteredVideos.length === 0 ? (
           <div className="empty-state">
             <h3>No videos yet</h3>
-            <p className="muted">Upload first source from ingest. New workspace should not feel blank.</p>
+            <p className="muted">Upload a video to get started.</p>
             <Link href={"/dashboard/ingest" as any} className="button">Open ingest</Link>
           </div>
         ) : (
           <div className="library-list">
-            {filteredVideos.map((video) => (
-              <button
-                key={video.id}
-                type="button"
-                className={`library-item${video.id === selectedVideo?.id ? " is-active" : ""}`}
-                onClick={() => setSelectedId(video.id)}
-              >
-                <div>
-                  <strong>{video.filename}</strong>
-                  <p>{sourceLabel(video.source_type)} • {fmt(video.duration)}</p>
-                </div>
-                <div className="job-history-meta">
-                  <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span>
-                  <span>{fmtDate(video.created_at)}</span>
-                </div>
-              </button>
-            ))}
+            {filteredVideos.map((video) => {
+              const mediaUrl = video.object_key
+                ? `/api/proxy/v1/media/${video.object_key.split("/").map(encodeURIComponent).join("/")}`
+                : null;
+              return (
+                <article key={video.id} className="library-item library-video-card">
+                  {mediaUrl ? <video className="library-video-preview" src={mediaUrl} controls preload="metadata" /> : <div className="library-video-placeholder">Preview unavailable</div>}
+                  <div className="library-video-card-body">
+                    <div className="library-video-card-head">
+                      <div>
+                        <strong>{video.filename}</strong>
+                        <p>{sourceLabel(video.source_type)} • {fmt(video.duration)}</p>
+                      </div>
+                      <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span>
+                    </div>
+                    <p className="muted">{fmtDate(video.created_at)}</p>
+                    <div className="dashboard-panel-links">
+                      <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "archive")} disabled={!permissions.canEdit}>Archive</button>
+                      <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>Reindex</button>
+                      <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "delete")} disabled={!permissions.canEdit}>Delete</button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </article>
@@ -958,9 +962,6 @@ export function WorkspacePanel({
 
   return (
     <section className="card dashboard-panel workspace-management-panel">
-      <div className="dashboard-panel-head workspace-management-head">
-        <h2>Workspace</h2>
-      </div>
       <form className="form workspace-switch-card" action="/api/workspace/select" method="post">
         <div className="field">
           <label htmlFor="workspace">Workspace ID</label>

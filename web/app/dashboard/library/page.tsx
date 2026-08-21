@@ -17,9 +17,9 @@ export default async function LibraryPage() {
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
       <div className="dashboard-stack">
-        <section className="dashboard-section-head">
+        <section className="dashboard-section-head library-page-head">
           <div>
-            <h1>Video catalog with detail.</h1>
+            <h1>Video library</h1>
           </div>
         </section>
         <LibraryPanel videos={videos} jobs={jobs} />
