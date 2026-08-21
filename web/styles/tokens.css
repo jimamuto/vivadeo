@@ -1,0 +1,108 @@
+:root {
+  color-scheme: light;
+
+  /* Brand primitives */
+  --color-grain: #D7CEC7;
+  --color-blackboard: #565656;
+  --color-oxblood: #76323F;
+  --color-tan: #C09F80;
+
+  /* Neutral primitives */
+  --color-cream-50: #FFF9F3;
+  --color-cream-100: #F7F3EE;
+  --color-cream-200: #EDE4DA;
+  --color-cream-300: #E6D9CC;
+  --color-ink-900: #2D2422;
+  --color-ink-700: #665850;
+
+  /* Semantic surfaces and content */
+  --color-background: var(--color-cream-100);
+  --color-background-subtle: var(--color-cream-200);
+  --color-surface: rgba(255, 251, 247, 0.94);
+  --color-surface-strong: var(--color-cream-50);
+  --color-surface-translucent: rgba(255, 251, 245, 0.72);
+  --color-surface-rail: rgba(247, 240, 232, 0.82);
+  --color-content: var(--color-ink-900);
+  --color-content-muted: var(--color-ink-700);
+  --color-content-inverse: var(--color-cream-100);
+  --color-border: rgba(86, 86, 86, 0.12);
+  --color-border-strong: rgba(86, 86, 86, 0.22);
+
+  /* Semantic actions and states */
+  --color-action: var(--color-oxblood);
+  --color-action-start: #863642;
+  --color-action-end: #6F2C38;
+  --color-action-hover: #6F2C38;
+  --color-action-subtle: rgba(118, 50, 63, 0.08);
+  --color-content-on-action: #FFF4EA;
+  --color-support: var(--color-tan);
+  --color-focus: rgba(118, 50, 63, 0.24);
+  --color-danger: var(--color-oxblood);
+  --color-success: var(--color-oxblood);
+
+  /* Typography */
+  --font-display: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-ui: "Manrope", "Aptos", "Segoe UI", system-ui, sans-serif;
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-md: 0.9375rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2.25rem;
+  --font-size-display: clamp(3rem, 7vw, 6.5rem);
+  --line-height-tight: 0.94;
+  --line-height-snug: 1.2;
+  --line-height-body: 1.55;
+  --line-height-loose: 1.75;
+  --letter-spacing-label: 0.12em;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* Shape, elevation, and layout */
+  --radius-sm: 18px;
+  --radius-md: 24px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 8px 20px rgba(86, 86, 86, 0.055);
+  --shadow-md: 0 14px 34px rgba(86, 86, 86, 0.08);
+  --shadow-lg: 0 24px 80px rgba(86, 86, 86, 0.14);
+  --content-max: 1240px;
+  --content-gutter: 16px;
+  --control-height: 42px;
+  --transition-fast: 140ms ease-out;
+  --transition-base: 220ms ease-out;
+  --transition-interactive: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+
+  /* Backward-compatible aliases for the current UI */
+  --grain: var(--color-grain);
+  --blackboard: var(--color-blackboard);
+  --oxblood: var(--color-oxblood);
+  --tan: var(--color-tan);
+  --bg: var(--color-background);
+  --bg-soft: var(--color-background-subtle);
+  --panel: var(--color-surface);
+  --panel-strong: var(--color-surface-strong);
+  --text: var(--color-content);
+  --muted: var(--color-content-muted);
+  --line: var(--color-border);
+  --accent: var(--color-action);
+  --accent-2: var(--color-support);
+  --danger: var(--color-danger);
+  --shadow: var(--shadow-md);
+  --shadow-soft: var(--shadow-sm);
+  --surface: var(--color-surface-translucent);
+  --surface-rail: var(--color-surface-rail);
+  --radius: var(--radius-lg);
+  --max: var(--content-max);
+}
