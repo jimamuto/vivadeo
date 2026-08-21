@@ -1,0 +1,1 @@
+import{r as e}from"./useRouter-C_K-nOkZ.js";import{t}from"./link-CrloB_O7.js";var n=e();function r({to:e,href:r,...i}){return(0,n.jsx)(t,{to:e??r??`/`,...i})}export{r as t};

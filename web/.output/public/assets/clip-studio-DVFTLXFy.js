@@ -1,0 +1,1 @@
+import{r as e}from"./useRouter-C_K-nOkZ.js";import{t}from"./useNavigate-BWwW3vwR.js";var n=e();function r(){return(0,n.jsx)(t,{to:`/search`,replace:!0})}var i=r;export{i as component};
