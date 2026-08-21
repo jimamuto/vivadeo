@@ -33,17 +33,11 @@ export function DashboardShell({
             <p className="muted">Workspace {workspace}</p>
           </div>
           <nav className="dashboard-nav">
-            <NavItem href="/dashboard" label="Overview" />
             <NavItem href="/dashboard/ingest" label="Ingest" />
             <NavItem href="/dashboard/library" label="Library" />
             <NavItem href="/dashboard/jobs" label="Jobs" />
             <NavItem href="/dashboard/workspace" label="Workspace" />
           </nav>
-          <div className="dashboard-sidebar-foot">
-            <Link href="/" className="button-secondary">
-              Landing
-            </Link>
-          </div>
         </aside>
         <div className="dashboard-stage">{children}</div>
       </div>

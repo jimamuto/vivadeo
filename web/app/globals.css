@@ -864,16 +864,21 @@ main { width: 100%; }
 }
 
 .dashboard-wrap {
-  width: min(calc(100% - 32px), 1500px);
-  padding: 0 0 40px;
+  width: 100%;
+  max-width: none;
+  padding: 0;
 }
 
 .dashboard-wrap .topbar {
-  margin: 0 calc((100vw - min(100vw - 32px, 1500px)) / -2) 0;
+  margin: 0;
 }
 
 .dashboard-wrap .topbar-shell {
   width: min(calc(100% - 32px), 1500px);
+}
+
+.dashboard-wrap.page > .topbar + .dashboard-shell {
+  margin-top: 0;
 }
 
 .dashboard-shell {
@@ -881,9 +886,11 @@ main { width: 100%; }
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
-  margin-top: 24px;
+  margin-top: 0;
   border: 1px solid rgba(86, 86, 86, 0.1);
-  border-radius: 34px;
+  border-top: 0;
+  border-radius: 0 34px 34px 0;
+  min-height: calc(100vh - 112px);
   background: rgba(247, 240, 232, 0.42);
   overflow: clip;
 }
@@ -891,11 +898,12 @@ main { width: 100%; }
 .dashboard-sidebar {
   position: sticky;
   top: 65px;
-  align-self: start;
+  align-self: stretch;
   display: grid;
+  align-content: start;
   gap: 14px;
-  padding: 22px 18px;
-  min-height: calc(100vh - 96px);
+  padding: 24px 16px;
+  min-height: 0;
   background: rgba(255, 251, 245, 0.34);
   border-right: 1px solid rgba(86, 86, 86, 0.1);
   box-shadow: none;
@@ -908,11 +916,12 @@ main { width: 100%; }
 
 .dashboard-nav {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  margin-top: 22px;
 }
 
 .dash-nav-item {
-  padding: 12px 14px;
+  padding: 13px 16px;
   border-radius: 16px;
   border: 1px solid transparent;
   background: transparent;
@@ -2257,6 +2266,7 @@ main { width: 100%; }
   .dashboard-hero, .dashboard-layout, .dashboard-ledger { grid-template-columns: 1fr; }
   .dashboard-hero-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-shell, .dashboard-module-grid, .dashboard-split-panel, .search-layout { grid-template-columns: 1fr; }
+  .dashboard-shell { border-radius: 0; }
   .dashboard-sidebar { position: static; }
   .stats-band, .service-grid, .benefits-band, .pricing-grid, .integration-band, .footer { grid-template-columns: 1fr; }
   .benefits-visual { min-height: 300px; }

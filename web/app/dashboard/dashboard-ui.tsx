@@ -66,16 +66,6 @@ function fmtBytes(bytes: number) {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function StatStrip({ label, value, note }: { label: string; value: string; note: string; }) {
-  return (
-    <div className="stat-strip">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <p>{note}</p>
-    </div>
-  );
-}
-
 function JobStages({ job }: { job: Job }) {
   const stages = ["queued", "chunking", "embedding", "indexing", "ready"];
   const activeIndex =
@@ -95,76 +85,6 @@ function JobStages({ job }: { job: Job }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-export function OverviewPanel({
-  activeWorkspace,
-  videos,
-  jobs,
-  stats,
-}: {
-  activeWorkspace: string;
-  videos: Video[];
-  jobs: Job[];
-  stats: { total_videos: number; total_chunks: number; total_storage_bytes: number };
-}) {
-  const readyVideos = videos.filter((video) => video.status === "ready").length;
-  const failedJobs = jobs.filter((job) => job.status === "failed").length;
-  const [activity, setActivity] = useState<ActivityEntry[]>([]);
-
-  useEffect(() => {
-    setActivity(readActivityLog().filter((entry) => entry.workspace === activeWorkspace));
-  }, [activeWorkspace]);
-
-  const ingestCount = activity.filter((entry) => entry.action === "ingest.queued").length;
-  const searchCount = activity.filter((entry) => entry.action === "search.performed").length;
-  const clipCount = activity.filter((entry) => entry.action === "clip.created").length;
-
-  return (
-    <div className="dashboard-stack fade-in">
-      <section className="dashboard-hero">
-        <div className="dashboard-title card">
-          <div className="eyebrow">Signed-in console</div>
-          <h1>Dashboard built like control room.</h1>
-          <p>Move between ingest, library, jobs, clips, workspace without mixing every task into one page.</p>
-          <div className="dashboard-chips">
-            <span className="pill">Workspace {activeWorkspace}</span>
-            <span className="pill">{readyVideos} ready videos</span>
-            <span className="pill">{failedJobs} failed jobs</span>
-            <span className="pill">Search + preview</span>
-          </div>
-        </div>
-        <div className="dashboard-hero-side">
-          <StatStrip label="Jobs" value={`${jobs.length}`} note="Queued, active, or finished." />
-          <StatStrip label="Videos" value={`${stats.total_videos}`} note="Indexed items in workspace." />
-          <StatStrip label="Chunks" value={`${stats.total_chunks}`} note="Searchable segments in this workspace." />
-          <StatStrip label="Storage" value={fmtBytes(stats.total_storage_bytes)} note="Source and clip objects found in storage." />
-        </div>
-      </section>
-      <section className="dashboard-summary-row">
-        <article className="summary-chip">
-          <span>Ingest throughput</span>
-          <strong>{ingestCount}</strong>
-          <p>Queued ingest actions in this browser workspace view.</p>
-        </article>
-        <article className="summary-chip">
-          <span>Search volume</span>
-          <strong>{searchCount}</strong>
-          <p>Recorded searches from current workspace context.</p>
-        </article>
-        <article className="summary-chip">
-          <span>Clip creation</span>
-          <strong>{clipCount}</strong>
-          <p>Clip creation actions recorded from UI.</p>
-        </article>
-        <article className="summary-chip">
-          <span>Job failures</span>
-          <strong>{failedJobs}</strong>
-          <p>Failed jobs currently visible in workspace history.</p>
-        </article>
-      </section>
     </div>
   );
 }
