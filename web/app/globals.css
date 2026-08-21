@@ -1881,6 +1881,11 @@ main { width: 100%; }
   gap: 28px;
 }
 
+.workspace-create-card {
+  max-width: 720px;
+  margin: 64px auto 0;
+}
+
 .form { display: grid; gap: 14px; }
 
 .field { display: grid; gap: 8px; }
@@ -2274,6 +2279,7 @@ main { width: 100%; }
   .search-top { grid-template-columns: 1fr; }
   .search-thumb { height: 130px; }
   .split { grid-template-columns: 1fr; gap: 16px; }
+  .workspace-create-card { margin-top: 40px; }
   .field input, .field select, .field textarea { min-width: 0; }
   .dashboard-module-grid, .dashboard-hero-side { grid-template-columns: 1fr; }
   .dashboard-summary-row { grid-template-columns: 1fr; }

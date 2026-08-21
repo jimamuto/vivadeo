@@ -17,8 +17,8 @@ export default async function SignUpPage() {
         <Link href="/" className="button-secondary">Back to landing</Link>
       </div>
 
-      <div className="split fade-in">
-        <section className="card">
+      <div className="fade-in">
+        <section className="card workspace-create-card">
           <h1>Create a workspace</h1>
           <p className="muted">Start a new tenant, invite your team, and keep content isolated from day one.</p>
           <form className="form" method="post" action="/api/auth/sign-up">
@@ -41,16 +41,6 @@ export default async function SignUpPage() {
             <button className="button" type="submit">Create workspace</button>
           </form>
         </section>
-
-        <aside className="card">
-          <h3>What happens next</h3>
-          <p className="muted">The first user becomes workspace owner, email verification starts, and the onboarding flow lands in the dashboard.</p>
-          <ul>
-            <li>Organization row is created in Postgres</li>
-            <li>Auth session is issued by Better Auth</li>
-            <li>Dashboard loads the current workspace</li>
-          </ul>
-        </aside>
       </div>
     </div>
   );
