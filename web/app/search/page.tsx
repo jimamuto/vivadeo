@@ -6,16 +6,16 @@ import { SearchContent } from "./search-content";
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; video_id?: string; video_ids?: string }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   const displayName = session?.user?.name || session?.user?.email || "V";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
-  const { q = "" } = await searchParams;
+  const { q = "", video_id: videoId = "", video_ids: videoIds = "" } = await searchParams;
 
   return (
     <Suspense fallback={null}>
-      <SearchContent profileInitial={profileInitial} initialQuery={q} />
+      <SearchContent profileInitial={profileInitial} initialQuery={q} initialVideoId={videoId} initialVideoIds={videoIds ? videoIds.split(",").filter(Boolean) : []} />
     </Suspense>
   );
 }

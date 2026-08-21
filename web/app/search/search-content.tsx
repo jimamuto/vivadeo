@@ -35,12 +35,18 @@ function fmt(s: number) {
 export function SearchContent({
   profileInitial,
   initialQuery = "",
+  initialVideoId = "",
+  initialVideoIds = [],
 }: {
   profileInitial: string;
   initialQuery?: string;
+  initialVideoId?: string;
+  initialVideoIds?: string[];
 }) {
   const [activeWorkspace, setActiveWorkspace] = useState("default-workspace");
   const [question, setQuestion] = useState(initialQuery);
+  const [videoId, setVideoId] = useState(initialVideoId);
+  const [videoIds, setVideoIds] = useState(initialVideoIds);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -105,6 +111,8 @@ export function SearchContent({
         body: JSON.stringify({
           messages: nextTurns.map(({ role, content }) => ({ role, content })),
           results: 6,
+          video_id: videoId || null,
+          video_ids: videoIds,
         }),
       });
       if (!response.ok) {

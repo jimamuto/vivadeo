@@ -96,7 +96,8 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   const urlRef = useRef<HTMLInputElement>(null);
   const [fileStatus, setFileStatus] = useState<FetchStatus>({ state: "idle" });
   const [urlStatus, setUrlStatus] = useState<FetchStatus>({ state: "idle" });
-  const [fileWarning, setFileWarning] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [ingestMode, setIngestMode] = useState<"file" | "youtube">("file");
   const [isDragActive, setIsDragActive] = useState(false);
   const [interruptedJobs, setInterruptedJobs] = useState<Job[]>([]);
@@ -130,10 +131,9 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   }
 
   function syncSelectedFile(file: File | undefined) {
-    const warning = file
-      ? `${file.name} • ${(file.size / (1024 * 1024)).toFixed(1)} MB • ${file.type || "unknown type"}`
-      : null;
-    setFileWarning(warning);
+    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+    setSelectedFile(file || null);
+    setFilePreviewUrl(file ? URL.createObjectURL(file) : null);
     const validationError = validateFile(file);
     if (validationError) setFileStatus({ state: "error", message: validationError });
     else setFileStatus({ state: "idle" });
@@ -162,6 +162,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
       appendActivity(workspace, "ingest.queued", file!.name);
       router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
       if (fileRef.current) fileRef.current.value = "";
+      syncSelectedFile(undefined);
     } catch (e: unknown) {
       setFileStatus({ state: "error", message: `Upload failed: ${(e as Error).message}` });
     }
@@ -224,25 +225,36 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
           <div className="form">
             <div className="field">
               <label htmlFor="file">Video file</label>
-              <button
-                type="button"
-                className={`ingest-dropzone${isDragActive ? " is-active" : ""}`}
-                onClick={() => fileRef.current?.click()}
-                onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }}
-                onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }}
-                onDragLeave={(event) => {
-                  event.preventDefault();
-                  const nextTarget = event.relatedTarget;
-                  if (!nextTarget || !(event.currentTarget as HTMLElement).contains(nextTarget as Node)) setIsDragActive(false);
-                }}
-                onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}
-              >
-                <strong>{isDragActive ? "Drop video to upload" : "Drop video here"}</strong>
-                <span>Or click to choose a local source file.</span>
-              </button>
+              {selectedFile && filePreviewUrl ? (
+                <div className="ingest-file-card">
+                  <video className="ingest-file-preview" src={filePreviewUrl} controls preload="metadata" />
+                  <div className="ingest-file-metadata">
+                    <strong>{selectedFile.name}</strong>
+                    <span>{(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</span>
+                    <span>{selectedFile.type || "Video file"}</span>
+                  </div>
+                  <button type="button" className="button-secondary" onClick={() => fileRef.current?.click()}>Choose another file</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`ingest-dropzone${isDragActive ? " is-active" : ""}`}
+                  onClick={() => fileRef.current?.click()}
+                  onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }}
+                  onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    const nextTarget = event.relatedTarget;
+                    if (!nextTarget || !(event.currentTarget as HTMLElement).contains(nextTarget as Node)) setIsDragActive(false);
+                  }}
+                  onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}
+                >
+                  <strong>{isDragActive ? "Drop video to upload" : "Drop video here"}</strong>
+                  <span>Or click to choose a local source file.</span>
+                </button>
+              )}
               <input ref={fileRef} id="file" name="file" type="file" accept="video/*" onChange={(event) => syncSelectedFile(event.target.files?.[0])} />
             </div>
-            {fileWarning ? <p className="notice notice-soft">{fileWarning}</p> : null}
             {!permissions.canEdit ? <p className="muted">Viewer role cannot upload or queue ingest jobs.</p> : null}
             <button className="button" onClick={handleUpload} disabled={fileStatus.state === "loading" || !permissions.canEdit}>Upload video</button>
             <StatusLine status={fileStatus} />
@@ -533,6 +545,8 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
   const [items, setItems] = useState(videos);
   const [selectedId, setSelectedId] = useState(videos[0]?.id ?? "");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [collectionFilter, setCollectionFilter] = useState("all");
+  const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
   const [savedClips, setSavedClips] = useState<SavedClip[]>([]);
   const [editingClipId, setEditingClipId] = useState("");
   const [videoLabels, setVideoLabels] = useState<Record<string, string[]>>({});
@@ -540,6 +554,7 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
   const [chunks, setChunks] = useState<VideoChunk[]>([]);
   const [chunksStatus, setChunksStatus] = useState<FetchStatus>({ state: "idle" });
   const [actionStatus, setActionStatus] = useState<FetchStatus>({ state: "idle" });
+  const [draggedVideoId, setDraggedVideoId] = useState<string | null>(null);
 
   useEffect(() => {
     setSavedClips(readSavedClips());
@@ -553,11 +568,17 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
   const filteredVideos = useMemo(() => {
     return items.filter((video) => {
       if (statusFilter !== "all" && video.status !== statusFilter) return false;
+      if (collectionFilter !== "all" && (video.collection || "Unsorted") !== collectionFilter) return false;
       if (!query.trim()) return true;
       const haystack = `${video.filename} ${video.source_uri} ${video.id}`.toLowerCase();
       return haystack.includes(query.trim().toLowerCase());
     });
-  }, [items, query, statusFilter]);
+  }, [items, query, statusFilter, collectionFilter]);
+
+  const collections = useMemo(
+    () => ["all", ...new Set(items.map((video) => video.collection || "Unsorted"))],
+    [items],
+  );
 
   useEffect(() => {
     setSelectedId((current) => (current && filteredVideos.some((video) => video.id === current) ? current : filteredVideos[0]?.id ?? ""));
@@ -631,6 +652,42 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
     writeVideoLabels(next);
   }
 
+  async function reorderVideo(videoId: string, targetId: string) {
+    if (videoId === targetId) return;
+    const ordered = [...items];
+    const from = ordered.findIndex((video) => video.id === videoId);
+    const to = ordered.findIndex((video) => video.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    setItems(ordered);
+    for (const [position, video] of ordered.entries()) {
+      await updateLibraryMetadata(video, { position });
+    }
+  }
+
+  async function updateLibraryMetadata(video: Video, changes: { filename?: string; collection?: string; labels?: string[]; position?: number }) {
+    const payload = {
+      ...(changes.filename !== undefined ? { filename: changes.filename } : {}),
+      ...(changes.collection !== undefined ? { collection: changes.collection } : {}),
+      ...(changes.labels !== undefined ? { labels: changes.labels } : {}),
+      ...(changes.position !== undefined ? { position: changes.position } : {}),
+    };
+    const response = await fetch(`/api/proxy/v1/videos/${video.id}/library`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) return;
+    const updated = (await response.json()) as Video;
+    setItems((current) => current.map((item) => (item.id === video.id ? { ...item, ...updated } : item)));
+  }
+
+  async function runBulkAction(action: "archive" | "reindex" | "delete") {
+    for (const videoId of selectedVideoIds) await runVideoAction(videoId, action);
+    setSelectedVideoIds([]);
+  }
+
   async function runVideoAction(videoId: string, action: "archive" | "reindex" | "delete") {
     setActionStatus({ state: "loading" });
     try {
@@ -681,6 +738,17 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
             <option value="queued">Queued</option>
             <option value="failed">Failed</option>
           </select>
+          <select value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)} aria-label="Filter library by collection">
+            {collections.map((collection) => <option key={collection} value={collection}>{collection === "all" ? "All collections" : collection}</option>)}
+          </select>
+        </div>
+        <div className="library-bulk-toolbar">
+          <label><input type="checkbox" checked={filteredVideos.length > 0 && filteredVideos.every((video) => selectedVideoIds.includes(video.id))} onChange={(event) => setSelectedVideoIds(event.target.checked ? filteredVideos.map((video) => video.id) : [])} /> Select visible</label>
+          <span>{selectedVideoIds.length} selected</span>
+          <button type="button" className="button-secondary" onClick={() => void runBulkAction("archive")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Archive</button>
+          <button type="button" className="button-secondary" onClick={() => void runBulkAction("reindex")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Reindex</button>
+          <button type="button" className="button-secondary" onClick={() => void runBulkAction("delete")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Delete</button>
+          {selectedVideoIds.length > 0 ? <Link className="button-secondary" href={`/search?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`}>Use in search</Link> : null}
         </div>
         {filteredVideos.length === 0 ? (
           <div className="empty-state">
@@ -695,17 +763,48 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
                 ? `/api/proxy/v1/media/${video.object_key.split("/").map(encodeURIComponent).join("/")}`
                 : null;
               return (
-                <article key={video.id} className="library-item library-video-card">
+                <article
+                  key={video.id}
+                  className="library-item library-video-card"
+                  draggable={permissions.canEdit}
+                  onDragStart={() => setDraggedVideoId(video.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => {
+                    if (draggedVideoId) void reorderVideo(draggedVideoId, video.id);
+                    setDraggedVideoId(null);
+                  }}
+                  onDragEnd={() => setDraggedVideoId(null)}
+                >
                   {mediaUrl ? <video className="library-video-preview" src={mediaUrl} controls preload="metadata" /> : <div className="library-video-placeholder">Preview unavailable</div>}
                   <div className="library-video-card-body">
+                    <label className="library-video-select"><input type="checkbox" checked={selectedVideoIds.includes(video.id)} onChange={(event) => setSelectedVideoIds((current) => event.target.checked ? [...new Set([...current, video.id])] : current.filter((id) => id !== video.id))} /> Select</label>
                     <div className="library-video-card-head">
                       <div>
-                        <strong>{video.filename}</strong>
+                        <input
+                          className="library-video-title"
+                          defaultValue={video.filename}
+                          aria-label={`Rename ${video.filename}`}
+                          onBlur={(event) => void updateLibraryMetadata(video, { filename: event.target.value })}
+                        />
                         <p>{sourceLabel(video.source_type)} • {fmt(video.duration)}</p>
                       </div>
                       <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span>
                     </div>
                     <p className="muted">{fmtDate(video.created_at)}</p>
+                    <div className="library-video-card-fields">
+                      <input
+                        defaultValue={video.collection || ""}
+                        placeholder="Collection"
+                        aria-label={`Collection for ${video.filename}`}
+                        onBlur={(event) => void updateLibraryMetadata(video, { collection: event.target.value })}
+                      />
+                      <input
+                        defaultValue={(video.labels || []).join(", ")}
+                        placeholder="Labels"
+                        aria-label={`Labels for ${video.filename}`}
+                        onBlur={(event) => void updateLibraryMetadata(video, { labels: event.target.value.split(",") })}
+                      />
+                    </div>
                     <div className="dashboard-panel-links">
                       <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "archive")} disabled={!permissions.canEdit}>Archive</button>
                       <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>Reindex</button>

@@ -41,6 +41,13 @@ class JobResponse(BaseModel):
     updated_at: datetime
 
 
+class VideoLibraryUpdateRequest(BaseModel):
+    filename: str | None = None
+    collection: str | None = None
+    labels: list[str] | None = None
+    position: int | None = None
+
+
 class VideoResponse(BaseModel):
     id: str
     organization_id: str
@@ -52,6 +59,9 @@ class VideoResponse(BaseModel):
     object_key: str | None = None
     url: str | None = None
     error: str | None = None
+    collection: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    position: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -96,6 +106,7 @@ class SearchRequest(BaseModel):
     results: int = Field(5, ge=1, le=100)
     threshold: float | None = None
     video_id: str | None = None
+    video_ids: list[str] = Field(default_factory=list)
 
 
 class SearchResult(BaseModel):
@@ -122,6 +133,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     results: int = Field(8, ge=1, le=30)
     video_id: str | None = None
+    video_ids: list[str] = Field(default_factory=list)
 
 
 class ChatCitation(BaseModel):

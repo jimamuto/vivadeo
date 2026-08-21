@@ -53,6 +53,7 @@ class PostgresVideoStore:
         n_results: int = 5,
         organization_id: str | None = None,
         video_id: str | None = None,
+        video_ids: list[str] | None = None,
     ) -> list[dict]:
         distance = VideoChunk.embedding.cosine_distance(query_embedding).label("distance")
         stmt = (
@@ -63,7 +64,9 @@ class PostgresVideoStore:
         )
         if organization_id:
             stmt = stmt.where(Video.organization_id == organization_id, VideoChunk.organization_id == organization_id)
-        if video_id:
+        if video_ids:
+            stmt = stmt.where(VideoChunk.video_id.in_(video_ids))
+        elif video_id:
             stmt = stmt.where(VideoChunk.video_id == video_id)
         rows = self.session.execute(stmt).all()
         return [

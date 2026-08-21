@@ -23,6 +23,9 @@ export type Video = {
   object_key?: string | null;
   url?: string | null;
   error?: string | null;
+  collection?: string | null;
+  labels?: string[];
+  position?: number;
   created_at: string;
   updated_at: string;
 };

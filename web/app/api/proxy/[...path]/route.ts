@@ -31,6 +31,8 @@ async function forward(
     undefined,
     workspace,
   );
+  const range = request.headers.get("range");
+  if (range) headers.set("Range", range);
   const method = request.method;
   let body: BodyInit | undefined;
 
@@ -60,13 +62,21 @@ async function forward(
     // @ts-expect-error: duplex is not in the TS types yet but is required at runtime.
     duplex: "half",
   });
+  if (method === "GET" || method === "HEAD") {
+    const responseHeaders = new Headers();
+    response.headers.forEach((value, key) => responseHeaders.set(key, value));
+    return new NextResponse(method === "HEAD" ? null : response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  }
+
   const text = await response.text();
   const responseBody = response.status === 204 || response.status === 304 ? null : text;
   return new NextResponse(responseBody, {
     status: response.status,
     headers: {
-      "content-type":
-        response.headers.get("content-type") || "application/json",
+      "content-type": response.headers.get("content-type") || "application/json",
     },
   });
 }

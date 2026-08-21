@@ -5,6 +5,7 @@ import re
 import tempfile
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from redis import Redis
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -45,6 +46,7 @@ from .schemas import (
     SearchResponse,
     UrlIngestRequest,
     VideoChunkResponse,
+    VideoLibraryUpdateRequest,
     VideoResponse,
     WorkspaceCreateRequest,
     WorkspaceResponse,
@@ -152,8 +154,31 @@ def _job_response(job: Job) -> JobResponse:
     )
 
 
-def _video_response(video: Video, store: ObjectStore | None = None) -> VideoResponse:
+def _library_metadata(session: Session, organization_id: str) -> dict[str, dict]:
+    setting = session.get(OrganizationSetting, organization_id)
+    settings = setting.settings if setting and isinstance(setting.settings, dict) else {}
+    library = settings.get("video_library", {})
+    return library if isinstance(library, dict) else {}
+
+
+def _save_library_metadata(session: Session, organization_id: str, metadata: dict[str, dict]) -> None:
+    setting = session.get(OrganizationSetting, organization_id)
+    if setting is None:
+        setting = OrganizationSetting(organization_id=organization_id, settings={})
+        session.add(setting)
+    settings = dict(setting.settings or {})
+    settings["video_library"] = metadata
+    setting.settings = settings
+    session.commit()
+
+
+def _video_response(
+    video: Video,
+    store: ObjectStore | None = None,
+    library_metadata: dict | None = None,
+) -> VideoResponse:
     url = store.presigned_url(video.object_key) if store and video.object_key else None
+    metadata = library_metadata or {}
     return VideoResponse(
         id=video.id,
         organization_id=video.organization_id,
@@ -165,6 +190,9 @@ def _video_response(video: Video, store: ObjectStore | None = None) -> VideoResp
         object_key=video.object_key,
         url=url,
         error=video.error,
+        collection=metadata.get("collection"),
+        labels=metadata.get("labels", []),
+        position=metadata.get("position", 0),
         created_at=video.created_at,
         updated_at=video.updated_at,
     )
@@ -488,12 +516,14 @@ def list_videos(
     session: Session = Depends(db_dep), organization_id: str = Depends(workspace_dep)
 ):
     store = ObjectStore()
+    library = _library_metadata(session, organization_id)
     videos = session.scalars(
         select(Video)
         .where(Video.organization_id == organization_id)
         .order_by(Video.created_at.desc())
     ).all()
-    return [_video_response(video, store) for video in videos]
+    videos.sort(key=lambda video: (library.get(video.id, {}).get("position", 0), -video.created_at.timestamp()))
+    return [_video_response(video, store, library.get(video.id)) for video in videos]
 
 
 @app.get(
@@ -509,7 +539,37 @@ def get_video(
     video = session.get(Video, video_id)
     if not video or video.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _video_response(video, ObjectStore())
+    return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id))
+
+
+@app.patch(
+    "/v1/videos/{video_id}/library",
+    response_model=VideoResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def update_video_library(
+    video_id: str,
+    request: VideoLibraryUpdateRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    video = session.get(Video, video_id)
+    if not video or video.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if request.filename is not None:
+        filename = request.filename.strip()
+        if not filename:
+            raise HTTPException(status_code=400, detail="Filename cannot be empty")
+        video.filename = filename
+    library = _library_metadata(session, organization_id)
+    current = library.get(video_id, {})
+    library[video_id] = {
+        "collection": request.collection.strip() if request.collection is not None else current.get("collection"),
+        "labels": sorted({label.strip() for label in request.labels if label.strip()}) if request.labels is not None else current.get("labels", []),
+        "position": max(0, request.position) if request.position is not None else current.get("position", 0),
+    }
+    _save_library_metadata(session, organization_id, library)
+    return _video_response(video, ObjectStore(), library[video_id])
 
 
 @app.get(
@@ -551,7 +611,7 @@ def archive_video(
         raise HTTPException(status_code=404, detail="Video not found")
     video.status = "archived"
     session.commit()
-    return _video_response(video, ObjectStore())
+    return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id))
 
 
 @app.post(
@@ -650,6 +710,7 @@ def delete_video(
 @app.get("/v1/media/{object_key:path}", dependencies=[Depends(require_api_key)])
 def get_media(
     object_key: str,
+    range_header: str | None = Header(default=None, alias="Range"),
     session: Session = Depends(db_dep),
     organization_id: str = Depends(workspace_dep),
 ) -> StreamingResponse:
@@ -666,7 +727,9 @@ def get_media(
     if video is None and clip is None:
         raise HTTPException(status_code=404, detail="Media not found")
     return stream_object(
-        object_key, content_type=(video.content_type if video else "video/mp4")
+        object_key,
+        content_type=(video.content_type if video else "video/mp4"),
+        range_header=range_header,
     )
 
 
@@ -720,6 +783,43 @@ def get_job(
     if not job or job.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Job not found")
     return _job_response(job)
+
+
+@app.get(
+    "/v1/jobs/{job_id}/events",
+    dependencies=[Depends(require_api_key)],
+)
+def stream_job_events(
+    job_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    job = session.get(Job, job_id)
+    if not job or job.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    def event_stream():
+        client = Redis.from_url(get_runtime_settings().redis_url, decode_responses=True)
+        pubsub = client.pubsub()
+        pubsub.subscribe(f"vivadeo:job:{job_id}")
+        try:
+            yield f"event: job\\ndata: {_job_response(job).model_dump_json()}\\n\\n"
+            if job.status in {"succeeded", "failed", "canceled"}:
+                return
+            while True:
+                message = pubsub.get_message(ignore_subscribe_messages=True, timeout=15)
+                if message and message.get("data"):
+                    payload = message["data"]
+                    yield f"event: job\\ndata: {payload}\\n\\n"
+                    if '"status":"succeeded"' in payload or '"status":"failed"' in payload or '"status":"canceled"' in payload:
+                        return
+                else:
+                    yield ": keepalive\\n\\n"
+        finally:
+            pubsub.close()
+            client.close()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "Connection": "keep-alive"})
 
 
 @app.post(
@@ -834,6 +934,7 @@ def search(
             n_results=request.results,
             organization_id=organization_id,
             video_id=request.video_id,
+            **({"video_ids": request.video_ids} if request.video_ids else {}),
         )
     finally:
         reset_embedder()
@@ -866,6 +967,7 @@ def search_chat(
             n_results=request.results,
             organization_id=organization_id,
             video_id=request.video_id,
+            **({"video_ids": request.video_ids} if request.video_ids else {}),
         )
     finally:
         reset_embedder()

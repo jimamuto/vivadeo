@@ -1,12 +1,14 @@
 """Celery worker tasks for production ingestion and clip generation."""
 
 import json
+import logging
 import os
 import shutil
 import tempfile
 from pathlib import Path
 
 from celery import Celery
+from redis import Redis
 from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
@@ -21,6 +23,8 @@ from .trimmer import trim_clip
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+progress_bus = Redis.from_url(settings.redis_url, decode_responses=True)
 celery_app = Celery(
     "vivadeo",
     broker=settings.redis_url,
@@ -33,11 +37,32 @@ class JobCanceled(Exception):
 
 
 def _update_job(job_id: str, **values) -> None:
+    payload = None
     with session_scope() as session:
         job = session.get(Job, job_id)
         if job and job.status != "canceled":
             for key, value in values.items():
                 setattr(job, key, value)
+            payload = {
+                "id": job.id,
+                "organization_id": job.organization_id,
+                "kind": job.kind,
+                "status": job.status,
+                "progress": job.progress,
+                "message": job.message,
+                "error": job.error,
+                "video_id": job.video_id,
+                "clip_id": job.clip_id,
+                "created_at": job.created_at.isoformat(),
+                "updated_at": job.updated_at.isoformat(),
+            }
+    if payload is None:
+        return
+    logger.info("job_progress %s", json.dumps(payload, separators=(",", ":")))
+    try:
+        progress_bus.publish(f"vivadeo:job:{job_id}", json.dumps(payload, separators=(",", ":")))
+    except Exception:
+        logger.exception("job_progress_publish_failed job_id=%s", job_id)
 
 
 def _mark_video(video_id: str, **values) -> None:
@@ -83,11 +108,13 @@ def _transcript_object_key(video_id: str) -> str:
 def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
     settings = get_settings()
     _update_job(job_id, status="running", progress=0.08, message="Transcribing audio")
+    logger.info("modal_transcription_start job_id=%s video_id=%s", job_id, video_id)
     segments = ModalWhisperTranscriber(
         app_name=settings.modal_whisper_app,
         function_name=settings.modal_whisper_function,
         timeout=settings.modal_timeout,
     ).transcribe(file_path)
+    logger.info("modal_transcription_complete job_id=%s video_id=%s segments=%s", job_id, video_id, len(segments))
     store = ObjectStore()
     tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
     try:
@@ -143,10 +170,12 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
             nonlocal stored_count
             if not batch:
                 return 0
+            logger.info("modal_embedding_start job_id=%s video_id=%s batch=%s", job_id, video_id, len(batch))
             embeddings = embedder.embed_video_chunks(
                 [item["embed_path"] for item in batch],
                 verbose=False,
             )
+            logger.info("modal_embedding_complete job_id=%s video_id=%s batch=%s", job_id, video_id, len(embeddings))
             with session_scope() as session:
                 store = PostgresVideoStore(session)
                 for item, embedding in zip(batch, embeddings):
@@ -368,36 +397,24 @@ def trim_clip_task(job_id: str, clip_id: str, organization_id: str) -> None:
         store.upload_file(local_clip, clip_key, "video/mp4")
         with session_scope() as session:
             clip = session.get(Clip, clip_id)
-            job = session.get(Job, job_id)
             if clip:
                 clip.object_key = clip_key
                 clip.status = "ready"
-            if job:
-                job.status = "succeeded"
-                job.progress = 1.0
-                job.message = "Clip ready"
+        _update_job(job_id, status="succeeded", progress=1.0, message="Clip ready")
     except JobCanceled:
         with session_scope() as session:
             clip = session.get(Clip, clip_id)
-            job = session.get(Job, job_id)
             if clip:
                 clip.status = "canceled"
                 clip.error = "Canceled by user"
-            if job:
-                job.status = "canceled"
-                job.message = "Canceled by user"
-                job.error = None
+        _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         with session_scope() as session:
             clip = session.get(Clip, clip_id)
-            job = session.get(Job, job_id)
             if clip:
                 clip.status = "failed"
                 clip.error = str(exc)
-            if job:
-                job.status = "failed"
-                job.error = str(exc)
-                job.message = "Failed"
+        _update_job(job_id, status="failed", error=str(exc), message="Failed")
         raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
