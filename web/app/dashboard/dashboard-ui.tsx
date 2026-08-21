@@ -215,7 +215,6 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
       <article className="card dash-stack dash-primary">
         <div>
           <h3>File ingest</h3>
-          <p className="muted">Upload one source, then jump straight into job detail. Drag a file here or browse from disk.</p>
         </div>
         <div className="form">
           <div className="field">
@@ -268,7 +267,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
       <article className="card dash-stack dash-secondary">
         <div>
           <h3>URL ingest</h3>
-          <p className="muted">Queue remote source, keep same jobs flow and retry path. HTTP(S) only. Make sure you have permission to ingest external media before indexing it.</p>
+          <p className="muted">HTTP(S) URLs only. Confirm you have permission to use the source.</p>
         </div>
         <form className="form" onSubmit={handleSubmit}>
           <div className="field">
@@ -283,7 +282,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
         <summary className="ingest-history-summary">
         <div>
           <h3>Interrupted ingests</h3>
-          <p className="muted">Retry canceled or failed ingest jobs from this workspace without re-entering everything.</p>
+          <p className="muted">Retry failed or canceled ingests.</p>
         </div>
         <div className="ingest-history-meta">
           <span className="pill">{interruptedJobs.length} queued for recovery</span>
@@ -401,7 +400,6 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
       <article className="card dashboard-panel">
         <div className="dashboard-panel-head">
           <h2>Job history</h2>
-          <p className="muted">Workspace queue with lifecycle state, failure reason, retry entry point.</p>
         </div>
         {items.length === 0 ? <p className="muted">No jobs yet.</p> : (
           <div className="job-history-list">
@@ -429,7 +427,6 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
       <article className="card dashboard-panel">
         <div className="dashboard-panel-head">
           <h2>Job detail</h2>
-          <p className="muted">Full lifecycle view with stage rail and retry when work fails.</p>
         </div>
         {error ? <p className="notice notice-bad">{error}</p> : null}
         {!selectedJob ? <p className="muted">Select job to inspect details.</p> : (
@@ -672,7 +669,6 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
         <div className="dashboard-panel-head library-panel-head">
           <div>
             <h2>Video library</h2>
-            <p className="muted">Browse workspace videos with status, duration, upload time, source type.</p>
           </div>
           <span className="pill">{filteredVideos.length} videos</span>
         </div>
@@ -723,7 +719,6 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
         <div className="dashboard-panel-head library-panel-head">
           <div>
             <h2>Video detail</h2>
-            <p className="muted">Source metadata, latest ingest state, searchable chunks, and transcript-ready answers.</p>
           </div>
           {selectedVideo ? <span className={`job-status job-status-${statusTone(selectedVideo.status)}`}>{selectedVideo.status}</span> : null}
         </div>
@@ -794,7 +789,6 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
               <summary className="chunk-browser-summary">
                 <div>
                   <h3>Chunk browser</h3>
-                  <p className="muted">Ordered searchable segments from this source video.</p>
                 </div>
                 <span className="pill">{chunks.length} chunks</span>
               </summary>
@@ -966,7 +960,6 @@ export function WorkspacePanel({
     <section className="card dashboard-panel workspace-management-panel">
       <div className="dashboard-panel-head workspace-management-head">
         <h2>Workspace</h2>
-        <p className="muted">Switch org, invite users, review members, manage pending invites.</p>
       </div>
       <form className="form workspace-switch-card" action="/api/workspace/select" method="post">
         <div className="field">
@@ -1015,7 +1008,6 @@ export function WorkspacePanel({
       <div className="dashboard-stack workspace-members-card">
         <div className="dashboard-panel-head">
           <h3>Members</h3>
-          <p className="muted">Update roles for current workspace members.</p>
         </div>
         {members.length === 0 ? <p className="muted">No member data loaded.</p> : (
           <div className="job-history-list">
@@ -1039,7 +1031,6 @@ export function WorkspacePanel({
       <div className="dashboard-stack workspace-invites-card">
         <div className="dashboard-panel-head">
           <h3>Pending invites</h3>
-          <p className="muted">Track invitations that still need acceptance.</p>
         </div>
         {invites.length === 0 ? <p className="muted">No pending invites.</p> : (
           <div className="job-history-list">
@@ -1059,7 +1050,6 @@ export function WorkspacePanel({
       <div className="dashboard-stack workspace-activity-card">
         <div className="dashboard-panel-head">
           <h3>Workspace activity</h3>
-          <p className="muted">Recent product actions in this workspace.</p>
         </div>
         {activity.length === 0 ? <p className="muted">No activity logged yet.</p> : (
           <div className="job-history-list">

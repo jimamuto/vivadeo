@@ -19,9 +19,7 @@ export default async function JobsPage() {
       <div className="dashboard-stack">
         <section className="dashboard-section-head">
           <div>
-            <div className="eyebrow">Jobs</div>
             <h1>Queue state only.</h1>
-            <p className="muted">Progress table lives here, not buried in mixed dashboard content.</p>
           </div>
         </section>
         <JobsPanel jobs={jobs} />

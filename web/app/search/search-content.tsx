@@ -32,9 +32,15 @@ function fmt(s: number) {
   return `${m}:${sec}`;
 }
 
-export function SearchContent({ profileInitial }: { profileInitial: string }) {
+export function SearchContent({
+  profileInitial,
+  initialQuery = "",
+}: {
+  profileInitial: string;
+  initialQuery?: string;
+}) {
   const [activeWorkspace, setActiveWorkspace] = useState("default-workspace");
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(initialQuery);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);

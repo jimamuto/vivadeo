@@ -19,9 +19,7 @@ export default async function LibraryPage() {
       <div className="dashboard-stack">
         <section className="dashboard-section-head">
           <div>
-            <div className="eyebrow">Library</div>
             <h1>Video catalog with detail.</h1>
-            <p className="muted">Status, source metadata, upload time, quick hop into job or clip flow.</p>
           </div>
         </section>
         <LibraryPanel videos={videos} jobs={jobs} />

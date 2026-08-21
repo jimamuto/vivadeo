@@ -11,11 +11,10 @@ export function AppTopbar({ profileInitial = "V" }: AppTopbarProps) {
         <Link href="/" className="brand">
           Vivadeo
         </Link>
-        <nav className="nav-center" aria-label="Main">
-          <Link href="/search" className="nav-link">
-            Search
-          </Link>
-        </nav>
+        <form className="nav-search-form" action="/search" method="get" role="search">
+          <label className="sr-only" htmlFor="global-search">Search footage</label>
+          <input id="global-search" name="q" type="search" placeholder="Search footage..." />
+        </form>
         <div className="nav-spacer" />
         <div className="nav-actions">
           <Link href="/settings" className="nav-user" aria-label="Profile">
