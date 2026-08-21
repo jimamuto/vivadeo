@@ -12,23 +12,8 @@ export function AppTopbar({ profileInitial = "V" }: AppTopbarProps) {
           Vivadeo
         </Link>
         <nav className="nav-center" aria-label="Main">
-          <Link href="/" className="nav-link">
-            Home
-          </Link>
-          <Link href="/dashboard" className="nav-link">
-            Dashboard
-          </Link>
           <Link href="/search" className="nav-link">
             Search
-          </Link>
-          <Link href={"/dashboard/library" as any} className="nav-link">
-            Library
-          </Link>
-          <Link href="/jobs" className="nav-link">
-            Jobs
-          </Link>
-          <Link href="/settings" className="nav-link">
-            Settings
           </Link>
         </nav>
         <div className="nav-spacer" />
