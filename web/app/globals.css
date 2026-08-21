@@ -1824,6 +1824,15 @@ main { width: 100%; }
   align-content: center;
 }
 
+.verify-email-card {
+  max-width: 560px;
+  margin: 64px auto 0;
+  padding: 32px;
+}
+
+.verify-email-card h1 { margin: 8px 0 12px; }
+.verify-resend-form { margin-top: 12px; text-align: center; }
+
 .auth-shell {
   display: grid;
   grid-template-columns: 0.95fr 1.05fr;
@@ -1848,6 +1857,7 @@ main { width: 100%; }
 @media (max-width: 960px) {
   .auth-shell { grid-template-columns: 1fr; }
   .auth-art { min-height: 360px; }
+  .verify-email-card { margin-top: 40px; padding: 24px; }
 }
 
 @media (max-width: 960px) {

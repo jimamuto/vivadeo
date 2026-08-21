@@ -1,3 +1,4 @@
+import { randomInt, randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
@@ -45,6 +46,60 @@ const databaseUrl = rawDatabaseUrl
 const authBaseUrl =
   process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 const authSecret = process.env.BETTER_AUTH_SECRET || "";
+const verificationCodeLifetimeMs = 10 * 60 * 1000;
+const verificationCodeIdentifier = (email: string) => `email-verification:${email.toLowerCase()}`;
+
+export async function sendVerificationCode(email: string): Promise<void> {
+  if (!databaseUrl) throw new Error("Auth database is not configured");
+  const normalizedEmail = email.trim().toLowerCase();
+  const code = String(randomInt(100000, 1000000));
+  const expiresAt = new Date(Date.now() + verificationCodeLifetimeMs);
+  const identifier = verificationCodeIdentifier(normalizedEmail);
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    await sql`DELETE FROM verification WHERE identifier = ${identifier}`;
+    await sql`
+      INSERT INTO verification (id, identifier, value, expires_at, created_at, updated_at)
+      VALUES (${randomUUID()}, ${identifier}, ${code}, ${expiresAt}, NOW(), NOW())
+    `;
+    await sendEmail(
+      normalizedEmail,
+      "Your Vivadeo verification code",
+      `<p>Your Vivadeo verification code is:</p>
+       <p style="font-size: 28px; letter-spacing: 0.24em; font-weight: 700;">${code}</p>
+       <p>This code expires in 10 minutes. If you did not create a Vivadeo account, you can ignore this email.</p>`,
+    );
+  } finally {
+    await sql.end();
+  }
+}
+
+export async function verifyEmailCode(email: string, code: string): Promise<boolean> {
+  if (!databaseUrl) return false;
+  const normalizedEmail = email.trim().toLowerCase();
+  const identifier = verificationCodeIdentifier(normalizedEmail);
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const rows = await sql<{ value: string; expires_at: Date }[]>`
+      SELECT value, expires_at FROM verification
+      WHERE identifier = ${identifier}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const record = rows[0];
+    if (!record || record.value !== code.trim() || new Date(record.expires_at).getTime() < Date.now()) {
+      return false;
+    }
+    const updated = await sql`
+      UPDATE "user" SET email_verified = TRUE, updated_at = NOW()
+      WHERE lower(email) = ${normalizedEmail}
+    `;
+    await sql`DELETE FROM verification WHERE identifier = ${identifier}`;
+    return updated.count > 0;
+  } finally {
+    await sql.end();
+  }
+}
 
 export const emailVerificationEnabled = Boolean(
   process.env.AZURE_COMMUNICATION_CONNECTION_STRING && process.env.EMAIL_FROM,
@@ -101,19 +156,11 @@ if (databaseUrl && authBaseUrl && authSecret) {
     emailVerification: {
       sendVerificationEmail: async ({
         user,
-        url,
       }: {
         user: { email: string; name?: string };
         url: string;
       }) => {
-        await sendEmail(
-          user.email,
-          "Verify your Vivadeo email address",
-          `<p>Hi ${user.name || user.email},</p>
-           <p>Click the link below to verify your email address and activate your account:</p>
-           <p><a href="${url}">${url}</a></p>
-           <p>This link expires in 24 hours. If you did not create an account, you can safely ignore this email.</p>`,
-        );
+        await sendVerificationCode(user.email);
       },
     },
     user: {

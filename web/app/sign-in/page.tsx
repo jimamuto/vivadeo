@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  EMAIL_NOT_VERIFIED: "Your email address has not been verified. Please check your inbox for a verification link.",
+  EMAIL_NOT_VERIFIED: "Your email address has not been verified. Enter the code from your inbox.",
   INVALID_EMAIL_OR_PASSWORD: "Invalid email or password.",
   USER_NOT_FOUND: "Invalid email or password.",
   INVALID_PASSWORD: "Invalid email or password.",
@@ -62,7 +62,7 @@ export default async function SignInPage({
           <h1>Sign in</h1>
           <p className="muted">Use your workspace account to manage uploads, search, and clips.</p>
 
-          {params.verify === "sent" && <p className="notice notice-good">Account created. Check email for a verification link.</p>}
+          {params.verify === "done" && <p className="notice notice-good">Email verified. You can now sign in.</p>}
           {params.reset === "sent" && <p className="notice notice-good">Password reset email sent - check your inbox.</p>}
           {params.error && <p className="notice notice-bad">{errorMessage(params.error)}</p>}
 

@@ -2,10 +2,16 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { SignupForm } from "./signup-form";
 
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (session?.user) redirect("/dashboard");
+  const params = await searchParams;
 
   return (
     <div className="shell" style={{ padding: "28px 0 48px" }}>
@@ -21,25 +27,7 @@ export default async function SignUpPage() {
         <section className="card workspace-create-card">
           <h1>Create a workspace</h1>
           <p className="muted">Start a new tenant, invite your team, and keep content isolated from day one.</p>
-          <form className="form" method="post" action="/api/auth/sign-up">
-            <div className="field">
-              <label htmlFor="name">Your name</label>
-              <input id="name" name="name" type="text" autoComplete="name" required />
-            </div>
-            <div className="field">
-              <label htmlFor="workspace">Workspace name</label>
-              <input id="workspace" name="workspace" type="text" required />
-            </div>
-            <div className="field">
-              <label htmlFor="email">Email</label>
-              <input id="email" name="email" type="email" autoComplete="email" required />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" autoComplete="new-password" required />
-            </div>
-            <button className="button" type="submit">Create workspace</button>
-          </form>
+          <SignupForm initialError={params.error} />
         </section>
       </div>
     </div>

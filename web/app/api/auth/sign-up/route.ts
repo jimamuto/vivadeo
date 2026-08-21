@@ -11,6 +11,11 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const workspaceName = String(form.get("workspace") || "New workspace");
   const email = String(form.get("email") || "").trim().toLowerCase();
+  const password = String(form.get("password") || "");
+  const confirmPassword = String(form.get("confirmPassword") || "");
+  if (password !== confirmPassword) {
+    return NextResponse.redirect(new URL("/sign-up?error=PASSWORD_MISMATCH", request.url));
+  }
   const backendResponse = await fetch(getBackendUrl("/v1/workspaces"), {
     method: "POST",
     headers: getBackendHeaders({
@@ -25,7 +30,7 @@ export async function POST(request: NextRequest) {
   const authResponse = await postAuthEndpoint(request, "/sign-up/email", {
     name: String(form.get("name") || ""),
     email: String(form.get("email") || ""),
-    password: String(form.get("password") || ""),
+    password,
     callbackURL: new URL("/dashboard", request.url).toString(),
   });
 
@@ -45,10 +50,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // If email verification is required, tell the user to check their inbox.
+    // If email verification is required, collect the code sent by email.
     // Otherwise (dev mode) send them straight to the dashboard.
     const destination = emailVerificationEnabled
-      ? "/sign-in?verify=sent"
+      ? `/verify-email?email=${encodeURIComponent(email)}&sent=1`
       : "/dashboard";
 
     const response = NextResponse.redirect(new URL(destination, request.url));
