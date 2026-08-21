@@ -15,6 +15,7 @@ browser
            -> postgres: relational data and pgvector embeddings
            -> redis: Celery broker/result backend
            -> Backblaze B2: original videos and generated clips via its S3-compatible API
+           -> Azure Communication Services Email: transactional auth email
            -> worker: Celery ingestion, embedding, and clipping jobs
               -> Modal Qwen3-VL embedder
 ```
@@ -121,6 +122,20 @@ clip request
   -> API returns a web-proxied media URL
 ```
 
+Transactional email:
+
+```text
+Better Auth verification/reset/deletion event
+  -> Next.js web email helper
+  -> Azure Communication Services Email SDK
+  -> Azure-managed MailFrom address with Vivadeo display name
+  -> recipient inbox
+```
+
+Email is a web responsibility and does not pass through FastAPI or Celery.
+The Azure-managed domain removes the need for a custom domain. The sender
+username is `vivadeo`, with display name `Vivadeo`.
+
 ## Configuration
 
 Root `.env` is shared by Compose services. Important production variables:
@@ -137,6 +152,11 @@ Root `.env` is shared by Compose services. Important production variables:
   fetch media through the web app rather than accessing Backblaze B2 directly.
 - `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and
   `S3_REGION`: Backblaze B2 S3-compatible connection settings in production.
+- `EMAIL_FROM`: verified Azure MailFrom address, currently the `vivadeo` sender
+  on the Azure-managed `azurecomm.net` domain.
+- `AZURE_COMMUNICATION_CONNECTION_STRING`: secret credential for the Azure
+  Communication Services resource. Keep it in secret-managed environment
+  configuration and never commit it.
 
 ## Deployment Notes
 
@@ -152,8 +172,8 @@ Root `.env` is shared by Compose services. Important production variables:
 
 ## Current Limitations
 
-- Email provider integration is configured through environment variables, but
-  production email delivery still needs real provider credentials.
+- Azure-managed email domains have limited sending volume and less sender
+  customization than a custom verified domain.
 - Better Auth schema/migration hardening should be revisited before external
   users are invited at scale.
 - End-to-end browser tests are not yet wired into CI.

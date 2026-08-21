@@ -10,8 +10,7 @@ Use these notes when working in this repository. Keep product behavior in `PRODU
 
 ## Runtime Findings
 
-- The web auth flow has a safe console-email fallback when `RESEND_API_KEY` is unset or placeholder text, so local and containerized sign-up and password reset flows do not need a Resend key during development.
-- Docker Compose defaults should reflect that fallback instead of advertising `resend` as the default provider.
+- The web auth flow sends verification, reset, and deletion emails through Azure Communication Services Email using the Azure-managed sender configured in `AZURE_COMMUNICATION_CONNECTION_STRING` and `EMAIL_FROM`.
 - The repo uses `uv` for Python environment management in CI. If `python` is not on PATH, run `uv sync --group test` and then `uv run pytest ...` instead of calling `python -m pytest` directly.
 - Modal inference deploys are consolidated in `vivadeo/modal_app.py`; one `modal deploy vivadeo/modal_app.py` publishes Qwen embeddings, faster-whisper transcription, and Gemma answer generation. After any change to `vivadeo/modal_app.py`, automatically run Modal deploy as the verification/deploy step. On Windows, prefer `PYTHONIOENCODING=utf-8 modal deploy vivadeo/modal_app.py` because plain deploy can fail with `'charmap' codec can't encode character '\u2713'` when Modal prints checkmark/emoji characters.
 - On Windows, prefer `npm.cmd` for web scripts (`npm.cmd ci`, `npm.cmd run build`) when plain `npm` does not resolve correctly from the shell.

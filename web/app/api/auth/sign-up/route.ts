@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 import { forwardAuthCookies } from "@/lib/auth-cookies";
-import { postAuthEndpoint } from "@/lib/auth";
+import { emailVerificationEnabled, postAuthEndpoint } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   return NextResponse.redirect(new URL("/sign-up", request.url));
@@ -44,10 +44,6 @@ export async function POST(request: NextRequest) {
         }),
       });
     }
-
-    const resendKey = process.env.RESEND_API_KEY || "";
-    const emailVerificationEnabled =
-      resendKey.length > 0 && resendKey !== "change-me-resend";
 
     // If email verification is required, tell the user to check their inbox.
     // Otherwise (dev mode) send them straight to the dashboard.

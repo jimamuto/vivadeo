@@ -5,45 +5,28 @@ import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
 import * as authSchema from "@/lib/auth-schema";
 import { getWorkspaceRoleOverrides } from "@/lib/workspace-role-overrides";
+import { EmailClient, KnownEmailSendStatus } from "@azure/communication-email";
 
-// ---------------------------------------------------------------------------
-// Email helper — uses Resend when configured, otherwise logs to console so
-// verification/reset links still work in development without a real API key.
-// ---------------------------------------------------------------------------
 async function sendEmail(
   to: string,
   subject: string,
   html: string,
 ): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || "Vivadeo <no-reply@example.com>";
-
-  if (!apiKey || apiKey === "change-me-resend") {
-    // Development fallback: print the email to the server console so the
-    // developer can copy the verification / reset link.
-    const text = html
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    console.log("\n[EMAIL] ─────────────────────────────────────────────────");
-    console.log(`[EMAIL] To:      ${to}`);
-    console.log(`[EMAIL] Subject: ${subject}`);
-    console.log(`[EMAIL] ${text}`);
-    console.log("[EMAIL] ─────────────────────────────────────────────────\n");
-    return;
+  const connectionString = process.env.AZURE_COMMUNICATION_CONNECTION_STRING;
+  const senderAddress = process.env.EMAIL_FROM;
+  if (!connectionString || !senderAddress) {
+    throw new Error("Azure email is not configured");
   }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+  const poller = await new EmailClient(connectionString).beginSend({
+    senderAddress,
+    content: { subject, html },
+    recipients: { to: [{ address: to }] },
   });
-
-  if (!res.ok) {
-    console.error("[EMAIL] Resend error:", await res.text());
+  while (!poller.isDone()) await poller.poll();
+  const result = poller.getResult();
+  if (!result || result.status !== KnownEmailSendStatus.Succeeded) {
+    throw new Error(`Azure email send failed: ${result?.error?.message || result?.status || "unknown status"}`);
   }
 }
 
@@ -63,11 +46,9 @@ const authBaseUrl =
   process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 const authSecret = process.env.BETTER_AUTH_SECRET || "";
 
-// Email verification is only enforced when a real email provider is configured.
-// In development (placeholder key) users can sign in immediately after sign-up.
-const resendKey = process.env.RESEND_API_KEY || "";
-const emailVerificationEnabled =
-  resendKey.length > 0 && resendKey !== "change-me-resend";
+export const emailVerificationEnabled = Boolean(
+  process.env.AZURE_COMMUNICATION_CONNECTION_STRING && process.env.EMAIL_FROM,
+);
 
 function createFallbackHandler(): AuthHandler {
   const missing = [

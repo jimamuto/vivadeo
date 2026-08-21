@@ -17,6 +17,7 @@ Browser
            -> PostgreSQL + pgvector
            -> Redis/Celery jobs
            -> Backblaze B2 object storage
+        -> Azure Communication Services Email
         -> Celery worker
            -> Backblaze B2 object storage
            -> Modal inference functions
@@ -46,6 +47,33 @@ object-key prefix. The API serves browser media through its authenticated
 `/v1/media/{object_key}` proxy rather than exposing B2 credentials or requiring
 the bucket to be public.
 
+## Transactional email
+
+The Next.js web application sends Better Auth transactional email through Azure
+Communication Services Email. Email is not sent by FastAPI or the Celery worker.
+The flow is:
+
+```text
+Better Auth event
+  -> web/lib/auth.ts
+  -> Azure Communication Services Email SDK
+  -> Azure-managed domain sender
+  -> recipient inbox
+```
+
+The sender username is `vivadeo` with display name `Vivadeo`. The sender address
+uses Azure's generated `azurecomm.net` domain because the product does not yet
+own a custom domain. The web container receives:
+
+- `EMAIL_FROM`: the verified Azure MailFrom address
+- `AZURE_COMMUNICATION_CONNECTION_STRING`: secret credential for the
+  Communication Services resource
+
+Verification, password-reset, and account-deletion links all use this same
+provider. Azure send operations are polled to completion and failures are
+surfaced; there is no alternate email provider or console fallback. See
+[`docs/email.md`](docs/email.md) for provisioning and operational details.
+
 Compose S3 settings are environment-overridable, with Backblaze B2 as the
 only supported object-storage provider. The API and worker use the same
 regional endpoint and credentials without changing application code.
@@ -70,8 +98,9 @@ must copy every source directory consumed by Next.js, including
 `web/styles/`, before running `npm run build`.
 
 Production deployment pulls the published GHCR images and starts Docker Compose.
-The deployment host supplies Backblaze credentials through its secret-managed
-`.env`; credentials must never be committed to Git or embedded in images.
+The deployment host supplies Backblaze and Azure Communication Services
+credentials through its secret-managed `.env`; credentials must never be
+committed to Git or embedded in images.
 
 ## Design-system foundation
 

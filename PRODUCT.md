@@ -23,7 +23,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Settings session panel calls Better Auth session endpoints directly: `/api/auth/list-sessions`, `/revoke-session`, and `/revoke-other-sessions`.
 - Account settings panel calls Better Auth endpoints directly: `/api/auth/update-user`, `/change-password`, and `/send-verification-email`.
 - Forgot/reset password flows are real via `/api/auth/forgot-password` to Better Auth `/request-password-reset`, and `/api/auth/reset-password` to Better Auth `/reset-password`.
-- Email verification is real when `RESEND_API_KEY` is configured; sign-up redirects to `/sign-in?verify=sent`.
+- Email verification is real through Azure Communication Services Email; sign-up redirects to `/sign-in?verify=sent` when Azure email credentials are configured.
 - Account deletion is enabled through Better Auth `/api/auth/delete-user`; settings only starts the email-verified deletion request, and actual deletion completes through the callback link.
 
 ## Search

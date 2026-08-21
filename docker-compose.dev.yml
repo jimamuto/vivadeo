@@ -120,9 +120,8 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-vivadeo-better-auth-secret-change-before-production}
       VIVADEO_INTERNAL_SERVICE_KEY: ${VIVADEO_INTERNAL_SERVICE_KEY:-change-me}
       VIVADEO_DEFAULT_ORG_ID: ${VIVADEO_DEFAULT_ORG_ID:-default-workspace}
-      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
-      EMAIL_FROM: ${EMAIL_FROM:-Vivadeo <no-reply@example.com>}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-DoNotReply@your-azure-managed-domain.azurecomm.net}
+      AZURE_COMMUNICATION_CONNECTION_STRING: ${AZURE_COMMUNICATION_CONNECTION_STRING:-}
       NODE_ENV: development
       WATCHPACK_POLLING: ${WATCHPACK_POLLING:-true}
       CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
