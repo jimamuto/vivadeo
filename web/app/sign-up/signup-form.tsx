@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { SubmitButton } from "@/components/submit-button";
 
 export function SignupForm({ initialError }: { initialError?: string }) {
   const [error, setError] = useState(initialError === "PASSWORD_MISMATCH" ? "Passwords do not match." : "");
@@ -38,7 +39,7 @@ export function SignupForm({ initialError }: { initialError?: string }) {
         <label htmlFor="confirmPassword">Confirm password</label>
         <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
       </div>
-      <button className="button" type="submit">Create workspace</button>
+      <SubmitButton pendingLabel="Creating workspace...">Create workspace</SubmitButton>
     </form>
   );
 }

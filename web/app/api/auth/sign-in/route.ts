@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     forwardAuthCookies(authResponse, response);
     const workspace =
       request.nextUrl.searchParams.get("workspace") ||
+      request.cookies.get("vivadeo_workspace")?.value ||
       process.env.VIVADEO_DEFAULT_ORG_ID ||
       "default-workspace";
     response.cookies.set("vivadeo_workspace", workspace, {

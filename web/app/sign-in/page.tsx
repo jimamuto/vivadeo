@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { SigninForm } from "./signin-form";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: "Your email address has not been verified. Enter the code from your inbox.",
@@ -66,17 +67,7 @@ export default async function SignInPage({
           {params.reset === "sent" && <p className="notice notice-good">Password reset email sent - check your inbox.</p>}
           {params.error && <p className="notice notice-bad">{errorMessage(params.error)}</p>}
 
-          <form className="form" method="post" action="/api/auth/sign-in">
-            <div className="field">
-              <label htmlFor="email">Email</label>
-              <input id="email" name="email" type="email" autoComplete="email" required />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" autoComplete="current-password" required />
-            </div>
-            <button className="button" type="submit">Sign in</button>
-          </form>
+          <SigninForm />
           <p className="muted" style={{ marginTop: 16 }}><Link href="/forgot-password">Forgot password?</Link></p>
         </div>
       </section>

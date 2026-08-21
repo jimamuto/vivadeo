@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function VerifyEmailPage({
   searchParams,
@@ -46,13 +47,13 @@ export default async function VerifyEmailPage({
               required
             />
           </div>
-          <button className="button" type="submit">Verify email</button>
+          <SubmitButton pendingLabel="Verifying...">Verify email</SubmitButton>
         </form>
 
         <form className="verify-resend-form" method="post" action="/api/auth/verify-email">
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="intent" value="resend" />
-          <button className="button-secondary" type="submit">Send a new code</button>
+          <SubmitButton className="button-secondary" pendingLabel="Sending...">Send a new code</SubmitButton>
         </form>
       </section>
     </div>
