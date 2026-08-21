@@ -150,7 +150,7 @@ uv run pytest
 
 Vivadeo can also run as a single-node production stack with a browser-first
 Next.js web app in front of FastAPI, Celery, Redis, Postgres/pgvector, and
-MinIO:
+Backblaze B2 object storage:
 
 ```bash
 cp .env.example .env
@@ -182,7 +182,8 @@ more reliable across Docker Desktop, Windows bind mounts, and WSL. The Celery
 worker also sees mounted source, but still needs a container restart for code
 changes to take effect.
 
-The current production architecture is documented in `ARCHITECTURE.md`.
+The current production architecture is documented in `ARCHITECTURE.md` and
+`SYSTEM-DESIGN.md`.
 
 The web app is published on:
 
@@ -220,6 +221,6 @@ vivadeo index /path/to/video.mp4
 vivadeo search "red truck"
 ```
 
-In API mode, indexing a single file uploads it to MinIO and queues an indexing
-job. Directory indexing uses the container's mounted `./media:/media:ro` path,
+In API mode, indexing a single file uploads it to Backblaze B2 and queues an
+indexing job. Directory indexing uses the container's mounted `./media:/media:ro` path,
 so directory paths must be visible inside the API container.

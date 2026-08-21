@@ -14,13 +14,14 @@ browser
         -> api: FastAPI on the private Compose network
            -> postgres: relational data and pgvector embeddings
            -> redis: Celery broker/result backend
-           -> minio: original videos and generated clips
+           -> Backblaze B2: original videos and generated clips via its S3-compatible API
            -> worker: Celery ingestion, embedding, and clipping jobs
               -> Modal Qwen3-VL embedder
 ```
 
-Only `web` is intended to be publicly exposed. Postgres, Redis, MinIO, FastAPI,
-and the worker are internal services on the Compose network.
+Only `web` is intended to be publicly exposed. Postgres, Redis, FastAPI, and the
+worker are internal services on the Compose network. Backblaze B2 is an external
+object-storage service accessed by the API and worker.
 
 ## Services
 
@@ -34,8 +35,8 @@ and the worker are internal services on the Compose network.
 - `postgres`: Primary database for product records, auth records, memberships,
   jobs, clips, and vectors.
 - `redis`: Celery broker and result backend.
-- `minio`: S3-compatible object store for uploaded source videos and generated
-  clips.
+- `Backblaze B2`: external S3-compatible object store for uploaded source videos,
+  generated clips, and transcript artifacts.
 - `modal`: External GPU runtime hosting `Qwen/Qwen3-VL-Embedding-2B`.
 
 ## Request Boundaries
@@ -90,7 +91,7 @@ upload or URL
   -> Next.js proxy
   -> FastAPI creates Video and Job records for the workspace
   -> Celery receives the job through Redis
-  -> worker stores source media in MinIO
+  -> worker stores source media in Backblaze B2 through the S3-compatible API
   -> worker chunks and preprocesses the video
   -> worker sends chunk bytes to Modal
   -> Modal returns normalized embeddings
@@ -114,9 +115,9 @@ Clip creation:
 clip request
   -> Next.js proxy
   -> FastAPI creates Clip and Job records
-  -> worker downloads source video from MinIO
+  -> worker downloads source video from Backblaze B2
   -> ffmpeg trims the requested range
-  -> worker uploads the clip to MinIO
+  -> worker uploads the clip to Backblaze B2
   -> API returns a web-proxied media URL
 ```
 
@@ -133,7 +134,9 @@ Root `.env` is shared by Compose services. Important production variables:
 - `BETTER_AUTH_SECRET`: secret used by Better Auth. Replace the development
   placeholder before exposing the app.
 - `S3_PUBLIC_ENDPOINT_URL`: should point at `/api/proxy/v1/media` so browsers
-  fetch media through the web app rather than MinIO directly.
+  fetch media through the web app rather than accessing Backblaze B2 directly.
+- `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and
+  `S3_REGION`: Backblaze B2 S3-compatible connection settings in production.
 
 ## Deployment Notes
 
@@ -144,7 +147,8 @@ Root `.env` is shared by Compose services. Important production variables:
 - Modal must be configured on the host and the embedder deployed separately with
   `uv run modal deploy vivadeo/modal_app.py`.
 - Database migrations run through Alembic from the Python services.
-- MinIO and Postgres state are persisted in Docker volumes.
+- Postgres state is persisted in a Docker volume. Media is persisted in
+  Backblaze B2.
 
 ## Current Limitations
 

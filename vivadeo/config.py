@@ -22,12 +22,12 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
 
-    s3_endpoint_url: str = Field("http://localhost:9000", alias="S3_ENDPOINT_URL")
+    s3_endpoint_url: str = Field("https://s3.eu-central-003.backblazeb2.com", alias="S3_ENDPOINT_URL")
     s3_public_endpoint_url: str | None = Field(None, alias="S3_PUBLIC_ENDPOINT_URL")
     s3_bucket: str = Field("vivadeo", alias="S3_BUCKET")
-    s3_access_key_id: str = Field("minioadmin", alias="S3_ACCESS_KEY_ID")
-    s3_secret_access_key: str = Field("minioadmin", alias="S3_SECRET_ACCESS_KEY")
-    s3_region: str = Field("us-east-1", alias="S3_REGION")
+    s3_access_key_id: str = Field("change-me", alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: str = Field("change-me", alias="S3_SECRET_ACCESS_KEY")
+    s3_region: str = Field("eu-central-003", alias="S3_REGION")
     s3_presign_seconds: int = Field(3600, alias="S3_PRESIGN_SECONDS")
 
     modal_app: str = Field(

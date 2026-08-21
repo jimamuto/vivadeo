@@ -29,6 +29,7 @@ Use these notes when working in this repository. Keep product behavior in `PRODU
 
 ## Change Discipline
 
+- Do not add backward-compatibility layers, fallback providers, aliases, or legacy paths unless the user explicitly requests them. Prefer removing obsolete integrations cleanly and updating all callers and documentation.
 - Preserve existing route contracts called out in `PRODUCT.md`, especially search chat, job retry/cancel/SSE paths, and workspace/auth wrapper routes.
 - Preserve the Vivadeo palette and layout language in `DESIGN.md`.
 - Do not stage unrelated local work. This repo may have active unstaged auth, backend, or migration changes.

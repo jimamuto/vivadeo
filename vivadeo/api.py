@@ -370,7 +370,7 @@ async def upload_video(
     filename = Path(file.filename or f"{video_id}.mp4").name
     object_key = video_object_key(video_id, filename)
 
-    # Stream the upload directly into MinIO — no temp file needed.
+    # Stream the upload directly into object storage — no temp file needed.
     ObjectStore().upload_fileobj(
         file.file,
         object_key,

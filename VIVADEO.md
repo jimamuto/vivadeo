@@ -29,12 +29,12 @@ AUTH_DATABASE_URL=postgres://vivadeo:vivadeo@postgres:5432/vivadeo
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=<secret auth signing key>
 REDIS_URL=redis://redis:6379/0
-S3_ENDPOINT_URL=http://minio:9000
+S3_ENDPOINT_URL=https://s3.eu-central-003.backblazeb2.com
 S3_PUBLIC_ENDPOINT_URL=http://localhost:3000/api/proxy/v1/media
 S3_BUCKET=vivadeo
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
-S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=<backblaze application key ID>
+S3_SECRET_ACCESS_KEY=<backblaze application key>
+S3_REGION=eu-central-003
 VIVADEO_MODAL_APP=vivadeo-qwen3-vl-embedding-2b
 VIVADEO_MODAL_CLASS=QwenEmbedder
 VIVADEO_CHUNK_DURATION=30
@@ -58,7 +58,7 @@ The Docker stack runs these services:
   videos.
 - `postgres`: Postgres with pgvector for video, job, clip, and embedding data.
 - `redis`: Celery broker and result backend.
-- `minio`: S3-compatible object storage for original videos and clips.
+- `Backblaze B2`: S3-compatible object storage for original videos and clips.
 
 Modal runs the GPU embedder outside Docker:
 
@@ -313,7 +313,7 @@ URL or upload
   -> FastAPI creates Video and Job records
   -> Celery worker receives the job through Redis
   -> worker downloads the source video into temporary storage
-  -> worker uploads the original to MinIO
+  -> worker uploads the original to Backblaze B2
   -> ffmpeg splits the video into overlapping chunks
   -> optional preprocessing lowers resolution and frame rate
   -> worker sends chunk bytes to Modal in batches
@@ -338,9 +338,9 @@ Clip creation follows this path:
 ```text
 clip request
   -> FastAPI creates Clip and Job records
-  -> Celery worker downloads the source video from MinIO
+  -> Celery worker downloads the source video from Backblaze B2
   -> ffmpeg trims the requested timestamp range
-  -> worker uploads the clip to MinIO
+  -> worker uploads the clip to Backblaze B2
   -> Clip becomes ready with a presigned URL
 ```
 
@@ -379,14 +379,15 @@ Stop the stack:
 docker compose down
 ```
 
-Stop and remove persisted Postgres and MinIO data:
+Stop and remove persisted Postgres data:
 
 ```bash
 docker compose down -v
 ```
 
-Only use `down -v` when you intentionally want to delete indexed data and stored
-objects.
+Only use `down -v` when you intentionally want to delete indexed data. Media
+objects are stored in Backblaze B2 and require separate retention/deletion
+operations.
 
 ## Troubleshooting
 
