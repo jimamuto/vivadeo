@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
-import { AppTopbar } from "@/components/app-topbar";
+import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
 
 const RECENT_SEARCHES_KEY = "vivadeo.recent-searches";
@@ -25,6 +25,13 @@ type Citation = {
 type ChatTurn = ChatMessage & {
   citations?: Citation[];
 };
+
+const starterPaths = {
+  moment: "M12 3a9 9 0 1 0 9 9 M12 7v5l3 2",
+  summarize: "M4 5h16v14H4z M7 9h10 M7 12h7 M7 15h5",
+  transcripts: "M6 4h12v16H6z M9 8h6 M9 12h6 M9 16h4",
+  compare: "M4 6h7v12H4z M13 6h7v12h-7z M7 10h1 M16 10h1",
+} as const;
 
 function fmt(s: number) {
   const m = Math.floor(s / 60);
@@ -54,6 +61,7 @@ export function SearchContent({
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
+  const [historyOpen, setHistoryOpen] = useState(true);
 
   useEffect(() => {
     const workspace = document.cookie
@@ -134,10 +142,8 @@ export function SearchContent({
   }
 
   return (
-    <div className="shell page">
-      <AppTopbar profileInitial={profileInitial} />
-
-      <section className="search-shell fade-in">
+    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
+      <section className={`search-shell chat-shell ${historyOpen ? "history-open" : "history-closed"} fade-in`}>
         <aside className="search-filters surface-section">
           <h1>Ask Vivadeo</h1>
           <p className="muted">Transcript-grounded answers from workspace videos. Clip evidence arrives later.</p>
@@ -165,20 +171,28 @@ export function SearchContent({
 
         <div className="search-main">
           <section className="surface-section search-query">
-            <form className="form" onSubmit={submit}>
-              <div className="field">
+            <form className="chat-composer" onSubmit={submit}>
+              <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
-                <input
+                <textarea
                   id="query"
+                  rows={1}
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
                   placeholder="What did the speaker say about the launch timeline?"
                   disabled={loading}
                 />
               </div>
-              <div className="dashboard-panel-links">
-                <button className="button" type="submit" disabled={loading}>{loading ? "Asking..." : "Ask"}</button>
-                <button className="button-secondary" type="button" onClick={() => setTurns([])} disabled={loading || turns.length === 0}>Clear chat</button>
+              <button className="chat-send" type="submit" disabled={loading || !question.trim()} aria-label={loading ? "Asking" : "Ask"}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>
+              </button>
+              <div className="chat-composer-footer">
+                <div className="chat-composer-tools" aria-label="Composer tools">
+                  <button type="button" disabled aria-label="Attach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
+                  <button type="button" disabled aria-label="Voice Message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h2m3-4v8m4-6v4m4-7v10m3-7v4" /></svg><span>Voice Message</span></button>
+                  <button type="button" onClick={() => document.getElementById("query")?.focus()} aria-label="Browse Videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse Videos</span></button>
+                </div>
+                <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
               </div>
             </form>
             {status ? (
@@ -187,14 +201,28 @@ export function SearchContent({
                 {loading ? <strong>{elapsedSeconds}s elapsed</strong> : null}
               </div>
             ) : null}
+            <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts. Model: Vivadeo Archive Assistant.</p>
           </section>
 
           <section className="search-layout">
             <section className="search-feed">
               {turns.length === 0 ? (
-                <article className="search-result">
-                  <h3>No questions yet</h3>
-                  <p className="muted">Ask a text question. Vivadeo finds relevant transcript evidence, then returns a cited answer.</p>
+                <article className="search-result chat-onboarding">
+                  <h3>Welcome to Vivadeo</h3>
+                  <p className="muted">Get started by asking about your videos and Vivadeo will find the relevant moments.</p>
+                  <div className="chat-starters">
+                    {[
+                      ["Find a moment", "When did we talk about the launch?", "moment"],
+                      ["Summarize a video", "Summarize the latest interview.", "summarize"],
+                      ["Search transcripts", "What did the speaker say about pricing?", "transcripts"],
+                      ["Compare footage", "Compare the two product demos.", "compare"],
+                    ].map(([label, prompt, icon]) => (
+                      <button key={label} type="button" className="chat-starter" onClick={() => setQuestion(prompt)}>
+                        <svg className={`chat-starter-icon chat-starter-icon-${icon}`} viewBox="0 0 24 24" aria-hidden="true"><path d={starterPaths[icon as keyof typeof starterPaths]} /></svg>
+                        <span>{label}</span><strong>＋</strong>
+                      </button>
+                    ))}
+                  </div>
                 </article>
               ) : (
                 turns.map((turn, index) => {
@@ -244,26 +272,28 @@ export function SearchContent({
                 })
               )}
             </section>
-
-            <aside className="surface-section search-preview">
-              <div className="dashboard-panel-head">
-                <h2>Evidence mode</h2>
-                <p className="muted">Answers cite exact transcript ranges. Video clip extraction is intentionally disabled for this phase.</p>
-              </div>
-              <div className="dashboard-stack">
-                <article className="detail-card">
-                  <span>Current phase</span>
-                  <strong>Text questions only</strong>
-                </article>
-                <article className="detail-card">
-                  <span>Next phase</span>
-                  <strong>Clip-backed answers from cited ranges</strong>
-                </article>
-              </div>
-            </aside>
           </section>
         </div>
+
+        <aside className="surface-section search-preview chat-history">
+              <div className="chat-history-head">
+                <div>
+                  <h2>History ({recentSearches.length})</h2>
+                  <p className="muted">Recent threads</p>
+                </div>
+                <button type="button" className="history-toggle" onClick={() => setHistoryOpen(false)} aria-label="Close history">›</button>
+              </div>
+              <button type="button" className="button-secondary chat-new-thread" onClick={() => { setTurns([]); setQuestion(""); }}>＋ New thread</button>
+              <div className="chat-history-list">
+                {recentSearches.length ? recentSearches.map((item) => (
+                  <button key={item} type="button" className="chat-history-item" onClick={() => setQuestion(item)}>
+                    <span>{item}</span><small>Recent question</small><i aria-hidden="true" />
+                  </button>
+                )) : <p className="muted chat-history-empty">Questions you ask will appear here.</p>}
+              </div>
+            </aside>
+        {!historyOpen ? <button type="button" className="history-open-button" onClick={() => setHistoryOpen(true)} aria-label="Open history">‹ History</button> : null}
       </section>
-    </div>
+    </DashboardShell>
   );
 }
