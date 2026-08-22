@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
 from .config import get_settings
-from .db import Clip, DeadLetterEntry, Job, Video, VideoTranscriptSegment, new_id, session_scope
+from .db import Clip, DeadLetterEntry, Job, Video, VideoTranscriptSegment, new_id, session_scope, utcnow
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
 from .modal_whisper import ModalWhisperTranscriber
@@ -43,6 +43,16 @@ def _update_job(job_id: str, **values) -> None:
         if job and job.status != "canceled":
             for key, value in values.items():
                 setattr(job, key, value)
+            event = {
+                "at": utcnow().isoformat(),
+                "status": job.status,
+                "progress": job.progress,
+                "message": job.message,
+            }
+            job.payload = dict(job.payload or {})
+            events = list(job.payload.get("progress_events", []))
+            if not events or events[-1] != event:
+                job.payload["progress_events"] = (events + [event])[-100:]
             payload = {
                 "id": job.id,
                 "organization_id": job.organization_id,
@@ -55,6 +65,7 @@ def _update_job(job_id: str, **values) -> None:
                 "clip_id": job.clip_id,
                 "created_at": job.created_at.isoformat(),
                 "updated_at": job.updated_at.isoformat(),
+                "events": job.payload.get("progress_events", []),
             }
     if payload is None:
         return
@@ -76,7 +87,7 @@ def _mark_video(video_id: str, **values) -> None:
 def _job_canceled(job_id: str) -> bool:
     with session_scope() as session:
         job = session.get(Job, job_id)
-        return bool(job and job.status == "canceled")
+        return job is None or job.status == "canceled"
 
 
 def _raise_if_canceled(job_id: str) -> None:
@@ -84,9 +95,17 @@ def _raise_if_canceled(job_id: str) -> None:
         raise JobCanceled(f"Job canceled: {job_id}")
 
 
+def _transcription_enabled(job_id: str) -> bool:
+    with session_scope() as session:
+        job = session.get(Job, job_id)
+        return bool((job.payload or {}).get("transcribe", True)) if job else False
+
+
 def _record_dlq(video_id: str, chunk_id: str, source_uri: str, start: float, end: float, error: str) -> None:
     with session_scope() as session:
         video = session.get(Video, video_id)
+        if video is None:
+            return
         session.add(
             DeadLetterEntry(
                 organization_id=video.organization_id if video else get_settings().default_org_id,
@@ -231,6 +250,8 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                     _raise_if_canceled(job_id)
                     flush_batch()
                 except Exception as exc:
+                    if isinstance(exc, JobCanceled) or _job_canceled(job_id):
+                        raise JobCanceled(f"Job canceled: {job_id}") from exc
                     failed_count += len(batch)
                     for item in batch:
                         _record_dlq(
@@ -247,6 +268,8 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                 _raise_if_canceled(job_id)
                 flush_batch()
             except Exception as exc:
+                if isinstance(exc, JobCanceled) or _job_canceled(job_id):
+                    raise JobCanceled(f"Job canceled: {job_id}") from exc
                 failed_count += len(batch)
                 for item in batch:
                     _record_dlq(
@@ -288,7 +311,10 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
             video.status = "indexing"
 
         _raise_if_canceled(job_id)
-        _transcribe_file(video_id, organization_id, path, job_id)
+        if _transcription_enabled(job_id):
+            _transcribe_file(video_id, organization_id, path, job_id)
+        else:
+            _update_job(job_id, status="running", progress=0.08, message="Transcription skipped")
         _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
@@ -318,7 +344,10 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
         store.download_file(object_key, local_path)
         _raise_if_canceled(job_id)
         _mark_video(video_id, status="indexing", duration=_get_video_duration(local_path))
-        _transcribe_file(video_id, organization_id, local_path, job_id)
+        if _transcription_enabled(job_id):
+            _transcribe_file(video_id, organization_id, local_path, job_id)
+        else:
+            _update_job(job_id, status="running", progress=0.08, message="Transcription skipped")
         _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, local_path, job_id)
         _mark_video(video_id, status="ready", error=None)
@@ -354,7 +383,10 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
             video.duration = _get_video_duration(path)
             video.status = "indexing"
         _raise_if_canceled(job_id)
-        _transcribe_file(video_id, organization_id, path, job_id)
+        if _transcription_enabled(job_id):
+            _transcribe_file(video_id, organization_id, path, job_id)
+        else:
+            _update_job(job_id, status="running", progress=0.08, message="Transcription skipped")
         _raise_if_canceled(job_id)
         _index_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)

@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 import tempfile
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
 from redis import Redis
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -149,6 +149,8 @@ def _job_response(job: Job) -> JobResponse:
         error=job.error,
         video_id=job.video_id,
         clip_id=job.clip_id,
+        events=(getattr(job, "payload", None) or {}).get("progress_events", []),
+        transcribe=bool((getattr(job, "payload", None) or {}).get("transcribe", True)),
         created_at=job.created_at,
         updated_at=job.updated_at,
     )
@@ -389,6 +391,7 @@ def update_settings(
 )
 async def upload_video(
     file: UploadFile = File(...),
+    transcribe: bool = Form(True),
     session: Session = Depends(db_dep),
     organization_id: str = Depends(workspace_dep),
 ):
@@ -424,6 +427,7 @@ async def upload_video(
         kind="ingest_uploaded_object",
         status="queued",
         video_id=video_id,
+        payload={"transcribe": transcribe},
     )
     session.add(job)
     session.commit()
@@ -460,7 +464,7 @@ def ingest_video_url(
         kind="ingest_url",
         status="queued",
         video_id=video_id,
-        payload={"url": request.url, "max_height": request.max_height},
+        payload={"url": request.url, "max_height": request.max_height, "transcribe": request.transcribe},
     )
     session.add(job)
     session.commit()
@@ -500,6 +504,7 @@ def ingest_local_video(
         kind="ingest_local_path",
         status="queued",
         video_id=video_id,
+        payload={"transcribe": request.transcribe},
     )
     session.add(job)
     session.commit()
@@ -629,6 +634,12 @@ def reindex_video(
         raise HTTPException(status_code=404, detail="Video not found")
 
     session.execute(delete(VideoChunk).where(VideoChunk.video_id == video_id))
+    latest_job = None
+    if hasattr(session, "scalars"):
+        latest_job = session.scalars(
+            select(Job).where(Job.video_id == video_id).order_by(Job.created_at.desc()).limit(1)
+        ).first()
+    transcribe = bool((latest_job.payload or {}).get("transcribe", True)) if latest_job else True
     job = Job(
         id=new_id(),
         organization_id=organization_id,
@@ -637,6 +648,7 @@ def reindex_video(
         video_id=video_id,
         progress=0.0,
         message="Reindex queued",
+        payload={"transcribe": transcribe},
         created_at=utcnow(),
         updated_at=utcnow(),
     )

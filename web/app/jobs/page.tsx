@@ -12,6 +12,7 @@ type Job = {
   progress: number;
   message?: string | null;
   error?: string | null;
+  events?: JobTimelineEntry[];
 };
 
 type JobTimelineEntry = {
@@ -101,9 +102,10 @@ function JobsContent() {
       setJob(nextJob);
       setError(null);
       setTimeline((current) => {
-        const nextMessage = nextJob.message || nextJob.status;
-        if (current[0]?.message === nextMessage) return current;
-        return [{ at: new Date().toISOString(), message: nextMessage }, ...current].slice(0, 12);
+        const liveEntry = { at: new Date().toISOString(), message: nextJob.message || nextJob.status };
+        const persisted = nextJob.events || [];
+        const merged = [...persisted, liveEntry].filter((entry, index, entries) => entries.findIndex((item) => item.at === entry.at && item.message === entry.message) === index);
+        return merged.slice(-20).reverse();
       });
       if (nextJob.status === "succeeded" || nextJob.status === "failed" || nextJob.status === "canceled") {
         stream.close();
@@ -165,12 +167,12 @@ function JobsContent() {
     <div className="shell page">
       <AppTopbar />
 
-      <section className="card fade-in">
+      <section className="card fade-in job-progress-page">
         <div className="dashboard-panel-head">
-          <h1>Ingest progress</h1>
-          <p className="muted">Paste job ID or arrive here after upload. This page tracks queued, uploading, chunking, embedding, indexing, ready, and failed states.</p>
+          <h1>Upload progress</h1>
+          <p className="muted">Upload, transcription, embeddings, and indexing.</p>
         </div>
-        <div className="form">
+        {!job ? <div className="form">
           <div className="field">
             <label htmlFor="jobId">Job ID</label>
             <input
@@ -180,7 +182,7 @@ function JobsContent() {
               placeholder="job_123"
             />
           </div>
-        </div>
+        </div> : null}
 
         {error ? <p style={{ color: "var(--danger)" }}>{error}</p> : null}
         {job ? (
@@ -211,7 +213,7 @@ function JobsContent() {
             <p className="muted">{job.message || "No job message yet."}</p>
             {timeline.length > 0 ? (
               <div className="dashboard-stack">
-                <h3>Worker timeline</h3>
+                <h3>Progress history</h3>
                 <div className="job-history-list">
                   {timeline.map((entry) => (
                     <article key={`${entry.at}-${entry.message}`} className="detail-card">

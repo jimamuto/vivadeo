@@ -9,6 +9,7 @@ export type Job = {
   error: string | null;
   video_id: string | null;
   clip_id?: string | null;
+  transcribe?: boolean;
   created_at: string;
   updated_at: string;
 };

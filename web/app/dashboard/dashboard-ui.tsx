@@ -99,6 +99,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [ingestMode, setIngestMode] = useState<"file" | "youtube">("file");
+  const [transcribe, setTranscribe] = useState(true);
   const [isDragActive, setIsDragActive] = useState(false);
   const [interruptedJobs, setInterruptedJobs] = useState<Job[]>([]);
   const [recoveryStatus, setRecoveryStatus] = useState<FetchStatus>({ state: "idle" });
@@ -158,6 +159,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
     try {
       const fd = new FormData();
       fd.append("file", file!);
+      fd.append("transcribe", String(transcribe));
       const job = await proxyPost<Job>("/v1/videos/upload", fd, false);
       appendActivity(workspace, "ingest.queued", file!.name);
       router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
@@ -188,7 +190,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
     }
     setUrlStatus({ state: "loading" });
     try {
-      const job = await proxyPost<Job>("/v1/videos/url", JSON.stringify({ url }));
+      const job = await proxyPost<Job>("/v1/videos/url", JSON.stringify({ url, transcribe }));
       appendActivity(workspace, "ingest.queued", url);
       router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
       if (urlRef.current) urlRef.current.value = "";
@@ -221,6 +223,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
             <button type="button" className={ingestMode === "youtube" ? "is-active" : ""} onClick={() => setIngestMode("youtube")} role="tab" aria-selected={ingestMode === "youtube"}>YouTube link</button>
           </div>
         </div>
+        <label className="ingest-transcription-toggle"><input type="checkbox" checked={transcribe} onChange={(event) => setTranscribe(event.target.checked)} /> Transcribe audio for text search</label>
         {ingestMode === "file" ? (
           <div className="form">
             <div className="field">
@@ -787,6 +790,7 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
                           onBlur={(event) => void updateLibraryMetadata(video, { filename: event.target.value })}
                         />
                         <p>{sourceLabel(video.source_type)} • {fmt(video.duration)}</p>
+                        <p className="muted">{latestJobByVideo.get(video.id)?.transcribe === false ? "Text search skipped" : "Transcript enabled"}</p>
                       </div>
                       <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span>
                     </div>

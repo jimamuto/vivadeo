@@ -39,6 +39,8 @@ class JobResponse(BaseModel):
     clip_id: str | None = None
     created_at: datetime
     updated_at: datetime
+    events: list[dict] = Field(default_factory=list)
+    transcribe: bool = True
 
 
 class VideoLibraryUpdateRequest(BaseModel):
@@ -95,10 +97,12 @@ class DeadLetterEntryResponse(BaseModel):
 class UrlIngestRequest(BaseModel):
     url: str
     max_height: int = 480
+    transcribe: bool = True
 
 
 class LocalPathIngestRequest(BaseModel):
     path: str
+    transcribe: bool = True
 
 
 class SearchRequest(BaseModel):

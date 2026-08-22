@@ -1765,6 +1765,14 @@ main { width: 100%; }
   margin: 6px 0 0;
 }
 
+.ingest-transcription-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .ingest-mode-switch {
   display: inline-flex;
   padding: 4px;
