@@ -62,9 +62,11 @@ export function DashboardShell({
             <span className="dashboard-brand-icon" aria-hidden="true">W</span>
             <strong>Vivadeo</strong>
           </Link>
-          <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label={collapsed ? "Open sidebar" : "Close sidebar"}>
-            <span className="sidebar-expander" aria-hidden="true" />
-          </button>
+          {!collapsed ? (
+            <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label="Close sidebar">
+              <span className="sidebar-expander" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
         <p className="sidebar-workspace">{workspace}</p>
         <nav className="dashboard-nav" aria-label="Main navigation">
@@ -79,7 +81,7 @@ export function DashboardShell({
         </nav>
       </aside>
       <div className="dashboard-frame">
-        <AppTopbar profileInitial={profileInitial} title={pathname === "/chat" ? "Chat" : "Workspace"} />
+        <AppTopbar profileInitial={profileInitial} title={pathname === "/chat" ? "Chat" : "Workspace"} sidebarCollapsed={collapsed} onToggleSidebar={collapsed ? toggleSidebar : undefined} />
         <main className="dashboard-stage">{children}</main>
       </div>
     </div>
