@@ -15,7 +15,7 @@ export default async function LibraryPage() {
   const { videos, jobs } = await fetchDashboardData(activeWorkspace);
 
   return (
-      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
+      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head library-page-head">
           <div>

@@ -15,7 +15,7 @@ export default async function SearchPage({
 
   return (
     <Suspense fallback={null}>
-      <SearchContent profileInitial={profileInitial} initialQuery={q} initialVideoId={videoId} initialVideoIds={videoIds ? videoIds.split(",").filter(Boolean) : []} />
+      <SearchContent profileInitial={profileInitial} profileName={displayName} initialQuery={q} initialVideoId={videoId} initialVideoIds={videoIds ? videoIds.split(",").filter(Boolean) : []} />
     </Suspense>
   );
 }

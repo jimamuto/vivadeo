@@ -16,6 +16,7 @@ export default async function ChatPage({
     <Suspense fallback={null}>
       <SearchContent
         profileInitial={displayName.trim().slice(0, 1).toUpperCase()}
+        profileName={displayName}
         initialQuery={params.q || ""}
         initialVideoId={params.video_id || ""}
         initialVideoIds={params.video_ids ? params.video_ids.split(",").filter(Boolean) : []}

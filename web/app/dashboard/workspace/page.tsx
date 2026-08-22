@@ -16,7 +16,7 @@ export default async function WorkspacePage() {
   );
 
   return (
-    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
+    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head workspace-page-head">
           <div>

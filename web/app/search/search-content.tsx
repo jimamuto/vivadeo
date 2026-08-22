@@ -41,11 +41,13 @@ function fmt(s: number) {
 
 export function SearchContent({
   profileInitial,
+  profileName,
   initialQuery = "",
   initialVideoId = "",
   initialVideoIds = [],
 }: {
   profileInitial: string;
+  profileName?: string;
   initialQuery?: string;
   initialVideoId?: string;
   initialVideoIds?: string[];
@@ -142,7 +144,7 @@ export function SearchContent({
   }
 
   return (
-    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
+    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={profileName}>
       <section className={`search-shell chat-shell ${historyOpen ? "history-open" : "history-closed"} fade-in`}>
         <aside className="search-filters surface-section">
           <h1>Ask Vivadeo</h1>

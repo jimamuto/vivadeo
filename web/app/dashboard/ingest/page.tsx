@@ -13,7 +13,7 @@ export default async function IngestPage() {
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
 
   return (
-      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
+      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head ingest-page-head">
           <div>

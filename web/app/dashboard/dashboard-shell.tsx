@@ -33,14 +33,17 @@ function NavItem({ href, label, icon }: { href: string; label: string; icon: Nav
 export function DashboardShell({
   workspace,
   profileInitial,
+  profileName,
   children,
 }: Readonly<{
   workspace: string;
   profileInitial: string;
+  profileName?: string;
   children: ReactNode;
 }>) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
@@ -68,7 +71,6 @@ export function DashboardShell({
             </button>
           ) : null}
         </div>
-        <p className="sidebar-workspace">{workspace}</p>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <NavItem href="/chat" label="Chat" icon="chat" />
           <NavItem href="/dashboard/ingest" label="Ingest" icon="ingest" />
@@ -76,9 +78,20 @@ export function DashboardShell({
           <NavItem href="/dashboard/jobs" label="Jobs" icon="jobs" />
           <NavItem href="/dashboard/workspace" label="Workspace" icon="workspace" />
         </nav>
-        <nav className="dashboard-nav dashboard-nav-secondary" aria-label="Account navigation">
-          <NavItem href="/settings" label="Settings" icon="settings" />
-        </nav>
+        <div className="dashboard-account">
+          {accountMenuOpen ? (
+            <div className="dashboard-account-menu">
+              <Link href="/settings"><span>⚙</span> Settings</Link>
+              <Link href="/settings#help"><span>?</span> Help &amp; Feedback</Link>
+              <form action="/api/auth/sign-out" method="post"><button type="submit"><span>↪</span> Log out</button></form>
+            </div>
+          ) : null}
+          <button className="dashboard-account-trigger" type="button" onClick={() => setAccountMenuOpen((open) => !open)} aria-expanded={accountMenuOpen}>
+            <span className="dashboard-account-avatar">{profileInitial}</span>
+            <span className="dashboard-account-name">{profileName || profileInitial}</span>
+            <strong aria-hidden="true">•••</strong>
+          </button>
+        </div>
       </aside>
       <div className="dashboard-frame">
         <AppTopbar profileInitial={profileInitial} title={pathname === "/chat" ? "Chat" : "Workspace"} sidebarCollapsed={collapsed} onToggleSidebar={collapsed ? toggleSidebar : undefined} />

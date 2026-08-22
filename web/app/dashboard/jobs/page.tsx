@@ -15,7 +15,7 @@ export default async function JobsPage() {
   const { jobs } = await fetchDashboardData(activeWorkspace);
 
   return (
-      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial}>
+      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
         <section className="dashboard-section-head jobs-page-head">
           <div>

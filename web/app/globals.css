@@ -927,6 +927,16 @@ main { width: 100%; }
 .sidebar-workspace { margin: 14px 8px 2px; overflow: hidden; color: var(--muted); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-nav { display: grid; gap: 4px; margin-top: 18px; }
 .dashboard-nav-secondary { margin-top: auto; }
+.dashboard-account { position: relative; margin-top: auto; }
+.dashboard-account-trigger { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 8px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); color: var(--color-content); text-align: left; cursor: pointer; }
+.dashboard-account-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; background: var(--oxblood); color: var(--color-content-inverse); font-weight: 700; }
+.dashboard-account-name { overflow: hidden; flex: 1; font-size: .84rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-account-trigger strong { color: var(--muted); letter-spacing: 2px; }
+.dashboard-account-menu { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 5; display: grid; width: 240px; padding: 8px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 14px 28px rgba(86, 86, 86, .14); }
+.dashboard-account-menu a, .dashboard-account-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--color-content); font: inherit; text-align: left; cursor: pointer; }
+.dashboard-account-menu a:hover, .dashboard-account-menu button:hover { background: var(--color-action-subtle); color: var(--oxblood); }
+.dashboard-account-menu span { width: 18px; color: var(--muted); text-align: center; }
+.dashboard-account-menu form { margin: 0; }
 .dash-nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; color: var(--muted); font-size: .9rem; transition: background 140ms ease, color 140ms ease; }
 .dash-nav-item:hover { background: rgba(118, 50, 63, .06); color: var(--oxblood); }
 .dash-nav-item.is-active { background: rgba(118, 50, 63, .1); color: var(--oxblood); font-weight: 650; }
@@ -940,7 +950,11 @@ main { width: 100%; }
 .dashboard-stage > .dashboard-stack { align-content: start; padding: 0; }
 .sidebar-collapsed .dashboard-brand-mark strong,
 .sidebar-collapsed .sidebar-workspace,
-.sidebar-collapsed .dash-nav-item span { display: none; }
+.sidebar-collapsed .dash-nav-item span,
+.sidebar-collapsed .dashboard-account-name,
+.sidebar-collapsed .dashboard-account-trigger strong { display: none; }
+.sidebar-collapsed .dashboard-account-trigger { justify-content: center; padding-inline: 4px; }
+.sidebar-collapsed .dashboard-account-menu { left: 54px; right: auto; bottom: 0; }
 .sidebar-collapsed .dashboard-brand-mark { width: calc(100% - 44px); max-width: none; justify-content: center; }
 .sidebar-collapsed .dashboard-brand-mark span { flex: 0 0 30px; }
 .sidebar-collapsed .dashboard-sidebar-brand { padding: 0; }
