@@ -58,7 +58,10 @@ export function DashboardShell({
     <div className={`shell page dashboard-wrap${collapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
         <div className="dashboard-sidebar-brand">
-          <Link href="/dashboard/ingest" className="dashboard-brand-mark"><span>V</span><strong>Vivadeo</strong></Link>
+          <Link href="/dashboard/ingest" className="dashboard-brand-mark">
+            <span className="dashboard-brand-icon" aria-hidden="true">W</span>
+            <strong>Vivadeo</strong>
+          </Link>
           <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label={collapsed ? "Open sidebar" : "Close sidebar"}>
             <span className="sidebar-expander" aria-hidden="true" />
           </button>

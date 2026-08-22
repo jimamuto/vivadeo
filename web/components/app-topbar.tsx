@@ -5,6 +5,10 @@ type AppTopbarProps = {
   title?: string;
 };
 
+function VivadeoAvatar() {
+  return <span className="vivadeo-avatar" aria-hidden="true">W</span>;
+}
+
 export function AppTopbar({ profileInitial = "V", title }: AppTopbarProps) {
   return (
     <header className="topbar">
@@ -16,8 +20,8 @@ export function AppTopbar({ profileInitial = "V", title }: AppTopbarProps) {
         </form>
         <div className="nav-spacer" />
         <div className="nav-actions">
-          <Link href="/settings" className="nav-user" aria-label="Profile">
-            {profileInitial}
+          <Link href="/settings" className="nav-user" aria-label={`Profile ${profileInitial}`}>
+            <VivadeoAvatar />
           </Link>
           <form action="/api/auth/sign-out" method="post">
             <button className="nav-logout" type="submit">
