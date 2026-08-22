@@ -41,8 +41,8 @@
   --color-success: var(--color-oxblood);
 
   /* Typography */
-  --font-display: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --font-ui: "Manrope", "Aptos", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Playfair Display", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-ui: "Raleway", "Aptos", "Segoe UI", system-ui, sans-serif;
   --font-size-xs: 0.6875rem;
   --font-size-sm: 0.8125rem;
   --font-size-md: 0.9375rem;
