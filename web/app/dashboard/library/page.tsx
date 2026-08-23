@@ -5,7 +5,11 @@ import { fetchDashboardData } from "../dashboard-data";
 import { LibraryPanel } from "../dashboard-ui";
 import { auth } from "@/lib/auth";
 
-export default async function LibraryPage() {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ video_id?: string }>;
+}) {
   const cookieStore = await cookies();
   const activeWorkspace =
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
@@ -13,6 +17,7 @@ export default async function LibraryPage() {
   const displayName = session?.user?.name || session?.user?.email || "V";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const { videos, jobs } = await fetchDashboardData(activeWorkspace);
+  const { video_id: selectedVideoId = "" } = await searchParams;
 
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
@@ -22,7 +27,7 @@ export default async function LibraryPage() {
             <h1>Video library</h1>
           </div>
         </section>
-        <LibraryPanel videos={videos} jobs={jobs} />
+        <LibraryPanel videos={videos} jobs={jobs} initialVideoId={selectedVideoId} />
       </div>
     </DashboardShell>
   );

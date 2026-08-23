@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppTopbar } from "@/components/app-topbar";
 
-type NavIcon = "chat" | "ingest" | "library" | "jobs" | "workspace" | "settings";
+type NavIcon = "chat" | "ingest" | "library" | "jobs" | "settings";
 
 function NavGlyph({ icon }: { icon: NavIcon }) {
   const paths: Record<NavIcon, string> = {
@@ -14,15 +14,14 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
-    workspace: "M4 7h16v13H4z M8 7V4h8v3 M8 12h8 M8 16h5",
     settings: "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7 M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6L7 7 M17 17l1.4 1.4 M18.4 5.6L17 7 M7 17l-1.4 1.4",
   };
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
 
-function NavItem({ href, label, icon }: { href: string; label: string; icon: NavIcon }) {
+function NavItem({ href, label, icon, activePaths = [] }: { href: string; label: string; icon: NavIcon; activePaths?: string[] }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const active = [href, ...activePaths].some((path) => pathname === path || pathname.startsWith(`${path}/`));
   return (
     <Link className={`dash-nav-item${active ? " is-active" : ""}`} href={href as any} aria-label={label} title={label}>
       <NavGlyph icon={icon} /><span>{label}</span>
@@ -75,8 +74,7 @@ export function DashboardShell({
           <NavItem href="/chat" label="Chat" icon="chat" />
           <NavItem href="/dashboard/ingest" label="Ingest" icon="ingest" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
-          <NavItem href="/dashboard/jobs" label="Jobs" icon="jobs" />
-          <NavItem href="/dashboard/workspace" label="Workspace" icon="workspace" />
+          <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="Jobs" icon="jobs" />
         </nav>
         <div className="dashboard-account">
           {accountMenuOpen ? (

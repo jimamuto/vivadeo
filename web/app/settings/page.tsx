@@ -28,6 +28,7 @@ export default async function SettingsPage() {
         <article className="surface-section">
           <h3>Admin controls</h3>
           <p className="muted">Workspace roles, invites, and billing settings are scoped to the active organization.</p>
+          <p><Link href="/dashboard/workspace" className="button-secondary">Manage workspace</Link></p>
           <ul>
             <li>Invite teammates</li>
             <li>Review workspace role assignments</li>

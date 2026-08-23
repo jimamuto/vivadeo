@@ -542,11 +542,11 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
   );
 }
 
-export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }) {
+export function LibraryPanel({ videos, jobs, initialVideoId = "" }: { videos: Video[]; jobs: Job[]; initialVideoId?: string }) {
   const permissions = useWorkspacePermissions();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState(videos);
-  const [selectedId, setSelectedId] = useState(videos[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(initialVideoId || videos[0]?.id || "");
   const [statusFilter, setStatusFilter] = useState("all");
   const [collectionFilter, setCollectionFilter] = useState("all");
   const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
@@ -595,6 +595,9 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
 
   const clipsForSelectedVideo = savedClips.filter((clip) => clip.video_id === selectedVideo?.id);
   const labelsForSelectedVideo = selectedVideo ? (videoLabels[selectedVideo.id] || []) : [];
+  const selectedMediaUrl = selectedVideo?.object_key
+    ? `/api/proxy/v1/media/${selectedVideo.object_key.split("/").map(encodeURIComponent).join("/")}`
+    : null;
 
   useEffect(() => {
     if (!selectedVideo) {
@@ -843,6 +846,9 @@ export function LibraryPanel({ videos, jobs }: { videos: Video[]; jobs: Job[]; }
                 <span>{chunks.length} chunks</span>
               </div>
             </div>
+            {selectedMediaUrl ? (
+              <video className="library-detail-player" src={selectedMediaUrl} controls preload="metadata" />
+            ) : null}
             <div className="detail-grid">
               <article className="detail-card">
                 <span>Duration</span>

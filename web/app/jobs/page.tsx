@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppTopbar } from "@/components/app-topbar";
+import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 
 type Job = {
   id: string;
@@ -10,6 +11,7 @@ type Job = {
   kind: string;
   status: string;
   progress: number;
+  video_id?: string | null;
   message?: string | null;
   error?: string | null;
   events?: JobTimelineEntry[];
@@ -80,6 +82,7 @@ function JobStages({ job }: { job: Job }) {
 function JobsContent() {
   const searchParams = useSearchParams();
   const [jobId, setJobId] = useState(searchParams.get("job") ?? "");
+  const [workspace, setWorkspace] = useState("default-workspace");
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryNote, setRetryNote] = useState<string | null>(null);
@@ -89,12 +92,24 @@ function JobsContent() {
 
   useEffect(() => {
     setJobId(searchParams.get("job") ?? "");
+    const cookieWorkspace = document.cookie
+      .split("; ")
+      .find((item) => item.startsWith("vivadeo_workspace="))
+      ?.split("=")[1];
+    if (cookieWorkspace) setWorkspace(cookieWorkspace);
   }, [searchParams]);
 
   useEffect(() => {
     if (!jobId) return;
     let mounted = true;
     setTimeline([]);
+    void fetch(`/api/proxy/v1/jobs/${jobId}`)
+      .then(async (response) => {
+        if (!response.ok) return;
+        const currentJob = (await response.json()) as Job;
+        if (mounted) setJob(currentJob);
+      })
+      .catch(() => undefined);
     const stream = new EventSource(`/api/job-events/${jobId}`);
     stream.addEventListener("job", (event) => {
       if (!mounted) return;
@@ -112,7 +127,6 @@ function JobsContent() {
       }
     });
     stream.addEventListener("error", () => {
-      if (mounted) setError("Live update stream failed.");
       stream.close();
     });
 
@@ -164,9 +178,7 @@ function JobsContent() {
           : "idle";
 
   return (
-    <div className="shell page">
-      <AppTopbar />
-
+    <DashboardShell workspace={workspace} profileInitial="V" profileName="Vivadeo">
       <section className="card fade-in job-progress-page">
         <div className="dashboard-panel-head">
           <h1>Upload progress</h1>
@@ -225,7 +237,15 @@ function JobsContent() {
               </div>
             ) : null}
             {job.error ? <p style={{ color: "var(--danger)" }}>{job.error}</p> : null}
-            {job.status === "succeeded" ? <p className="job-finish">Ready. Ingest finished and source should now appear in library and search.</p> : null}
+            {job.status === "succeeded" ? (
+              <>
+                <p className="job-finish">Ready. Ingest finished and source should now appear in library and search.</p>
+                <div className="dashboard-panel-links job-completion-actions">
+                  <Link href="/dashboard/library" className="button">View in Library</Link>
+                  {job.video_id ? <Link href={`/search?video_id=${encodeURIComponent(job.video_id)}`} className="button-secondary">Search this video</Link> : null}
+                </div>
+              </>
+            ) : null}
             {job.status === "failed" ? <p className="job-finish">Failed. Check error above, then retry if source is still valid.</p> : null}
             {job.status === "canceled" ? <p className="job-finish">Canceled. Work should stop at the next safe checkpoint.</p> : null}
             {job.status !== "succeeded" && job.status !== "failed" && job.status !== "canceled" ? <p className="job-finish">Still processing. Keep this page open or check dashboard jobs later.</p> : null}
@@ -256,7 +276,7 @@ function JobsContent() {
           </div>
         ) : null}
       </section>
-    </div>
+    </DashboardShell>
   );
 }
 

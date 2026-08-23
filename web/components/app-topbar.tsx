@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 type AppTopbarProps = {
   profileInitial?: string;
   title?: string;
@@ -20,11 +18,7 @@ export function AppTopbar({ profileInitial = "V", title, sidebarCollapsed = fals
             ) : null}
             <strong className="topbar-title">{title}</strong>
           </div>
-        ) : <Link href="/" className="brand">Vivadeo</Link>}
-        <form className="nav-search-form" action="/search" method="get" role="search">
-          <label className="sr-only" htmlFor="global-search">Search footage</label>
-          <input id="global-search" name="q" type="search" placeholder="Search footage..." />
-        </form>
+        ) : <strong className="brand">Vivadeo</strong>}
         <div className="nav-spacer" />
         <div className="nav-actions" aria-hidden="true" />
       </div>
