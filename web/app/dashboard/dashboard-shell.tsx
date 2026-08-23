@@ -61,8 +61,7 @@ export function DashboardShell({
       <aside className="dashboard-sidebar">
         <div className="dashboard-sidebar-brand">
           <Link href="/dashboard/ingest" className="dashboard-brand-mark">
-            <span className="dashboard-brand-icon" aria-hidden="true">W</span>
-            <strong>Vivadeo</strong>
+            <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />
           </Link>
           {!collapsed ? (
             <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label="Close sidebar">
