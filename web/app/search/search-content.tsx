@@ -1080,7 +1080,7 @@ export function SearchContent({
               <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search threads" aria-label="Search threads" />
               <div className="chat-history-list">
                 {filteredThreads.length ? filteredThreads.map((thread) => (
-                  <div key={thread.id} className="chat-history-row">
+                  <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""}`}>
                     <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
                       <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
                     </button>
