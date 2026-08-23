@@ -936,8 +936,7 @@ main { width: 100%; }
 .sidebar-expander { position: relative; display: block; width: 22px; height: 20px; border: 1.6px solid currentColor; border-radius: 4px; }
 .sidebar-expander::after { content: ""; position: absolute; top: 2px; bottom: 2px; left: 7px; border-left: 1.6px solid currentColor; }
 .sidebar-workspace { margin: 14px 8px 2px; overflow: hidden; color: var(--muted); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-nav { display: grid; gap: 4px; margin-top: 12px; }
-.dashboard-sidebar-divider { height: 1px; margin: 18px 8px 0; background: rgba(86, 86, 86, .14); }
+.dashboard-nav { display: grid; gap: 4px; margin-top: 18px; }
 .dashboard-nav-divider { height: 1px; margin: 12px 8px 8px; background: rgba(86, 86, 86, .14); }
 .dashboard-nav-secondary { margin-top: auto; }
 .dashboard-account { position: relative; margin-top: auto; }
@@ -973,7 +972,6 @@ main { width: 100%; }
 .sidebar-collapsed .dashboard-brand-logo { width: 34px; height: 34px; object-position: center; }
 .sidebar-collapsed .dashboard-sidebar { padding-inline: 8px; }
 .sidebar-collapsed .dashboard-sidebar-brand { padding: 0; justify-content: center; }
-.sidebar-collapsed .dashboard-sidebar-divider { width: 40px; margin: 8px auto 0; }
 .sidebar-collapsed .dashboard-nav { gap: 8px; margin-top: 0; }
 .sidebar-collapsed .dashboard-nav-divider { width: 40px; margin: 4px auto; }
 .sidebar-collapsed .dash-nav-item { display: grid; place-items: center; width: 40px; height: 40px; margin-inline: auto; padding: 0; border-radius: 10px; line-height: 0; }
