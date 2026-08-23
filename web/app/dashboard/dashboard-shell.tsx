@@ -70,6 +70,10 @@ export function DashboardShell({
             </button>
           ) : null}
         </div>
+        <form className="dashboard-sidebar-search" action="/chat" method="get" role="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
+          <input name="q" type="search" placeholder="Search" aria-label="Search videos" />
+        </form>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <NavItem href="/chat" label="Chat" icon="chat" />
           <NavItem href="/dashboard/ingest" label="Ingest" icon="ingest" />

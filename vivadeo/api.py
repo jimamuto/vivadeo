@@ -15,6 +15,8 @@ from .config import Settings
 from .config import get_settings as get_runtime_settings
 from .db import (
     Base,
+    ChatThread,
+    ChatThreadMessage,
     Clip,
     DeadLetterEntry,
     Job,
@@ -37,6 +39,7 @@ from .schemas import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    ChatThreadResponse,
     ClipRequest,
     ClipResponse,
     DeadLetterEntryResponse,
@@ -955,6 +958,75 @@ def search(
     return SearchResponse(results=results)
 
 
+def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
+    return ChatThreadResponse(
+        id=thread.id,
+        title=thread.title,
+        created_at=thread.created_at,
+        updated_at=thread.updated_at,
+        messages=[
+            {
+                "id": message.id,
+                "role": message.role,
+                "content": message.content,
+                "citations": message.citations or [],
+                "created_at": message.created_at,
+            }
+            for message in thread.messages
+        ],
+    )
+
+
+@app.get(
+    "/v1/chat/threads",
+    response_model=list[ChatThreadResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def list_chat_threads(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    threads = session.scalars(
+        select(ChatThread)
+        .where(ChatThread.organization_id == organization_id)
+        .order_by(ChatThread.updated_at.desc())
+    ).all()
+    return [_chat_thread_response(thread) for thread in threads]
+
+
+@app.post(
+    "/v1/chat/threads",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def create_chat_thread(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = ChatThread(id=new_id(), organization_id=organization_id, title="New thread")
+    session.add(thread)
+    session.commit()
+    session.refresh(thread)
+    return _chat_thread_response(thread)
+
+
+@app.delete(
+    "/v1/chat/threads/{thread_id}",
+    status_code=204,
+    dependencies=[Depends(require_api_key)],
+)
+def delete_chat_thread(
+    thread_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = session.scalar(select(ChatThread).where(ChatThread.id == thread_id, ChatThread.organization_id == organization_id))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Chat thread not found")
+    session.delete(thread)
+    session.commit()
+
+
 @app.post(
     "/v1/search/chat",
     response_model=ChatResponse,
@@ -971,6 +1043,14 @@ def search_chat(
     )
     if not question:
         raise HTTPException(status_code=400, detail="Question is required")
+
+    thread = None
+    if request.thread_id:
+        thread = session.scalar(select(ChatThread).where(ChatThread.id == request.thread_id, ChatThread.organization_id == organization_id))
+        if not thread:
+            raise HTTPException(status_code=404, detail="Chat thread not found")
+    if thread is not None and (not thread.messages or thread.messages[-1].role != "user" or thread.messages[-1].content != question):
+        thread.messages.append(ChatThreadMessage(id=new_id(), role="user", content=question))
 
     try:
         embedding = get_embedder().embed_query(question)
@@ -1021,22 +1101,44 @@ def search_chat(
             break
 
     if not citations:
-        return ChatResponse(
-            answer="No transcript evidence is available yet. Reindex or ingest videos with transcription enabled, then ask again.",
-            citations=[],
-        )
+        answer = "No transcript evidence is available yet. Reindex or ingest videos with transcription enabled, then ask again."
+        if thread is not None:
+            if thread.title == "New thread":
+                try:
+                    settings = get_runtime_settings()
+                    thread.title = ModalGemmaChat(
+                        app_name=settings.modal_gemma_app,
+                        function_name=settings.modal_gemma_function,
+                        timeout=settings.modal_timeout,
+                    ).title(question)
+                except Exception:
+                    thread.title = " ".join(question.split())[:255] or "New thread"
+            thread.messages.append(ChatThreadMessage(id=new_id(), role="assistant", content=answer, citations=[]))
+            thread.updated_at = utcnow()
+            session.commit()
+        return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None)
 
     settings = get_runtime_settings()
     messages = [message.model_dump() for message in request.messages[-10:]]
+    gemma = ModalGemmaChat(
+        app_name=settings.modal_gemma_app,
+        function_name=settings.modal_gemma_function,
+        timeout=settings.modal_timeout,
+    )
     try:
-        answer = ModalGemmaChat(
-            app_name=settings.modal_gemma_app,
-            function_name=settings.modal_gemma_function,
-            timeout=settings.modal_timeout,
-        ).answer(messages, citations)
+        if thread is not None and thread.title == "New thread":
+            try:
+                thread.title = gemma.title(question)
+            except Exception:
+                thread.title = " ".join(question.split())[:255] or "New thread"
+        answer = gemma.answer(messages, citations)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return ChatResponse(answer=answer, citations=citations)
+    if thread is not None:
+        thread.messages.append(ChatThreadMessage(id=new_id(), role="assistant", content=answer, citations=citations))
+        thread.updated_at = utcnow()
+        session.commit()
+    return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None)
 
 
 @app.post(

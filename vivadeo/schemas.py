@@ -138,6 +138,7 @@ class ChatRequest(BaseModel):
     results: int = Field(8, ge=1, le=30)
     video_id: str | None = None
     video_ids: list[str] = Field(default_factory=list)
+    thread_id: str | None = None
 
 
 class ChatCitation(BaseModel):
@@ -154,6 +155,24 @@ class ChatCitation(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     citations: list[ChatCitation]
+    thread_id: str | None = None
+    title: str | None = None
+
+
+class ChatThreadMessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    citations: list[ChatCitation] = Field(default_factory=list)
+    created_at: datetime
+
+
+class ChatThreadResponse(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    messages: list[ChatThreadMessageResponse] = Field(default_factory=list)
 
 
 class ClipRequest(BaseModel):

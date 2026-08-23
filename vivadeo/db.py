@@ -149,6 +149,31 @@ class VideoTranscriptSegment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ChatThread(Base):
+    __tablename__ = "chat_threads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="New thread")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    messages: Mapped[list["ChatThreadMessage"]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="ChatThreadMessage.created_at")
+
+
+class ChatThreadMessage(Base):
+    __tablename__ = "chat_thread_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    thread_id: Mapped[str] = mapped_column(String(36), ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    citations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    thread: Mapped[ChatThread] = relationship(back_populates="messages")
+
+
 class Job(Base):
     __tablename__ = "jobs"
 

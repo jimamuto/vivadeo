@@ -56,6 +56,13 @@ class ModalGemmaChat:
                 return str(answer).strip()
         raise ModalGemmaError("Modal Gemma returned invalid answer payload.")
 
+    def title(self, question: str) -> str:
+        prompt = [
+            {"role": "user", "content": f"Create a concise 3 to 6 word title for this video archive chat. Return only the title, no quotes or punctuation: {question}"},
+        ]
+        title = self.answer(prompt, [])
+        return " ".join(title.replace("\n", " ").split())[:255] or "New thread"
+
     def answer(self, messages: list[dict], context: list[dict], verbose: bool = False) -> str:
         remote = self._get_remote()
         t0 = time.monotonic()

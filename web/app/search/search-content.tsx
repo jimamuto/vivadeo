@@ -1,10 +1,13 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
 
 const RECENT_SEARCHES_KEY = "vivadeo.recent-searches";
+const CHAT_ONBOARDING_KEY = "vivadeo.chat-onboarding-seen";
+const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -24,6 +27,20 @@ type Citation = {
 
 type ChatTurn = ChatMessage & {
   citations?: Citation[];
+};
+
+type ChatThread = {
+  id: string;
+  title: string;
+  turns: ChatTurn[];
+  updatedAt: string;
+};
+
+
+type VideoOption = {
+  id: string;
+  filename: string;
+  status: string;
 };
 
 const starterPaths = {
@@ -56,7 +73,13 @@ export function SearchContent({
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
   const [videoIds, setVideoIds] = useState(initialVideoIds);
+  const [videos, setVideos] = useState<VideoOption[]>([]);
+  const [videosLoaded, setVideosLoaded] = useState(false);
+  const [onboardingSeen, setOnboardingSeen] = useState(false);
+  const [greeting, setGreeting] = useState(GREETINGS[0]);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,6 +87,7 @@ export function SearchContent({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
   const [historyOpen, setHistoryOpen] = useState(true);
+  const initialQuerySubmitted = useRef(false);
 
   useEffect(() => {
     const workspace = document.cookie
@@ -74,17 +98,53 @@ export function SearchContent({
   }, []);
 
   useEffect(() => {
-    try {
-      const recent = window.localStorage.getItem(RECENT_SEARCHES_KEY);
-      if (recent) setRecentSearches(JSON.parse(recent) as string[]);
-    } catch {
-      return;
-    }
+    void fetch("/api/proxy/v1/videos", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = (await response.json()) as VideoOption[];
+        setVideos(payload.filter((video) => video.status !== "archived"));
+      })
+      .catch(() => undefined)
+      .finally(() => setVideosLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    setOnboardingSeen(window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true");
+    setGreeting(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.removeItem("vivadeo.chat-threads");
+    void fetch("/api/proxy/v1/chat/threads", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load chat threads");
+        const payload = (await response.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatTurn[] }>;
+        const loadedThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages }));
+        if (loadedThreads.length) {
+          setThreads(loadedThreads);
+          setActiveThreadId(loadedThreads[0].id);
+          setTurns(loadedThreads[0].turns);
+          return;
+        }
+        const created = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
+        if (!created.ok) return;
+        const thread = (await created.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[] };
+        const initialThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages };
+        setThreads([initialThread]);
+        setActiveThreadId(thread.id);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches));
   }, [recentSearches]);
+
+  useEffect(() => {
+    if (!initialQuery.trim() || !activeThreadId || initialQuerySubmitted.current) return;
+    initialQuerySubmitted.current = true;
+    window.setTimeout(() => document.querySelector<HTMLFormElement>(".chat-composer")?.requestSubmit(), 0);
+  }, [initialQuery, activeThreadId]);
 
   useEffect(() => {
     if (!loading || startedAt === null) return;
@@ -107,6 +167,9 @@ export function SearchContent({
 
     const nextTurns: ChatTurn[] = [...turns, { role: "user", content: nextQuestion }];
     setTurns(nextTurns);
+    setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, turns: nextTurns, updatedAt: new Date().toISOString() } : thread));
+    setOnboardingSeen(true);
+    window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     setQuestion("");
     const requestStartedAt = Date.now();
     setLoading(true);
@@ -123,15 +186,18 @@ export function SearchContent({
           results: 6,
           video_id: videoId || null,
           video_ids: videoIds,
+          thread_id: activeThreadId || null,
         }),
       });
       if (!response.ok) {
         setStatus(`Chat failed (${response.status})`);
         return;
       }
-      const payload = (await response.json()) as { answer: string; citations: Citation[] };
+      const payload = (await response.json()) as { answer: string; citations: Citation[]; thread_id?: string; title?: string | null };
       const seconds = Math.max(1, Math.round((Date.now() - requestStartedAt) / 1000));
-      setTurns((current) => [...current, { role: "assistant", content: payload.answer, citations: payload.citations }]);
+      const assistantTurn: ChatTurn = { role: "assistant", content: payload.answer, citations: payload.citations };
+      setTurns((current) => [...current, assistantTurn]);
+      setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, title: payload.title || thread.title, turns: [...thread.turns, assistantTurn], updatedAt: new Date().toISOString() } : thread));
       recordRecentSearch(nextQuestion);
       appendActivity(activeWorkspace, "search.performed", nextQuestion);
       setStatus(payload.citations.length ? `Answer ready in ${seconds}s with ${payload.citations.length} cited evidence range(s).` : `Answer ready in ${seconds}s. No cited evidence yet.`);
@@ -143,6 +209,41 @@ export function SearchContent({
     }
   }
 
+  async function startNewThread() {
+    const response = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
+    if (!response.ok) return;
+    const thread = (await response.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[] };
+    const nextThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages };
+    setThreads((current) => [nextThread, ...current]);
+    setActiveThreadId(nextThread.id);
+    setTurns([]);
+    setQuestion("");
+    setStatus(null);
+    setExpandedCitations({});
+  }
+
+  function openThread(thread: ChatThread) {
+    setActiveThreadId(thread.id);
+    setTurns(thread.turns);
+    setQuestion("");
+    setStatus(null);
+    setExpandedCitations({});
+  }
+
+  async function deleteThread(thread: ChatThread) {
+    const response = await fetch(`/api/proxy/v1/chat/threads/${thread.id}`, { method: "DELETE" });
+    if (!response.ok) return;
+    const remaining = threads.filter((item) => item.id !== thread.id);
+    setThreads(remaining);
+    if (thread.id === activeThreadId) {
+      if (remaining[0]) openThread(remaining[0]);
+      else await startNewThread();
+    }
+  }
+
+  const firstName = (profileName || "there").split(/[ @]/)[0];
+  const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && turns.length === 0;
+
   return (
     <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={profileName}>
       <section className={`search-shell chat-shell ${historyOpen ? "history-open" : "history-closed"} fade-in`}>
@@ -152,6 +253,20 @@ export function SearchContent({
           <div className="field">
             <label htmlFor="workspace-filter">Workspace</label>
             <input id="workspace-filter" value={activeWorkspace} readOnly />
+          </div>
+          <div className="field">
+            <label htmlFor="video-scope">Search scope</label>
+            <select
+              id="video-scope"
+              value={videoId}
+              onChange={(event) => {
+                setVideoId(event.target.value);
+                setVideoIds([]);
+              }}
+            >
+              <option value="">All workspace videos ({videos.length})</option>
+              {videos.map((video) => <option key={video.id} value={video.id}>{video.filename}</option>)}
+            </select>
           </div>
           <div className="detail-card">
             <span>Answer source</span>
@@ -190,9 +305,9 @@ export function SearchContent({
               </button>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
-                  <button type="button" disabled aria-label="Attach"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
-                  <button type="button" disabled aria-label="Voice Message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h2m3-4v8m4-6v4m4-7v10m3-7v4" /></svg><span>Voice Message</span></button>
-                  <button type="button" onClick={() => document.getElementById("query")?.focus()} aria-label="Browse Videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse Videos</span></button>
+                  <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Choose videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Choose videos</span></button>
+                  <button type="button" onClick={() => document.getElementById("query")?.focus()} aria-label="Focus question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-7-7 7 7-7 7" /></svg><span>Focus question</span></button>
+                  <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Browse videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse videos</span></button>
                 </div>
                 <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
               </div>
@@ -209,22 +324,22 @@ export function SearchContent({
           <section className="search-layout">
             <section className="search-feed">
               {turns.length === 0 ? (
-                <article className="search-result chat-onboarding">
-                  <h3>Welcome to Vivadeo</h3>
-                  <p className="muted">Get started by asking about your videos and Vivadeo will find the relevant moments.</p>
-                  <div className="chat-starters">
+                <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
+                  <h3>{greeting}, {firstName}</h3>
+                  <p className="muted">{showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive."}</p>
+                  {showOnboarding ? <div className="chat-starters">
                     {[
                       ["Find a moment", "When did we talk about the launch?", "moment"],
                       ["Summarize a video", "Summarize the latest interview.", "summarize"],
                       ["Search transcripts", "What did the speaker say about pricing?", "transcripts"],
                       ["Compare footage", "Compare the two product demos.", "compare"],
                     ].map(([label, prompt, icon]) => (
-                      <button key={label} type="button" className="chat-starter" onClick={() => setQuestion(prompt)}>
+                      <button key={label} type="button" className="chat-starter" onClick={() => { setQuestion(prompt); setOnboardingSeen(true); window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true"); }}>
                         <svg className={`chat-starter-icon chat-starter-icon-${icon}`} viewBox="0 0 24 24" aria-hidden="true"><path d={starterPaths[icon as keyof typeof starterPaths]} /></svg>
                         <span>{label}</span><strong>＋</strong>
                       </button>
                     ))}
-                  </div>
+                  </div> : null}
                 </article>
               ) : (
                 turns.map((turn, index) => {
@@ -256,6 +371,9 @@ export function SearchContent({
                               <span>{citation.filename} • {fmt(citation.start_time)} - {fmt(citation.end_time)}</span>
                               <strong className="detail-wrap">{citation.text}</strong>
                               <p className="muted">{citation.source_uri}</p>
+                              <Link className="button-secondary" href={`/dashboard/library?video_id=${encodeURIComponent(citation.video_id)}`}>
+                                Open video
+                              </Link>
                             </article>
                           ))}
                           {citations.length > 3 ? (
@@ -280,18 +398,21 @@ export function SearchContent({
         <aside className="surface-section search-preview chat-history">
               <div className="chat-history-head">
                 <div>
-                  <h2>History ({recentSearches.length})</h2>
+                  <h2>History ({threads.length})</h2>
                   <p className="muted">Recent threads</p>
                 </div>
                 <button type="button" className="history-toggle" onClick={() => setHistoryOpen(false)} aria-label="Close history">›</button>
               </div>
-              <button type="button" className="button-secondary chat-new-thread" onClick={() => { setTurns([]); setQuestion(""); }}>＋ New thread</button>
+              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New thread</button>
               <div className="chat-history-list">
-                {recentSearches.length ? recentSearches.map((item) => (
-                  <button key={item} type="button" className="chat-history-item" onClick={() => setQuestion(item)}>
-                    <span>{item}</span><small>Recent question</small><i aria-hidden="true" />
-                  </button>
-                )) : <p className="muted chat-history-empty">Questions you ask will appear here.</p>}
+                {threads.length ? threads.map((thread) => (
+                  <div key={thread.id} className="chat-history-row">
+                    <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
+                      <span>{thread.title}</span><small>{thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}</small><i aria-hidden="true" />
+                    </button>
+                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`}>×</button>
+                  </div>
+                )) : <p className="muted chat-history-empty">Start a new thread to begin.</p>}
               </div>
             </aside>
         {!historyOpen ? <button type="button" className="history-open-button" onClick={() => setHistoryOpen(true)} aria-label="Open history">‹ History</button> : null}
