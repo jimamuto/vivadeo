@@ -2788,8 +2788,7 @@ main { width: 100%; }
 
 .auth-minimal-page {
   min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: block;
   background: var(--color-surface-solid);
 }
 
@@ -2800,6 +2799,7 @@ main { width: 100%; }
 .auth-minimal-brand { display: inline-flex; align-items: center; }
 .auth-minimal-brand .brand-logo { width: 132px; height: 38px; }
 .auth-minimal-logo .brand-logo { width: 210px; height: 70px; }
+.auth-minimal-logo:hover { opacity: .82; }
 .auth-minimal-brand {
   color: var(--color-content);
   font-size: 1.15rem;
@@ -2810,7 +2810,7 @@ main { width: 100%; }
 .auth-minimal-main {
   display: grid;
   place-items: start center;
-  padding: 54px 24px 80px;
+  padding: 96px 24px 80px;
 }
 
 .auth-minimal-card {
@@ -2824,7 +2824,9 @@ main { width: 100%; }
 }
 
 .auth-minimal-logo {
+  display: block;
   margin: 0 auto 8px;
+  text-align: center;
   color: var(--color-content);
   font-size: 1.4rem;
   font-weight: 700;

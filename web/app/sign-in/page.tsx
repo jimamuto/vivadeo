@@ -28,12 +28,9 @@ export default async function SignInPage({
 
   return (
     <div className="auth-minimal-page">
-      <header className="auth-minimal-header">
-        <Link href="/" className="auth-minimal-brand"><BrandLogo /></Link>
-      </header>
       <main className="auth-minimal-main">
         <section className="auth-minimal-card fade-in">
-          <div className="auth-minimal-logo"><BrandLogo /></div>
+          <Link href="/" className="auth-minimal-logo"><BrandLogo /></Link>
           <h1>Sign in</h1>
           <p className="muted">Use your workspace account to continue.</p>
 
