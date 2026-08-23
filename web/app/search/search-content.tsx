@@ -29,7 +29,7 @@ type ChatTurn = ChatMessage & {
   citations?: Citation[];
 };
 
-type ChatThread = {
+export type ChatThread = {
   id: string;
   title: string;
   turns: ChatTurn[];
@@ -62,7 +62,9 @@ export function SearchContent({
   initialQuery = "",
   initialVideoId = "",
   initialVideoIds = [],
+  initialThreads = [],
 }: {
+  initialThreads?: ChatThread[];
   profileInitial: string;
   profileName?: string;
   initialQuery?: string;
@@ -73,13 +75,14 @@ export function SearchContent({
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
   const [videoIds, setVideoIds] = useState(initialVideoIds);
+  const [chatModel, setChatModel] = useState("vivadeo-auto");
+  const [modelOpen, setModelOpen] = useState(false);
   const [videos, setVideos] = useState<VideoOption[]>([]);
   const [videosLoaded, setVideosLoaded] = useState(false);
   const [onboardingSeen, setOnboardingSeen] = useState(false);
-  const [greeting, setGreeting] = useState(GREETINGS[0]);
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
-  const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [activeThreadId, setActiveThreadId] = useState("");
+  const [turns, setTurns] = useState<ChatTurn[]>(initialThreads[0]?.turns || []);
+  const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
+  const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +90,7 @@ export function SearchContent({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
   const initialQuerySubmitted = useRef(false);
 
   useEffect(() => {
@@ -110,7 +114,6 @@ export function SearchContent({
 
   useEffect(() => {
     setOnboardingSeen(window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true");
-    setGreeting(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
   }, []);
 
   useEffect(() => {
@@ -122,10 +125,12 @@ export function SearchContent({
         const loadedThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages }));
         if (loadedThreads.length) {
           setThreads(loadedThreads);
-          setActiveThreadId(loadedThreads[0].id);
-          setTurns(loadedThreads[0].turns);
+          const selectedId = loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
+          setActiveThreadId(selectedId);
+          setTurns(loadedThreads.find((thread) => thread.id === selectedId)?.turns || []);
           return;
         }
+        if (threads.length) return;
         const created = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
         if (!created.ok) return;
         const thread = (await created.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[] };
@@ -187,6 +192,7 @@ export function SearchContent({
           video_id: videoId || null,
           video_ids: videoIds,
           thread_id: activeThreadId || null,
+          model: chatModel,
         }),
       });
       if (!response.ok) {
@@ -228,6 +234,7 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setExpandedCitations({});
+    setThreadMenuId(null);
   }
 
   async function deleteThread(thread: ChatThread) {
@@ -239,10 +246,15 @@ export function SearchContent({
       if (remaining[0]) openThread(remaining[0]);
       else await startNewThread();
     }
+    setThreadMenuId(null);
   }
 
   const firstName = (profileName || "there").split(/[ @]/)[0];
-  const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && turns.length === 0;
+  const greetingSeed = Array.from(profileName || "there").reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const greeting = GREETINGS[greetingSeed % GREETINGS.length];
+  const hasConversation = threads.some((thread) => thread.turns.length > 0);
+  const showGreeting = turns.length === 0 && !hasConversation;
+  const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting;
 
   return (
     <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={profileName}>
@@ -308,25 +320,39 @@ export function SearchContent({
                   <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Choose videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Choose videos</span></button>
                   <button type="button" onClick={() => document.getElementById("query")?.focus()} aria-label="Focus question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-7-7 7 7-7 7" /></svg><span>Focus question</span></button>
                   <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Browse videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse videos</span></button>
+                  <div className="chat-model-control">
+                    <span>Model</span>
+                    <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => setModelOpen((open) => !open)}>
+                      <strong>Vivadeo Auto</strong>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                    </button>
+                    {modelOpen ? (
+                      <div className="chat-model-menu">
+                        <button type="button" className="is-selected" onClick={() => { setChatModel("vivadeo-auto"); setModelOpen(false); }}>
+                          <span>Vivadeo Auto</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
               </div>
             </form>
+            <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts.</p>
             {status ? (
               <div className="search-status" aria-live="polite">
                 <span>{status}</span>
                 {loading ? <strong>{elapsedSeconds}s elapsed</strong> : null}
               </div>
             ) : null}
-            <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts. Model: Vivadeo Archive Assistant.</p>
           </section>
 
           <section className="search-layout">
             <section className="search-feed">
               {turns.length === 0 ? (
                 <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
-                  <h3>{greeting}, {firstName}</h3>
-                  <p className="muted">{showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive."}</p>
+                  <h3 className="chat-greeting">{showGreeting ? `${greeting}, ${firstName}` : "New thread"}</h3>
+                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this thread."}</p>
                   {showOnboarding ? <div className="chat-starters">
                     {[
                       ["Find a moment", "When did we talk about the launch?", "moment"],
@@ -401,21 +427,28 @@ export function SearchContent({
                   <h2>History ({threads.length})</h2>
                   <p className="muted">Recent threads</p>
                 </div>
-                <button type="button" className="history-toggle" onClick={() => setHistoryOpen(false)} aria-label="Close history">›</button>
+                <button type="button" className="history-toggle" onClick={() => setHistoryOpen(false)} aria-label="Close history">×</button>
               </div>
               <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New thread</button>
               <div className="chat-history-list">
                 {threads.length ? threads.map((thread) => (
                   <div key={thread.id} className="chat-history-row">
                     <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
-                      <span>{thread.title}</span><small>{thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}</small><i aria-hidden="true" />
+                      <span>{thread.title}</span><small>{thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}</small>
                     </button>
-                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`}>×</button>
+                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage thread">•••</button>
+                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete thread">×</button>
+                    {threadMenuId === thread.id ? (
+                      <div className="chat-thread-menu">
+                        <button type="button" onClick={() => openThread(thread)}>Open thread</button>
+                        <button type="button" onClick={() => void deleteThread(thread)}>Delete thread</button>
+                      </div>
+                    ) : null}
                   </div>
                 )) : <p className="muted chat-history-empty">Start a new thread to begin.</p>}
               </div>
             </aside>
-        {!historyOpen ? <button type="button" className="history-open-button" onClick={() => setHistoryOpen(true)} aria-label="Open history">‹ History</button> : null}
+        {!historyOpen ? <button type="button" className="history-open-button" onClick={() => setHistoryOpen(true)} aria-label="Manage chat history" data-tooltip="Manage chat history">•••</button> : null}
       </section>
     </DashboardShell>
   );

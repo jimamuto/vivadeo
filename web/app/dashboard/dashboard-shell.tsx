@@ -4,7 +4,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { AppTopbar } from "@/components/app-topbar";
 
 type NavIcon = "chat" | "ingest" | "library" | "jobs" | "settings";
 
@@ -23,7 +22,7 @@ function NavItem({ href, label, icon, activePaths = [] }: { href: string; label:
   const pathname = usePathname();
   const active = [href, ...activePaths].some((path) => pathname === path || pathname.startsWith(`${path}/`));
   return (
-    <Link className={`dash-nav-item${active ? " is-active" : ""}`} href={href as any} aria-label={label} title={label}>
+    <Link className={`dash-nav-item${active ? " is-active" : ""}`} href={href as any} aria-label={label} data-tooltip={label}>
       <NavGlyph icon={icon} /><span>{label}</span>
     </Link>
   );
@@ -40,7 +39,6 @@ export function DashboardShell({
   profileName?: string;
   children: ReactNode;
 }>) {
-  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
@@ -60,16 +58,22 @@ export function DashboardShell({
     <div className={`shell page dashboard-wrap${collapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
         <div className="dashboard-sidebar-brand">
-          <Link href="/dashboard/ingest" className="dashboard-brand-mark">
-            <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />
-          </Link>
-          {!collapsed ? (
-            <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label="Close sidebar">
-              <span className="sidebar-expander" aria-hidden="true" />
+          {collapsed ? (
+            <button className="dashboard-brand-collapsed-toggle" type="button" onClick={toggleSidebar} aria-label="Expand sidebar" data-tooltip="Expand sidebar">
+              <span className="sidebar-expander collapsed-brand-expander" aria-hidden="true" />
             </button>
-          ) : null}
+          ) : (
+            <>
+              <Link href="/dashboard/ingest" className="dashboard-brand-mark">
+                <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />
+              </Link>
+              <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label="Close sidebar" data-tooltip="Close sidebar">
+                <span className="sidebar-expander" aria-hidden="true" />
+              </button>
+            </>
+          )}
         </div>
-        <form className="dashboard-sidebar-search" action="/chat" method="get" role="search">
+        <form className="dashboard-sidebar-search" action="/chat" method="get" role="search" data-tooltip="Search archive">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
           <input name="q" type="search" placeholder="Search" aria-label="Search videos" />
         </form>
@@ -95,7 +99,6 @@ export function DashboardShell({
         </div>
       </aside>
       <div className="dashboard-frame">
-        <AppTopbar profileInitial={profileInitial} title={pathname === "/chat" ? "Chat" : "Workspace"} sidebarCollapsed={collapsed} onToggleSidebar={collapsed ? toggleSidebar : undefined} />
         <main className="dashboard-stage">{children}</main>
       </div>
     </div>
