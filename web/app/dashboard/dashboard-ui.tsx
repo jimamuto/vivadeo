@@ -258,7 +258,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
               )}
               <input ref={fileRef} id="file" name="file" type="file" accept="video/*" onChange={(event) => syncSelectedFile(event.target.files?.[0])} />
             </div>
-            {!permissions.canEdit ? <p className="muted">Viewer role cannot upload or queue ingest jobs.</p> : null}
+            {!permissions.isLoading && !permissions.canEdit ? <p className="muted">Viewer role cannot upload or queue ingest jobs.</p> : null}
             <button className="button" onClick={handleUpload} disabled={fileStatus.state === "loading" || !permissions.canEdit}>Upload video</button>
             <StatusLine status={fileStatus} />
           </div>
