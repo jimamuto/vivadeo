@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
   const authResponse = await postAuthEndpoint(request, "/sign-in/email", {
     email,
     password: String(form.get("password") || ""),
+    rememberMe: form.get("rememberMe") === "on",
     callbackURL: new URL("/chat", request.url).toString(),
   });
 

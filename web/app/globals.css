@@ -2848,6 +2848,9 @@ main { width: 100%; }
   gap: 16px;
 }
 
+.auth-remember-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .82rem; cursor: pointer; }
+.auth-remember-row input { width: 16px; height: 16px; accent-color: var(--oxblood); }
+
 .auth-minimal-card .field {
   gap: 7px;
 }

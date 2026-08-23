@@ -11,6 +11,10 @@ export function SigninForm() {
         <label htmlFor="password">Password</label>
         <input id="password" name="password" type="password" autoComplete="current-password" required />
       </div>
+      <label className="auth-remember-row">
+        <input name="rememberMe" type="checkbox" defaultChecked />
+        <span>Remember me</span>
+      </label>
       <SubmitButton pendingLabel="Signing in...">Sign in</SubmitButton>
     </form>
   );
