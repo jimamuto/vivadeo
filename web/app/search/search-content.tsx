@@ -753,8 +753,9 @@ export function SearchContent({
               accept="video/*"
               multiple
               onChange={(event) => {
-                if (event.target.files?.length) void uploadVideos(event.target.files);
+                const selectedFiles = event.target.files ? Array.from(event.target.files) : [];
                 event.target.value = "";
+                if (selectedFiles.length) void uploadVideos(selectedFiles);
               }}
             />
             {threadSources.length || uploadItems.length ? (
