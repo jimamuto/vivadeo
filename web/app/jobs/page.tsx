@@ -79,11 +79,24 @@ function JobStages({ job }: { job: Job }) {
   );
 }
 
+function queuedJob(jobId: string): Job {
+  return {
+    id: jobId,
+    organization_id: "",
+    kind: "ingest_uploaded_object",
+    status: "queued",
+    progress: 0,
+    message: "Connecting to live progress",
+    events: [],
+  };
+}
+
 function JobsContent() {
   const searchParams = useSearchParams();
-  const [jobId, setJobId] = useState(searchParams.get("job") ?? "");
+  const initialJobId = searchParams.get("job") ?? "";
+  const [jobId, setJobId] = useState(initialJobId);
   const [workspace, setWorkspace] = useState("default-workspace");
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJob] = useState<Job | null>(() => initialJobId ? queuedJob(initialJobId) : null);
   const [error, setError] = useState<string | null>(null);
   const [retryNote, setRetryNote] = useState<string | null>(null);
   const [cancelNote, setCancelNote] = useState<string | null>(null);
@@ -91,7 +104,9 @@ function JobsContent() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setJobId(searchParams.get("job") ?? "");
+    const nextJobId = searchParams.get("job") ?? "";
+    setJobId(nextJobId);
+    setJob(nextJobId ? queuedJob(nextJobId) : null);
     const cookieWorkspace = document.cookie
       .split("; ")
       .find((item) => item.startsWith("vivadeo_workspace="))
@@ -105,11 +120,13 @@ function JobsContent() {
     setTimeline([]);
     void fetch(`/api/proxy/v1/jobs/${jobId}`)
       .then(async (response) => {
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(`Job lookup failed (${response.status})`);
         const currentJob = (await response.json()) as Job;
         if (mounted) setJob(currentJob);
       })
-      .catch(() => undefined);
+      .catch((cause) => {
+        if (mounted) setError(cause instanceof Error ? cause.message : "Job lookup failed");
+      });
     const stream = new EventSource(`/api/job-events/${jobId}`);
     stream.addEventListener("job", (event) => {
       if (!mounted) return;
@@ -184,15 +201,10 @@ function JobsContent() {
           <h1>Upload progress</h1>
           <p className="muted">Upload, transcription, embeddings, and indexing.</p>
         </div>
-        {!job ? <div className="form">
+        {!jobId ? <div className="form">
           <div className="field">
             <label htmlFor="jobId">Job ID</label>
-            <input
-              id="jobId"
-              value={jobId}
-              onChange={(event) => setJobId(event.target.value)}
-              placeholder="job_123"
-            />
+            <input id="jobId" value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="job_123" />
           </div>
         </div> : null}
 

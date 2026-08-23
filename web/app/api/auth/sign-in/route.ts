@@ -12,11 +12,11 @@ export async function POST(request: NextRequest) {
   const authResponse = await postAuthEndpoint(request, "/sign-in/email", {
     email,
     password: String(form.get("password") || ""),
-    callbackURL: new URL("/dashboard", request.url).toString(),
+    callbackURL: new URL("/chat", request.url).toString(),
   });
 
   if (authResponse.ok) {
-    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+    const response = NextResponse.redirect(new URL("/chat", request.url));
     forwardAuthCookies(authResponse, response);
     const requestedWorkspace = request.nextUrl.searchParams.get("workspace") || request.cookies.get("vivadeo_workspace")?.value;
     const workspace =
