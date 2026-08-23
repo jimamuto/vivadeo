@@ -12,7 +12,7 @@ The first implementation slice is now active on the `chat` branch:
 - `Ask about this moment` context sent with the next chat request
 - Library deep links that seek to the cited timestamp
 
-Server-side frame extraction and cached derived clips remain a follow-up slice after timestamp playback is validated.
+Server-side exact timestamp frame extraction is now implemented with cached B2 JPEGs and worker/SSE progress. Short derived video clips and visual-model frame questioning remain a follow-up slice after frame playback is validated.
 
 ## 1. Goal
 

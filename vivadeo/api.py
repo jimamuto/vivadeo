@@ -20,6 +20,7 @@ from .db import (
     ChatThreadVideo,
     Clip,
     DeadLetterEntry,
+    EvidenceFrame,
     Job,
     Organization,
     OrganizationSetting,
@@ -48,6 +49,8 @@ from .schemas import (
     ClipRequest,
     ClipResponse,
     DeadLetterEntryResponse,
+    EvidenceFrameRequest,
+    EvidenceFrameResponse,
     JobResponse,
     LocalPathIngestRequest,
     SearchRequest,
@@ -62,6 +65,7 @@ from .schemas import (
     WorkspaceSettingsResponse,
 )
 from .worker import (
+    extract_evidence_frame_task,
     ingest_local_path,
     ingest_uploaded_object,
     ingest_url,
@@ -234,6 +238,18 @@ def _clip_response(clip: Clip, store: ObjectStore | None = None) -> ClipResponse
         object_key=clip.object_key,
         url=url,
         job_id=clip.job_id,
+    )
+
+
+def _evidence_frame_response(frame: EvidenceFrame, store: ObjectStore | None = None, job_id: str | None = None) -> EvidenceFrameResponse:
+    return EvidenceFrameResponse(
+        id=frame.id,
+        video_id=frame.video_id,
+        timestamp=frame.timestamp,
+        status=frame.status,
+        url=store.presigned_url(frame.object_key) if store and frame.object_key else None,
+        job_id=job_id,
+        error=frame.error,
     )
 
 
@@ -584,6 +600,85 @@ def get_video(
     return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id))
 
 
+@app.post(
+    "/v1/videos/{video_id}/frames",
+    response_model=EvidenceFrameResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def request_evidence_frame(
+    video_id: str,
+    request: EvidenceFrameRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    video = session.get(Video, video_id)
+    if not video or video.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if not video.object_key:
+        raise HTTPException(status_code=400, detail="Video playback object is unavailable")
+    timestamp = request.timestamp
+    if video.duration is not None:
+        timestamp = min(timestamp, max(0.0, video.duration))
+    timestamp_key = f"{timestamp:.3f}"
+    frame = session.scalar(select(EvidenceFrame).where(EvidenceFrame.video_id == video_id, EvidenceFrame.organization_id == organization_id, EvidenceFrame.timestamp_key == timestamp_key))
+    if frame is not None and frame.status == "ready":
+        return _evidence_frame_response(frame, ObjectStore())
+
+    job_id = None
+    if frame is not None and frame.status == "queued":
+        jobs = session.scalars(select(Job).where(Job.organization_id == organization_id, Job.kind == "extract_evidence_frame", Job.video_id == video_id).order_by(Job.created_at.desc()).limit(10)).all()
+        job_id = next((job.id for job in jobs if (job.payload or {}).get("frame_id") == frame.id and job.status not in {"failed", "canceled", "succeeded"}), None)
+        if job_id:
+            return _evidence_frame_response(frame, job_id=job_id)
+
+    if frame is None:
+        frame = EvidenceFrame(
+            id=new_id(),
+            organization_id=organization_id,
+            video_id=video_id,
+            timestamp=timestamp,
+            timestamp_key=timestamp_key,
+            status="queued",
+        )
+        session.add(frame)
+    else:
+        frame.timestamp = timestamp
+        frame.status = "queued"
+        frame.error = None
+        frame.object_key = None
+    job = Job(
+        id=new_id(),
+        organization_id=organization_id,
+        kind="extract_evidence_frame",
+        status="queued",
+        video_id=video_id,
+        payload={"frame_id": frame.id, "timestamp": timestamp},
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    session.add(job)
+    session.commit()
+    extract_evidence_frame_task.delay(job.id, frame.id, organization_id)
+    return _evidence_frame_response(frame, job_id=job.id)
+
+
+@app.get(
+    "/v1/videos/{video_id}/frames/{frame_id}",
+    response_model=EvidenceFrameResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def get_evidence_frame(
+    video_id: str,
+    frame_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    frame = session.scalar(select(EvidenceFrame).where(EvidenceFrame.id == frame_id, EvidenceFrame.video_id == video_id, EvidenceFrame.organization_id == organization_id))
+    if frame is None:
+        raise HTTPException(status_code=404, detail="Evidence frame not found")
+    return _evidence_frame_response(frame, ObjectStore())
+
+
 @app.patch(
     "/v1/videos/{video_id}/library",
     response_model=VideoResponse,
@@ -739,6 +834,20 @@ def delete_video(
             store.delete_object(video.object_key)
         except Exception:
             pass
+
+    frame_keys = session.scalars(
+        select(EvidenceFrame.object_key).where(
+            EvidenceFrame.organization_id == organization_id,
+            EvidenceFrame.video_id == video_id,
+            EvidenceFrame.object_key.is_not(None),
+        )
+    ).all()
+    for key in frame_keys:
+        try:
+            store.delete_object(key)
+        except Exception:
+            continue
+    session.execute(delete(EvidenceFrame).where(EvidenceFrame.video_id == video_id, EvidenceFrame.organization_id == organization_id))
 
     clip_ids = session.scalars(
         select(Clip.id).where(
@@ -900,6 +1009,11 @@ def cancel_job(
         if clip and clip.organization_id == organization_id and clip.status in {"queued", "running"}:
             clip.status = "canceled"
             clip.error = "Canceled by user"
+    if job.kind == "extract_evidence_frame":
+        frame = session.get(EvidenceFrame, (job.payload or {}).get("frame_id"))
+        if frame and frame.organization_id == organization_id and frame.status == "queued":
+            frame.status = "canceled"
+            frame.error = "Canceled by user"
     session.commit()
     return _job_response(job)
 
@@ -953,6 +1067,21 @@ def retry_job(
         job.error = None
         session.commit()
         ingest_local_path.delay(job.id, video.id, organization_id, video.source_uri)
+        return _job_response(job)
+    if job.kind == "extract_evidence_frame":
+        frame_id = (job.payload or {}).get("frame_id")
+        frame = session.get(EvidenceFrame, frame_id) if frame_id else None
+        if frame is None:
+            raise HTTPException(status_code=404, detail="Evidence frame not found for job")
+        frame.status = "queued"
+        frame.error = None
+        frame.object_key = None
+        job.status = "queued"
+        job.progress = 0.0
+        job.message = "Retry queued"
+        job.error = None
+        session.commit()
+        extract_evidence_frame_task.delay(job.id, frame.id, organization_id)
         return _job_response(job)
     if job.kind == "trim_clip":
         if clip is None:

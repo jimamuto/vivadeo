@@ -72,6 +72,16 @@ type MomentContext = {
   endTime: number;
 };
 
+type EvidenceFrame = {
+  id: string;
+  video_id: string;
+  timestamp: number;
+  status: string;
+  url?: string | null;
+  job_id?: string | null;
+  error?: string | null;
+};
+
 const starterPaths = {
   moment: "M12 3a9 9 0 1 0 9 9 M12 7v5l3 2",
   summarize: "M4 5h16v14H4z M7 9h10 M7 12h7 M7 15h5",
@@ -124,8 +134,10 @@ export function SearchContent({
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
   const [activeEvidence, setActiveEvidence] = useState<Citation | null>(null);
+  const [evidenceFrame, setEvidenceFrame] = useState<EvidenceFrame | null>(null);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
 
   useEffect(() => {
@@ -188,6 +200,37 @@ export function SearchContent({
   }, [recentSearches]);
 
   useEffect(() => {
+    if (!activeEvidence) {
+      setEvidenceFrame(null);
+      return;
+    }
+    let cancelled = false;
+    setEvidenceFrame({ id: "", video_id: activeEvidence.video_id, timestamp: activeEvidence.start_time, status: "queued" });
+    void (async () => {
+      try {
+        const response = await fetch(`/api/proxy/v1/videos/${activeEvidence.video_id}/frames`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timestamp: activeEvidence.start_time }),
+        });
+        if (!response.ok) throw new Error("Frame unavailable");
+        let frame = (await response.json()) as EvidenceFrame;
+        if (frame.status !== "ready" && frame.job_id) {
+          const job = await waitForJob(frame.job_id);
+          if (job.status !== "succeeded") throw new Error("Frame extraction failed");
+          const refreshed = await fetch(`/api/proxy/v1/videos/${activeEvidence.video_id}/frames/${frame.id}`, { cache: "no-store" });
+          if (!refreshed.ok) throw new Error("Frame unavailable");
+          frame = (await refreshed.json()) as EvidenceFrame;
+        }
+        if (!cancelled) setEvidenceFrame(frame);
+      } catch (cause) {
+        if (!cancelled) setEvidenceFrame({ id: "", video_id: activeEvidence.video_id, timestamp: activeEvidence.start_time, status: "failed", error: cause instanceof Error ? cause.message : "Frame unavailable" });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeEvidence?.video_id, activeEvidence?.start_time]);
+
+  useEffect(() => {
     if (!initialQuery.trim() || !activeThreadId || initialQuerySubmitted.current) return;
     initialQuerySubmitted.current = true;
     window.setTimeout(() => document.querySelector<HTMLFormElement>(".chat-composer")?.requestSubmit(), 0);
@@ -207,6 +250,28 @@ export function SearchContent({
     setRecentSearches((current) => [next, ...current.filter((item) => item !== next)].slice(0, 6));
   }
 
+  async function ensureActiveThread() {
+    if (activeThreadId) return activeThreadId;
+    if (creatingThreadRef.current) return creatingThreadRef.current;
+    const creation = fetch("/api/proxy/v1/chat/threads", { method: "POST" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not create a chat thread");
+        const thread = (await response.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] };
+        const nextThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] };
+        setThreads((current) => current.some((item) => item.id === nextThread.id) ? current : [nextThread, ...current]);
+        setActiveThreadId(nextThread.id);
+        setTurns(nextThread.turns);
+        return nextThread.id;
+      })
+      .catch((cause) => {
+        setStatus(cause instanceof Error ? cause.message : "Could not create a chat thread");
+        return null;
+      })
+      .finally(() => { creatingThreadRef.current = null; });
+    creatingThreadRef.current = creation;
+    return creation;
+  }
+
   async function refreshThreadSources(threadId: string) {
     const [sourcesResponse, videosResponse] = await Promise.all([
       fetch(`/api/proxy/v1/chat/threads/${threadId}/sources`, { cache: "no-store" }),
@@ -219,6 +284,28 @@ export function SearchContent({
       const payload = (await videosResponse.json()) as VideoOption[];
       setVideos(payload.filter((video) => video.status !== "archived"));
     }
+  }
+
+  function waitForJob(jobId: string) {
+    return new Promise<{ status: string }>((resolve) => {
+      const stream = new EventSource(`/api/job-events/${jobId}`);
+      stream.addEventListener("job", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { status: string };
+          if (["succeeded", "failed", "canceled"].includes(payload.status)) {
+            stream.close();
+            resolve(payload);
+          }
+        } catch {
+          stream.close();
+          resolve({ status: "failed" });
+        }
+      });
+      stream.onerror = () => {
+        stream.close();
+        resolve({ status: "unknown" });
+      };
+    });
   }
 
   function watchUploadJob(itemId: string, jobId: string) {
@@ -246,10 +333,8 @@ export function SearchContent({
   }
 
   async function ingestVideoUrl() {
-    if (!activeThreadId) {
-      setStatus("Create a thread before adding a video URL.");
-      return;
-    }
+    const threadId = await ensureActiveThread();
+    if (!threadId) return;
     const url = window.prompt("Paste a permitted video URL")?.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) {
@@ -262,23 +347,21 @@ export function SearchContent({
       const response = await fetch("/api/proxy/v1/videos/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, max_height: 480, transcribe: true, thread_id: activeThreadId }),
+        body: JSON.stringify({ url, max_height: 480, transcribe: true, thread_id: threadId }),
       });
       if (!response.ok) throw new Error(`URL ingest failed (${response.status})`);
       const job = (await response.json()) as { id: string; video_id?: string };
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
       await watchUploadJob(itemId, job.id);
-      await refreshThreadSources(activeThreadId);
+      await refreshThreadSources(threadId);
     } catch (cause) {
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "URL ingest failed" } : item));
     }
   }
 
   async function uploadVideos(files: FileList | File[]) {
-    if (!activeThreadId) {
-      setStatus("Create a thread before attaching videos.");
-      return;
-    }
+    const threadId = await ensureActiveThread();
+    if (!threadId) return;
     const selected = Array.from(files);
     for (const file of selected) {
       const itemId = `${Date.now()}-${file.name}`;
@@ -294,14 +377,14 @@ export function SearchContent({
       const form = new FormData();
       form.append("file", file);
       form.append("transcribe", "true");
-      form.append("thread_id", activeThreadId);
+      form.append("thread_id", threadId);
       try {
         const response = await fetch("/api/proxy/v1/videos/upload", { method: "POST", body: form });
         if (!response.ok) throw new Error(`Upload failed (${response.status})`);
         const job = (await response.json()) as { id: string; video_id?: string };
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
         await watchUploadJob(itemId, job.id);
-        await refreshThreadSources(activeThreadId);
+        await refreshThreadSources(threadId);
         setVideosLoaded(true);
       } catch (cause) {
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } : item));
@@ -313,10 +396,12 @@ export function SearchContent({
     event.preventDefault();
     const nextQuestion = question.trim();
     if (!nextQuestion || loading) return;
+    const threadId = await ensureActiveThread();
+    if (!threadId) return;
 
     const nextTurns: ChatTurn[] = [...turns, { role: "user", content: nextQuestion }];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, turns: nextTurns, updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, turns: nextTurns, updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
@@ -336,7 +421,7 @@ export function SearchContent({
           results: 6,
           video_id: videoId || null,
           video_ids: videoIds,
-          thread_id: activeThreadId || null,
+          thread_id: threadId,
           focus_video_id: momentContext?.videoId || null,
           focus_start_time: momentContext?.startTime ?? null,
           focus_end_time: momentContext?.endTime ?? null,
@@ -351,7 +436,7 @@ export function SearchContent({
       const seconds = Math.max(1, Math.round((Date.now() - requestStartedAt) / 1000));
       const assistantTurn: ChatTurn = { role: "assistant", content: payload.answer, citations: payload.citations };
       setTurns((current) => [...current, assistantTurn]);
-      setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, title: payload.title || thread.title, turns: [...thread.turns, assistantTurn], updatedAt: new Date().toISOString() } : thread));
+      setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: payload.title || thread.title, turns: [...thread.turns, assistantTurn], updatedAt: new Date().toISOString() } : thread));
       recordRecentSearch(nextQuestion);
       appendActivity(activeWorkspace, "search.performed", nextQuestion);
       setMomentContext(null);
@@ -635,6 +720,7 @@ export function SearchContent({
                 </div>
                 <button type="button" className="history-toggle" onClick={() => setActiveEvidence(null)} aria-label="Close video evidence">×</button>
               </div>
+              {evidenceFrame?.url ? <img className="chat-evidence-frame" src={evidenceFrame.url} alt={`Frame from ${activeEvidence.filename} at ${fmt(activeEvidence.start_time)}`} /> : null}
               {activeEvidenceSource?.url ? (
                 <video
                   key={`${activeEvidence.video_id}-${activeEvidence.start_time}`}
@@ -647,6 +733,7 @@ export function SearchContent({
               ) : (
                 <p className="muted">This source is still processing or its playback URL is unavailable.</p>
               )}
+              {evidenceFrame?.status === "failed" ? <p className="muted">Exact frame unavailable; the timestamped video is still available.</p> : null}
               <p className="chat-evidence-transcript">{activeEvidence.text}</p>
             </section>
           ) : null}

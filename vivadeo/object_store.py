@@ -94,3 +94,7 @@ def video_object_key(video_id: str, filename: str) -> str:
 
 def clip_object_key(clip_id: str) -> str:
     return f"clips/{clip_id}.mp4"
+
+
+def evidence_frame_object_key(frame_id: str) -> str:
+    return f"evidence-frames/{frame_id}.jpg"

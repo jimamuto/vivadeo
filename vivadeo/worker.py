@@ -13,11 +13,12 @@ from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
 from .config import get_settings
-from .db import Clip, DeadLetterEntry, Job, Video, VideoTranscriptSegment, new_id, session_scope, utcnow
+from .db import Clip, DeadLetterEntry, EvidenceFrame, Job, Video, VideoTranscriptSegment, new_id, session_scope, utcnow
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
+from .frame_extractor import extract_frame
 from .modal_whisper import ModalWhisperTranscriber
-from .object_store import ObjectStore, clip_object_key, video_object_key
+from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
 
@@ -397,6 +398,58 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
+        raise
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@celery_app.task(name="vivadeo.extract_evidence_frame")
+def extract_evidence_frame_task(job_id: str, frame_id: str, organization_id: str) -> None:
+    tmp_dir = tempfile.mkdtemp(prefix="vivadeo_frame_")
+    try:
+        _raise_if_canceled(job_id)
+        store = ObjectStore()
+        with session_scope() as session:
+            frame = session.get(EvidenceFrame, frame_id)
+            if frame is None or frame.organization_id != organization_id:
+                raise RuntimeError(f"Evidence frame not found: {frame_id}")
+            video = session.get(Video, frame.video_id)
+            if video is None or video.organization_id != organization_id or not video.object_key:
+                raise RuntimeError(f"Video object not found for frame: {frame_id}")
+            local_video = os.path.join(tmp_dir, video.filename)
+            local_frame = os.path.join(tmp_dir, f"{frame.id}.jpg")
+            object_key = video.object_key
+            timestamp = frame.timestamp
+
+        _update_job(job_id, status="running", progress=0.2, message="Downloading source")
+        store.download_file(object_key, local_video)
+        _raise_if_canceled(job_id)
+        _update_job(job_id, status="running", progress=0.7, message="Extracting evidence frame")
+        extract_frame(local_video, timestamp, local_frame)
+        _raise_if_canceled(job_id)
+        frame_key = evidence_frame_object_key(frame_id)
+        store.upload_file(local_frame, frame_key, "image/jpeg")
+        with session_scope() as session:
+            frame = session.get(EvidenceFrame, frame_id)
+            if frame:
+                frame.object_key = frame_key
+                frame.status = "ready"
+                frame.error = None
+        _update_job(job_id, status="succeeded", progress=1.0, message="Evidence frame ready")
+    except JobCanceled:
+        with session_scope() as session:
+            frame = session.get(EvidenceFrame, frame_id)
+            if frame:
+                frame.status = "canceled"
+                frame.error = "Canceled by user"
+        _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
+    except Exception as exc:
+        with session_scope() as session:
+            frame = session.get(EvidenceFrame, frame_id)
+            if frame:
+                frame.status = "failed"
+                frame.error = str(exc)
+        _update_job(job_id, status="failed", error=str(exc), message="Frame extraction failed")
         raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

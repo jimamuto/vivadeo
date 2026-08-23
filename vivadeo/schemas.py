@@ -184,6 +184,20 @@ class ChatResponse(BaseModel):
     title: str | None = None
 
 
+class EvidenceFrameRequest(BaseModel):
+    timestamp: float = Field(..., ge=0)
+
+
+class EvidenceFrameResponse(BaseModel):
+    id: str
+    video_id: str
+    timestamp: float
+    status: str
+    url: str | None = None
+    job_id: str | None = None
+    error: str | None = None
+
+
 class ChatThreadMessageResponse(BaseModel):
     id: str
     role: str

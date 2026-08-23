@@ -1806,6 +1806,7 @@ main { width: 100%; }
 
 .chat-evidence-player-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .chat-evidence-player-head div { display: grid; gap: 4px; }
+.chat-evidence-frame { display: block; width: min(100%, 720px); max-height: 360px; margin: 0 auto 12px; border-radius: 10px; background: var(--blackboard); object-fit: contain; }
 .chat-evidence-video { display: block; width: 100%; max-height: 420px; border-radius: 10px; background: var(--blackboard); }
 .chat-evidence-transcript { margin: 12px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.55; }
 
