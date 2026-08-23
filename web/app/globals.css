@@ -1731,6 +1731,33 @@ main { width: 100%; }
   white-space: pre-wrap;
 }
 
+.chat-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat-message-error {
+  margin: 8px 0 0;
+  color: var(--oxblood);
+  font-size: 0.88rem;
+}
+
+.chat-branch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.chat-branch-control .button-secondary {
+  min-width: 30px;
+  padding: 5px 9px;
+}
+
 .search-citations {
   display: grid;
   gap: 12px;

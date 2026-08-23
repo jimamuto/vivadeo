@@ -1192,12 +1192,61 @@ def search(
     return SearchResponse(results=results)
 
 
+def _current_chat_message(thread: ChatThread) -> ChatThreadMessage | None:
+    if thread.current_message_id:
+        return next((message for message in thread.messages if message.id == thread.current_message_id), None)
+    return thread.messages[-1] if thread.messages else None
+
+
+def _chat_message_path(thread: ChatThread, message_id: str | None) -> list[ChatThreadMessage]:
+    messages = {message.id: message for message in thread.messages}
+    path: list[ChatThreadMessage] = []
+    seen: set[str] = set()
+    current_id = message_id
+    while current_id and current_id not in seen:
+        seen.add(current_id)
+        message = messages.get(current_id)
+        if message is None:
+            break
+        path.append(message)
+        current_id = message.parent_id
+    path.reverse()
+    return path
+
+
+def _append_chat_message(
+    thread: ChatThread,
+    *,
+    role: str,
+    content: str,
+    parent_id: str | None = None,
+    status: str = "completed",
+    error: str | None = None,
+    citations: list | None = None,
+) -> ChatThreadMessage:
+    message = ChatThreadMessage(
+        id=new_id(),
+        thread_id=thread.id,
+        parent_id=parent_id,
+        role=role,
+        content=content,
+        citations=citations or [],
+        status=status,
+        error=error,
+    )
+    thread.messages.append(message)
+    thread.current_message_id = message.id
+    thread.updated_at = utcnow()
+    return message
+
+
 def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
     return ChatThreadResponse(
         id=thread.id,
         title=thread.title,
         created_at=thread.created_at,
         updated_at=thread.updated_at,
+        current_message_id=thread.current_message_id,
         sources=[
             {
                 "video_id": source.video.id,
@@ -1213,10 +1262,14 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
         messages=[
             {
                 "id": message.id,
+                "parent_id": message.parent_id,
                 "role": message.role,
                 "content": message.content,
                 "citations": message.citations or [],
+                "status": message.status,
+                "error": message.error,
                 "created_at": message.created_at,
+                "updated_at": message.updated_at,
             }
             for message in thread.messages
         ],
@@ -1404,8 +1457,18 @@ def search_chat(
         thread = session.scalar(select(ChatThread).where(ChatThread.id == request.thread_id, ChatThread.organization_id == organization_id))
         if not thread:
             raise HTTPException(status_code=404, detail="Chat thread not found")
-    if thread is not None and (not thread.messages or thread.messages[-1].role != "user" or thread.messages[-1].content != question):
-        thread.messages.append(ChatThreadMessage(id=new_id(), role="user", content=question))
+    user_message: ChatThreadMessage | None = None
+    if thread is not None:
+        current = _current_chat_message(thread)
+        if current is not None and current.role == "user" and current.content == question:
+            user_message = current
+        else:
+            user_message = _append_chat_message(
+                thread,
+                role="user",
+                content=question,
+                parent_id=current.id if current is not None else None,
+            )
 
     scope_video_ids = list(dict.fromkeys(request.video_ids))
     if not request.video_id and not scope_video_ids and thread is not None:
@@ -1485,8 +1548,12 @@ def search_chat(
                     ).title(question)
                 except Exception:
                     thread.title = " ".join(question.split())[:255] or "New thread"
-            thread.messages.append(ChatThreadMessage(id=new_id(), role="assistant", content=answer, citations=[]))
-            thread.updated_at = utcnow()
+            _append_chat_message(
+                thread,
+                role="assistant",
+                content=answer,
+                parent_id=user_message.id if user_message is not None else None,
+            )
             session.commit()
         return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None)
 
@@ -1497,20 +1564,163 @@ def search_chat(
         function_name=settings.modal_gemma_function,
         timeout=settings.modal_timeout,
     )
+    assistant_message: ChatThreadMessage | None = None
     try:
         if thread is not None and thread.title == "New thread":
             try:
                 thread.title = gemma.title(question)
             except Exception:
                 thread.title = " ".join(question.split())[:255] or "New thread"
+        if thread is not None:
+            assistant_message = _append_chat_message(
+                thread,
+                role="assistant",
+                content="",
+                parent_id=user_message.id if user_message is not None else None,
+                status="pending",
+            )
+            session.flush()
         answer = gemma.answer(messages, citations)
     except Exception as exc:
+        if thread is not None:
+            if assistant_message is None:
+                assistant_message = _append_chat_message(
+                    thread,
+                    role="assistant",
+                    content="",
+                    parent_id=user_message.id if user_message is not None else None,
+                    status="failed",
+                    error="Vivadeo could not prepare an answer.",
+                )
+            else:
+                assistant_message.status = "failed"
+                assistant_message.error = "Vivadeo could not prepare an answer."
+            session.commit()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    if thread is not None:
-        thread.messages.append(ChatThreadMessage(id=new_id(), role="assistant", content=answer, citations=citations))
-        thread.updated_at = utcnow()
+    if thread is not None and assistant_message is not None:
+        assistant_message.content = answer
+        assistant_message.citations = citations
+        assistant_message.status = "completed"
+        assistant_message.error = None
+        assistant_message.updated_at = utcnow()
         session.commit()
     return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None)
+
+
+@app.post(
+    "/v1/chat/threads/{thread_id}/messages/{message_id}/select",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def select_chat_message_branch(
+    thread_id: str,
+    message_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    message = session.scalar(
+        select(ChatThreadMessage).where(
+            ChatThreadMessage.id == message_id,
+            ChatThreadMessage.thread_id == thread.id,
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=404, detail="Chat message not found")
+    if message.status in {"pending", "streaming"}:
+        raise HTTPException(status_code=409, detail="Chat message is still generating")
+    thread.current_message_id = message.id
+    thread.updated_at = utcnow()
+    session.commit()
+    session.refresh(thread)
+    return _chat_thread_response(thread)
+
+
+@app.post(
+    "/v1/chat/threads/{thread_id}/messages/{message_id}/retry",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+@app.post(
+    "/v1/chat/threads/{thread_id}/messages/{message_id}/regenerate",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def regenerate_chat_message(
+    thread_id: str,
+    message_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    message = session.scalar(
+        select(ChatThreadMessage).where(
+            ChatThreadMessage.id == message_id,
+            ChatThreadMessage.thread_id == thread.id,
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=404, detail="Chat message not found")
+    if message.role != "assistant":
+        raise HTTPException(status_code=400, detail="Only assistant messages can be regenerated")
+    if not message.parent_id:
+        raise HTTPException(status_code=400, detail="Assistant message has no user prompt")
+
+    parent = next((item for item in thread.messages if item.id == message.parent_id), None)
+    if parent is None or parent.role != "user":
+        raise HTTPException(status_code=409, detail="Assistant message history is incomplete")
+    history = _chat_message_path(thread, parent.id)
+    source_ids = [
+        source.video_id
+        for source in thread.sources
+        if source.video is not None and source.video.status not in {"archived", "failed", "canceled"}
+    ]
+    replacement = _append_chat_message(
+        thread,
+        role="assistant",
+        content="",
+        parent_id=parent.id,
+        status="pending",
+    )
+    session.flush()
+    session.commit()
+
+    try:
+        result = search_chat(
+            ChatRequest(
+                messages=[ChatMessage(role=item.role, content=item.content) for item in history],
+                results=8,
+                video_ids=source_ids,
+            ),
+            session=session,
+            organization_id=organization_id,
+        )
+    except HTTPException as exc:
+        replacement.status = "failed"
+        replacement.error = "Vivadeo could not prepare an answer."
+        thread.current_message_id = replacement.id
+        thread.updated_at = utcnow()
+        session.commit()
+        raise exc
+    except Exception as exc:
+        replacement.status = "failed"
+        replacement.error = "Vivadeo could not prepare an answer."
+        thread.current_message_id = replacement.id
+        thread.updated_at = utcnow()
+        session.commit()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    replacement.content = result.answer
+    replacement.citations = [citation.model_dump() for citation in result.citations]
+    replacement.status = "completed"
+    replacement.error = None
+    if thread.title == "New thread":
+        thread.title = " ".join(parent.content.split())[:255] or "New thread"
+    thread.current_message_id = replacement.id
+    thread.updated_at = utcnow()
+    session.commit()
+    session.refresh(thread)
+    return _chat_thread_response(thread)
 
 
 @app.post(

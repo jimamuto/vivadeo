@@ -200,10 +200,14 @@ class EvidenceFrameResponse(BaseModel):
 
 class ChatThreadMessageResponse(BaseModel):
     id: str
+    parent_id: str | None = None
     role: str
     content: str
     citations: list[ChatCitation] = Field(default_factory=list)
+    status: str = "completed"
+    error: str | None = None
     created_at: datetime
+    updated_at: datetime
 
 
 class ChatThreadResponse(BaseModel):
@@ -211,6 +215,7 @@ class ChatThreadResponse(BaseModel):
     title: str
     created_at: datetime
     updated_at: datetime
+    current_message_id: str | None = None
     messages: list[ChatThreadMessageResponse] = Field(default_factory=list)
     sources: list[ChatThreadSourceResponse] = Field(default_factory=list)
 

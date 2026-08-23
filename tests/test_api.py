@@ -238,6 +238,26 @@ def test_search_chat_answers_with_transcript_citations(monkeypatch):
     assert response.citations[0].similarity_score == 0.87
 
 
+def test_chat_message_path_follows_selected_branch():
+    root = SimpleNamespace(id="root", parent_id=None, role="user", content="first")
+    answer_a = SimpleNamespace(id="answer-a", parent_id="root", role="assistant", content="A")
+    answer_b = SimpleNamespace(id="answer-b", parent_id="root", role="assistant", content="B")
+    thread = SimpleNamespace(messages=[root, answer_a, answer_b], current_message_id="answer-b")
+
+    assert [message.id for message in api._chat_message_path(thread, thread.current_message_id)] == ["root", "answer-b"]
+
+
+def test_append_chat_message_updates_current_branch_pointer():
+    thread = SimpleNamespace(id="thread-1", messages=[], current_message_id=None, updated_at=None)
+
+    message = api._append_chat_message(thread, role="user", content="Find the launch moment")
+
+    assert message.parent_id is None
+    assert message.status == "completed"
+    assert thread.current_message_id == message.id
+    assert thread.messages == [message]
+
+
 def test_search_by_image_returns_search_results(monkeypatch):
     _disable_startup_io(monkeypatch)
     monkeypatch.setattr(

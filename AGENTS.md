@@ -8,6 +8,10 @@ Use these notes when working in this repository. Keep product behavior in `PRODU
 - Read `DESIGN.md` before changing UI, copy hierarchy, layout, color, spacing, imagery, or frontend components.
 - Brand name is always `Vivadeo`.
 
+### Chat Reference
+
+For chat behavior, message branching, attachment lifecycle, streaming states, and conversation-management patterns, agents may consult the upstream Open WebUI repository at <https://github.com/open-webui/open-webui>. Treat it as a behavioral and architectural reference only: preserve Vivadeo's Next.js/FastAPI stack, video-first retrieval, workspace authorization, B2 storage, Modal inference, and licensing/provenance guardrails documented in `docs/OPEN-WEBUI-CHAT-IMPLEMENTATION-PLAN.md`.
+
 ## Runtime Findings
 
 - The web auth flow sends verification, reset, and deletion emails through Azure Communication Services Email using the Azure-managed sender configured in `AZURE_COMMUNICATION_CONNECTION_STRING` and `EMAIL_FROM`.

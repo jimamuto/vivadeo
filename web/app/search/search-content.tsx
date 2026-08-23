@@ -26,6 +26,10 @@ type Citation = {
 };
 
 type ChatTurn = ChatMessage & {
+  id?: string;
+  parentId?: string | null;
+  status?: string;
+  error?: string | null;
   citations?: Citation[];
 };
 
@@ -42,6 +46,8 @@ export type ChatThread = {
   id: string;
   title: string;
   turns: ChatTurn[];
+  messages: ChatTurn[];
+  currentMessageId?: string | null;
   updatedAt: string;
   sources: ThreadSource[];
 };
@@ -95,6 +101,36 @@ function fmt(s: number) {
   return `${m}:${sec}`;
 }
 
+function activeBranch(messages: ChatTurn[], currentMessageId?: string | null) {
+  if (!messages.length || !currentMessageId) return messages;
+  const byId = new Map(messages.filter((message) => message.id).map((message) => [message.id, message]));
+  const branch: ChatTurn[] = [];
+  const seen = new Set<string>();
+  let currentId: string | undefined = currentMessageId;
+  while (currentId && !seen.has(currentId)) {
+    seen.add(currentId);
+    const message = byId.get(currentId);
+    if (!message) break;
+    branch.push(message);
+    currentId = message.parentId || undefined;
+  }
+  return branch.length ? branch.reverse() : messages;
+}
+
+function normalizeThread(payload: { id: string; title: string; updated_at: string; current_message_id?: string | null; messages: Array<ChatTurn & { parent_id?: string | null }>; sources?: ThreadSource[] }): ChatThread {
+  const messages = payload.messages.map((message) => ({ ...message, parentId: message.parent_id ?? message.parentId }));
+  const currentMessageId = payload.current_message_id ?? messages.at(-1)?.id ?? null;
+  return {
+    id: payload.id,
+    title: payload.title,
+    updatedAt: payload.updated_at,
+    messages,
+    turns: activeBranch(messages, currentMessageId),
+    currentMessageId,
+    sources: payload.sources || [],
+  };
+}
+
 export function SearchContent({
   profileInitial,
   profileName,
@@ -127,6 +163,7 @@ export function SearchContent({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
@@ -179,8 +216,8 @@ export function SearchContent({
     void fetch("/api/proxy/v1/chat/threads", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load chat threads");
-        const payload = (await response.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] }>;
-        const loadedThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] }));
+        const payload = (await response.json()) as Array<Parameters<typeof normalizeThread>[0]>;
+        const loadedThreads = payload.map(normalizeThread);
         if (loadedThreads.length) {
           setThreads(loadedThreads);
           const selectedId = loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
@@ -191,8 +228,8 @@ export function SearchContent({
         if (threads.length) return;
         const created = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
         if (!created.ok) return;
-        const thread = (await created.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] };
-        const initialThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] };
+        const thread = (await created.json()) as Parameters<typeof normalizeThread>[0];
+        const initialThread = normalizeThread(thread);
         setThreads([initialThread]);
         setActiveThreadId(thread.id);
       })
@@ -260,8 +297,8 @@ export function SearchContent({
     const creation = fetch("/api/proxy/v1/chat/threads", { method: "POST" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not create a chat thread");
-        const thread = (await response.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] };
-        const nextThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] };
+        const thread = (await response.json()) as Parameters<typeof normalizeThread>[0];
+        const nextThread = normalizeThread(thread);
         setThreads((current) => current.some((item) => item.id === nextThread.id) ? current : [nextThread, ...current]);
         setActiveThreadId(nextThread.id);
         setTurns(nextThread.turns);
@@ -423,9 +460,10 @@ export function SearchContent({
     const threadId = await ensureActiveThread();
     if (!threadId) return;
 
-    const nextTurns: ChatTurn[] = [...turns, { role: "user", content: nextQuestion }];
+    const userTurn: ChatTurn = { role: "user", content: nextQuestion, status: "completed" };
+    const nextTurns: ChatTurn[] = [...turns, userTurn];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, turns: nextTurns, updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
@@ -458,9 +496,9 @@ export function SearchContent({
       }
       const payload = (await response.json()) as { answer: string; citations: Citation[]; thread_id?: string; title?: string | null };
       const seconds = Math.max(1, Math.round((Date.now() - requestStartedAt) / 1000));
-      const assistantTurn: ChatTurn = { role: "assistant", content: payload.answer, citations: payload.citations };
+      const assistantTurn: ChatTurn = { role: "assistant", content: payload.answer, citations: payload.citations, status: "completed" };
       setTurns((current) => [...current, assistantTurn]);
-      setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: payload.title || thread.title, turns: [...thread.turns, assistantTurn], updatedAt: new Date().toISOString() } : thread));
+      setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: payload.title || thread.title, turns: [...thread.turns, assistantTurn], messages: [...thread.messages, assistantTurn], updatedAt: new Date().toISOString() } : thread));
       recordRecentSearch(nextQuestion);
       appendActivity(activeWorkspace, "search.performed", nextQuestion);
       setMomentContext(null);
@@ -473,11 +511,41 @@ export function SearchContent({
     }
   }
 
+  async function regenerateMessage(message: ChatTurn) {
+    if (!activeThreadId || !message.id || message.role !== "assistant" || regeneratingId) return;
+    setRegeneratingId(message.id);
+    setLoading(true);
+    setStatus(message.status === "failed" ? "Retrying the answer..." : "Regenerating the answer...");
+    try {
+      const response = await fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/messages/${message.id}/${message.status === "failed" ? "retry" : "regenerate"}`, { method: "POST" });
+      if (!response.ok) throw new Error(`Could not regenerate answer (${response.status})`);
+      const thread = normalizeThread(await response.json() as Parameters<typeof normalizeThread>[0]);
+      setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
+      setTurns(thread.turns);
+      setStatus("Answer regenerated. Choose another branch from the response controls when available.");
+    } catch (cause) {
+      setStatus(cause instanceof Error ? cause.message : "Could not regenerate answer");
+    } finally {
+      setLoading(false);
+      setRegeneratingId(null);
+    }
+  }
+
+  async function selectMessageBranch(messageId: string) {
+    if (!activeThreadId) return;
+    const response = await fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/messages/${messageId}/select`, { method: "POST" });
+    if (!response.ok) return;
+    const thread = normalizeThread(await response.json() as Parameters<typeof normalizeThread>[0]);
+    setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
+    setTurns(thread.turns);
+    setStatus("Conversation branch selected.");
+  }
+
   async function startNewThread() {
     const response = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
     if (!response.ok) return;
-    const thread = (await response.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] };
-    const nextThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] };
+    const thread = (await response.json()) as Parameters<typeof normalizeThread>[0];
+    const nextThread = normalizeThread(thread);
     setThreads((current) => [nextThread, ...current]);
     setActiveThreadId(nextThread.id);
     setTurns([]);
@@ -714,8 +782,13 @@ export function SearchContent({
               ) : (
                 turns.map((turn, index) => {
                   const citations = turn.citations ?? [];
-                  const citationKey = `${turn.role}-${index}`;
+                  const citationKey = `${turn.id || turn.role}-${index}`;
                   const showAll = expandedCitations[citationKey] ?? false;
+                  const branchMessages = turn.id && turn.parentId
+                    ? (activeThread?.messages || []).filter((candidate) => candidate.role === turn.role && candidate.parentId === turn.parentId)
+                    : [];
+                  const branchIndex = turn.id ? branchMessages.findIndex((candidate) => candidate.id === turn.id) : -1;
+                  const isFailed = turn.status === "failed";
                   const visibleCitations = showAll ? citations : citations.slice(0, 3);
 
                   return (
@@ -724,7 +797,18 @@ export function SearchContent({
                         <div className="search-meta">
                           <p className="pill">{turn.role === "user" ? "You" : "Vivadeo"}</p>
                           {turn.role === "assistant" ? (
-                            <p className="search-answer-text">{turn.content}</p>
+                            <>
+                              <p className="search-answer-text">{turn.content || (isFailed ? "Vivadeo could not prepare this answer." : "Generating answer…")}</p>
+                              {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
+                              <div className="chat-message-actions">
+                                {turn.id ? <button className="button-secondary" type="button" disabled={loading} onClick={() => void regenerateMessage(turn)}>{isFailed ? "Retry" : "Regenerate"}</button> : null}
+                                {branchMessages.length > 1 ? <span className="chat-branch-control" aria-label="Answer branches">
+                                  <button type="button" className="button-secondary" disabled={branchIndex <= 0} onClick={() => void selectMessageBranch(branchMessages[branchIndex - 1].id!)} aria-label="Previous answer branch">←</button>
+                                  <span>{branchIndex + 1} / {branchMessages.length}</span>
+                                  <button type="button" className="button-secondary" disabled={branchIndex === branchMessages.length - 1} onClick={() => void selectMessageBranch(branchMessages[branchIndex + 1].id!)} aria-label="Next answer branch">→</button>
+                                </span> : null}
+                              </div>
+                            </>
                           ) : (
                             <h3>{turn.content}</h3>
                           )}

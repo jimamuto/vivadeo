@@ -155,10 +155,17 @@ class ChatThread(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="New thread")
+    current_message_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_thread_messages.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    messages: Mapped[list["ChatThreadMessage"]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="ChatThreadMessage.created_at")
+    messages: Mapped[list["ChatThreadMessage"]] = relationship(
+        back_populates="thread",
+        cascade="all, delete-orphan",
+        order_by="ChatThreadMessage.created_at",
+        foreign_keys="ChatThreadMessage.thread_id",
+    )
+    current_message: Mapped["ChatThreadMessage | None"] = relationship(foreign_keys=[current_message_id], post_update=True)
     sources: Mapped[list["ChatThreadVideo"]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="ChatThreadVideo.created_at")
 
 
@@ -196,12 +203,19 @@ class ChatThreadMessage(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     thread_id: Mapped[str] = mapped_column(String(36), ForeignKey("chat_threads.id", ondelete="CASCADE"), nullable=False)
+    parent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_thread_messages.id", ondelete="SET NULL"))
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     citations: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="completed")
+    error: Mapped[str | None] = mapped_column(Text)
+    generation_metadata: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    thread: Mapped[ChatThread] = relationship(back_populates="messages")
+    thread: Mapped[ChatThread] = relationship(back_populates="messages", foreign_keys=[thread_id])
+    parent: Mapped["ChatThreadMessage | None"] = relationship(remote_side=[id], back_populates="children", foreign_keys=[parent_id])
+    children: Mapped[list["ChatThreadMessage"]] = relationship(back_populates="parent", foreign_keys=[parent_id])
 
 
 class Job(Base):

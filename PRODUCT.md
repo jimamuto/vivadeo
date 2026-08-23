@@ -32,6 +32,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Search chat sends conversation history to backend `/v1/search/chat` through `/api/proxy/v1/search/chat`.
 - Search chat retrieves relevant video chunks, attaches overlapping transcript segments, and asks Modal-hosted Gemma E4B through Modal remote functions, not HTTP model endpoints.
 - Search answers return transcript citations with video filename, source URI, and timestamp ranges.
+- Chat messages persist as a selected conversation branch; assistant answers can be regenerated or retried without overwriting earlier answers.
 - Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
 - Recent searches are client-only in `localStorage` under `vivadeo.recent-searches`; there is no server sync or workspace scoping yet.
 - Workspace value in search is derived from the `vivadeo_workspace` cookie on the client.
