@@ -1859,7 +1859,7 @@ main { width: 100%; }
 .chat-source-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--tan); }
 .chat-source-succeeded .chat-source-dot, .chat-source-ready .chat-source-dot { background: var(--oxblood); }
 .chat-source-failed .chat-source-dot, .chat-source-canceled .chat-source-dot, .chat-source-rejected .chat-source-dot { background: var(--blackboard); }
-.chat-tool-panel, .chat-upload-panel { margin-top: 10px; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-solid); }
+.chat-tool-panel { margin-top: 10px; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-solid); }
 .chat-tool-panel { display: grid; gap: 10px; }
 .chat-tool-panel strong { font-size: .86rem; }
 .chat-tool-panel p { margin: 4px 0 0; font-size: .76rem; }
@@ -1873,18 +1873,14 @@ main { width: 100%; }
 .chat-video-picker-item:disabled { opacity: .55; cursor: default; }
 .chat-video-picker-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-video-picker-item small { flex: 0 0 auto; color: var(--muted); font-size: .7rem; }
-.chat-upload-panel { display: grid; gap: 10px; }
-.chat-upload-head, .chat-upload-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.chat-upload-head { color: var(--muted); font-size: .74rem; }
-.chat-upload-head strong { color: var(--color-content); font-size: .86rem; }
-.chat-upload-item { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 5px 10px; align-items: center; }
-.chat-upload-meta { grid-column: 1 / -1; min-width: 0; font-size: .76rem; }
-.chat-upload-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.chat-upload-meta span { flex: 0 0 auto; color: var(--muted); font-size: .7rem; }
-.chat-upload-track { grid-column: 1; height: 6px; overflow: hidden; border-radius: 999px; background: var(--color-border); }
-.chat-upload-track span { display: block; height: 100%; border-radius: inherit; background: var(--color-oxblood); transition: width .3s ease-out; }
-.chat-upload-item small { color: var(--muted); font-size: .7rem; text-align: right; }
-.chat-upload-failed .chat-upload-track span, .chat-upload-rejected .chat-upload-track span { background: var(--color-blackboard); }
+.chat-inline-attachments { display: grid; gap: 7px; padding: 0 18px 11px; }
+.chat-inline-attachment { min-width: 0; }
+.chat-inline-attachment-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .7rem; }
+.chat-inline-attachment-meta strong { min-width: 0; overflow: hidden; color: var(--color-content); font-size: .74rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.chat-inline-attachment-meta span { flex: 0 0 auto; }
+.chat-inline-attachment-track { height: 4px; margin-top: 5px; overflow: hidden; border-radius: 999px; background: var(--color-border); }
+.chat-inline-attachment-track span { display: block; height: 100%; border-radius: inherit; background: var(--color-oxblood); transition: width .2s ease-out; }
+.chat-upload-failed .chat-inline-attachment-track span, .chat-upload-rejected .chat-inline-attachment-track span { background: var(--color-blackboard); }
 
 .chat-moment-context {
   display: inline-flex;
@@ -1951,7 +1947,7 @@ main { width: 100%; }
 }
 
 .dashboard-stage:has(.chat-shell) { padding: 0; gap: 0; }
-.dashboard-stage > .chat-shell { position: relative; min-height: 100vh; margin: 0; border: 1px solid var(--color-border); border-top: 0; border-bottom: 0; border-radius: 0; overflow: hidden; padding: 0; background: var(--color-surface-strong); }
+.dashboard-stage > .chat-shell { position: relative; min-height: 100vh; margin: 0; border: 1px solid var(--color-border); border-top: 0; border-bottom: 0; border-radius: 0; overflow: visible; padding: 0; background: var(--color-surface-strong); }
 .dashboard-stage > .search-shell { display: block; min-height: calc(100vh - 126px); }
 .dashboard-stage > .search-shell .search-filters,
 .dashboard-stage > .search-shell .search-preview { display: none; }
@@ -2002,7 +1998,7 @@ main { width: 100%; }
 .chat-shell.history-closed .search-preview { display: flex !important; min-width: 0; width: 300px; overflow: hidden; opacity: 0; transform: translateX(18px); pointer-events: none; transition: opacity 160ms ease, transform 260ms ease; }
 .chat-shell.history-open .search-preview { opacity: 1; transform: translateX(0); transition: opacity 180ms ease 80ms, transform 260ms ease; }
 .chat-shell .search-layout { display: block; min-width: 0; }
-.chat-shell.history-open .search-preview { display: flex !important; flex-direction: column; min-height: 100vh; margin: 0; padding: 0 14px 24px 16px; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; background: var(--color-surface); }
+.chat-shell.history-open .search-preview { position: sticky; top: 0; display: flex !important; flex-direction: column; height: 100vh; max-height: 100vh; min-height: 100vh; margin: 0; padding: 0 14px 24px 16px; overflow-y: auto; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; background: var(--color-surface); }
 .chat-history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 -14px 0 -16px; padding: 18px 16px 14px 24px; border-bottom: 1px solid var(--color-border); }
 .chat-history-head h2 { margin: 0; font-size: .95rem; }
 .chat-history-head p { display: none; }
@@ -2047,7 +2043,7 @@ main { width: 100%; }
 @media (max-width: 840px) {
   .chat-shell.history-open { grid-template-columns: 1fr !important; }
   .chat-shell.history-closed { grid-template-columns: 1fr !important; }
-  .chat-shell.history-open .search-preview { min-height: auto; }
+  .chat-shell.history-open .search-preview { position: static; height: auto; max-height: none; min-height: auto; overflow: visible; }
   .chat-shell.history-closed .search-preview { display: none !important; }
   .chat-starters { grid-template-columns: 1fr; }
 }

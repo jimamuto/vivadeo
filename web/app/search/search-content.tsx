@@ -504,9 +504,28 @@ export function SearchContent({
       form.append("transcribe", "true");
       form.append("thread_id", threadId);
       try {
-        const response = await fetch("/api/proxy/v1/videos/upload", { method: "POST", body: form });
-        if (!response.ok) throw new Error(`Upload failed (${response.status})`);
-        const job = (await response.json()) as { id: string; video_id?: string };
+        const job = await new Promise<{ id: string; video_id?: string }>((resolve, reject) => {
+          const request = new XMLHttpRequest();
+          request.open("POST", "/api/proxy/v1/videos/upload");
+          request.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, progress: event.loaded / event.total } : item));
+          };
+          request.onload = () => {
+            if (request.status < 200 || request.status >= 300) {
+              reject(new Error(`Upload failed (${request.status})`));
+              return;
+            }
+            try {
+              resolve(JSON.parse(request.responseText) as { id: string; video_id?: string });
+            } catch {
+              reject(new Error("Upload returned an invalid response."));
+            }
+          };
+          request.onerror = () => reject(new Error("Upload failed. Check the connection and try again."));
+          request.onabort = () => reject(new Error("Upload canceled."));
+          request.send(form);
+        });
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
         await watchUploadJob(itemId, job.id);
         await refreshThreadSources(threadId);
@@ -781,6 +800,17 @@ export function SearchContent({
                   placeholder="What did the speaker say about the launch timeline?"
                   disabled={loading}
                 />
+                {uploadItems.length ? (
+                  <div className="chat-inline-attachments" aria-live="polite" aria-label="Video attachments">
+                    {uploadItems.map((item) => {
+                      const percent = Math.max(0, Math.min(100, Math.round(item.progress * 100)));
+                      return <div key={item.id} className={`chat-inline-attachment chat-upload-${item.status}`}>
+                        <div className="chat-inline-attachment-meta"><strong title={item.filename}>{item.filename}</strong><span>{item.error || item.message || (item.status === "succeeded" ? "Ready" : item.status)} · {percent}%</span></div>
+                        <div className="chat-inline-attachment-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></div>
+                      </div>;
+                    })}
+                  </div>
+                ) : null}
               </div>
               <button className="chat-send" type="submit" disabled={loading || !question.trim()} aria-label={loading ? "Asking" : "Ask"}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>
@@ -861,19 +891,6 @@ export function SearchContent({
                   </div>
                 ) : <p className="muted">No videos are available yet. Attach a file or add a URL first.</p>}
               </div>
-            ) : null}
-            {uploadItems.length ? (
-              <section className="chat-upload-panel" aria-live="polite" aria-label="Video upload progress">
-                <div className="chat-upload-head"><strong>Video attachments</strong><span>{uploadItems.filter((item) => ["succeeded", "ready"].includes(item.status)).length} of {uploadItems.length} ready</span></div>
-                {uploadItems.map((item) => {
-                  const percent = Math.max(0, Math.min(100, Math.round(item.progress * 100)));
-                  return <div key={item.id} className={`chat-upload-item chat-upload-${item.status}`}>
-                    <div className="chat-upload-meta"><strong title={item.filename}>{item.filename}</strong><span>{item.error || item.message || (item.status === "succeeded" ? "Ready for questions" : item.status)}</span></div>
-                    <div className="chat-upload-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></div>
-                    <small>{percent}%</small>
-                  </div>;
-                })}
-              </section>
             ) : null}
             <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts.</p>
             {status ? (
