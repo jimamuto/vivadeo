@@ -191,9 +191,7 @@ export function AccountSettingsPanel({
               <button className="button" type="button" onClick={saveProfile}>Save profile</button>
               {!emailVerified ? (
                 <button className="button-secondary" type="button" onClick={resendVerification}>Send verification email</button>
-              ) : (
-                <span className="pill">Email verified</span>
-              )}
+              ) : null}
             </div>
             {renderStatus(profileStatus)}
             {renderStatus(verifyStatus)}
