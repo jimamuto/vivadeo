@@ -8,20 +8,21 @@
   --color-tan: #C09F80;
 
   /* Neutral primitives */
-  --color-cream-50: #FFF9F3;
-  --color-cream-100: #F7F3EE;
-  --color-cream-200: #EDE4DA;
-  --color-cream-300: #E6D9CC;
+  --color-surface-solid: #FFFFFF;
+  --color-cream-50: var(--color-surface-solid);
+  --color-cream-100: var(--color-surface-solid);
+  --color-cream-200: var(--color-surface-solid);
+  --color-cream-300: var(--color-surface-solid);
   --color-ink-900: #2D2422;
   --color-ink-700: #665850;
 
   /* Semantic surfaces and content */
   --color-background: var(--color-cream-100);
   --color-background-subtle: var(--color-cream-200);
-  --color-surface: rgba(255, 251, 247, 0.94);
-  --color-surface-strong: var(--color-cream-50);
-  --color-surface-translucent: rgba(255, 251, 245, 0.72);
-  --color-surface-rail: rgba(247, 240, 232, 0.82);
+  --color-surface: color-mix(in srgb, var(--color-surface-solid) 94%, transparent);
+  --color-surface-strong: var(--color-surface-solid);
+  --color-surface-translucent: color-mix(in srgb, var(--color-surface-solid) 92%, transparent);
+  --color-surface-rail: var(--color-surface-solid);
   --color-content: var(--color-ink-900);
   --color-content-muted: var(--color-ink-700);
   --color-content-inverse: var(--color-cream-100);
