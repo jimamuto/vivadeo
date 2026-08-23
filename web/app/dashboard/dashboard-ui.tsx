@@ -542,7 +542,7 @@ export function JobsPanel({ jobs }: { jobs: Job[]; }) {
   );
 }
 
-export function LibraryPanel({ videos, jobs, initialVideoId = "" }: { videos: Video[]; jobs: Job[]; initialVideoId?: string }) {
+export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTime }: { videos: Video[]; jobs: Job[]; initialVideoId?: string; initialStartTime?: number }) {
   const permissions = useWorkspacePermissions();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState(videos);
@@ -558,6 +558,7 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "" }: { videos: Vi
   const [chunksStatus, setChunksStatus] = useState<FetchStatus>({ state: "idle" });
   const [actionStatus, setActionStatus] = useState<FetchStatus>({ state: "idle" });
   const [draggedVideoId, setDraggedVideoId] = useState<string | null>(null);
+  const detailPlayerRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setSavedClips(readSavedClips());
@@ -598,6 +599,15 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "" }: { videos: Vi
   const selectedMediaUrl = selectedVideo?.object_key
     ? `/api/proxy/v1/media/${selectedVideo.object_key.split("/").map(encodeURIComponent).join("/")}`
     : null;
+
+  useEffect(() => {
+    const player = detailPlayerRef.current;
+    if (!player || initialStartTime === undefined || !selectedVideo) return;
+    const seek = () => { player.currentTime = Math.min(initialStartTime, player.duration || initialStartTime); };
+    if (player.readyState >= 1) seek();
+    else player.addEventListener("loadedmetadata", seek, { once: true });
+    return () => player.removeEventListener("loadedmetadata", seek);
+  }, [initialStartTime, selectedVideo?.id]);
 
   useEffect(() => {
     if (!selectedVideo) {
@@ -847,7 +857,7 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "" }: { videos: Vi
               </div>
             </div>
             {selectedMediaUrl ? (
-              <video className="library-detail-player" src={selectedMediaUrl} controls preload="metadata" />
+              <video ref={detailPlayerRef} className="library-detail-player" src={selectedMediaUrl} controls preload="metadata" />
             ) : null}
             <div className="detail-grid">
               <article className="detail-card">

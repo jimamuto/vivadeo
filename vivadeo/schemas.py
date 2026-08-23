@@ -98,6 +98,7 @@ class UrlIngestRequest(BaseModel):
     url: str
     max_height: int = 480
     transcribe: bool = True
+    thread_id: str | None = None
 
 
 class LocalPathIngestRequest(BaseModel):
@@ -137,6 +138,19 @@ class ChatThreadUpdate(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
 
 
+class ChatThreadSourceRequest(BaseModel):
+    video_ids: list[str] = Field(default_factory=list, min_length=1)
+
+
+class ChatThreadSourceResponse(BaseModel):
+    video_id: str
+    filename: str
+    status: str
+    duration: float | None = None
+    url: str | None = None
+    created_at: datetime
+
+
 class ChatOnboardingState(BaseModel):
     completed: bool
 
@@ -147,6 +161,9 @@ class ChatRequest(BaseModel):
     video_id: str | None = None
     video_ids: list[str] = Field(default_factory=list)
     thread_id: str | None = None
+    focus_video_id: str | None = None
+    focus_start_time: float | None = Field(default=None, ge=0)
+    focus_end_time: float | None = Field(default=None, ge=0)
 
 
 class ChatCitation(BaseModel):
@@ -181,6 +198,7 @@ class ChatThreadResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: list[ChatThreadMessageResponse] = Field(default_factory=list)
+    sources: list[ChatThreadSourceResponse] = Field(default_factory=list)
 
 
 class ClipRequest(BaseModel):

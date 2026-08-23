@@ -29,11 +29,21 @@ type ChatTurn = ChatMessage & {
   citations?: Citation[];
 };
 
+export type ThreadSource = {
+  video_id: string;
+  filename: string;
+  status: string;
+  duration: number | null;
+  url: string | null;
+  created_at: string;
+};
+
 export type ChatThread = {
   id: string;
   title: string;
   turns: ChatTurn[];
   updatedAt: string;
+  sources: ThreadSource[];
 };
 
 
@@ -41,6 +51,25 @@ type VideoOption = {
   id: string;
   filename: string;
   status: string;
+  url?: string | null;
+};
+
+type UploadItem = {
+  id: string;
+  filename: string;
+  jobId?: string;
+  videoId?: string;
+  status: string;
+  progress: number;
+  message?: string | null;
+  error?: string | null;
+};
+
+type MomentContext = {
+  videoId: string;
+  filename: string;
+  startTime: number;
+  endTime: number;
 };
 
 const starterPaths = {
@@ -93,6 +122,10 @@ export function SearchContent({
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
   const [historyOpen, setHistoryOpen] = useState(true);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
+  const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
+  const [activeEvidence, setActiveEvidence] = useState<Citation | null>(null);
+  const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const initialQuerySubmitted = useRef(false);
 
   useEffect(() => {
@@ -130,8 +163,8 @@ export function SearchContent({
     void fetch("/api/proxy/v1/chat/threads", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load chat threads");
-        const payload = (await response.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatTurn[] }>;
-        const loadedThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages }));
+        const payload = (await response.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] }>;
+        const loadedThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] }));
         if (loadedThreads.length) {
           setThreads(loadedThreads);
           const selectedId = loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
@@ -142,8 +175,8 @@ export function SearchContent({
         if (threads.length) return;
         const created = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
         if (!created.ok) return;
-        const thread = (await created.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[] };
-        const initialThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages };
+        const thread = (await created.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] };
+        const initialThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] };
         setThreads([initialThread]);
         setActiveThreadId(thread.id);
       })
@@ -174,6 +207,108 @@ export function SearchContent({
     setRecentSearches((current) => [next, ...current.filter((item) => item !== next)].slice(0, 6));
   }
 
+  async function refreshThreadSources(threadId: string) {
+    const [sourcesResponse, videosResponse] = await Promise.all([
+      fetch(`/api/proxy/v1/chat/threads/${threadId}/sources`, { cache: "no-store" }),
+      fetch("/api/proxy/v1/videos", { cache: "no-store" }),
+    ]);
+    if (!sourcesResponse.ok) return;
+    const sources = (await sourcesResponse.json()) as ThreadSource[];
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, sources } : thread));
+    if (videosResponse.ok) {
+      const payload = (await videosResponse.json()) as VideoOption[];
+      setVideos(payload.filter((video) => video.status !== "archived"));
+    }
+  }
+
+  function watchUploadJob(itemId: string, jobId: string) {
+    return new Promise<void>((resolve) => {
+      const stream = new EventSource(`/api/job-events/${jobId}`);
+      stream.addEventListener("job", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress: number; message?: string | null; error?: string | null };
+          setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: payload.status, progress: payload.progress, message: payload.message, error: payload.error } : item));
+          if (["succeeded", "failed", "canceled"].includes(payload.status)) {
+            stream.close();
+            resolve();
+          }
+        } catch {
+          stream.close();
+          resolve();
+        }
+      });
+      stream.onerror = () => {
+        stream.close();
+        setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "unknown", message: "Progress connection lost" } : item));
+        resolve();
+      };
+    });
+  }
+
+  async function ingestVideoUrl() {
+    if (!activeThreadId) {
+      setStatus("Create a thread before adding a video URL.");
+      return;
+    }
+    const url = window.prompt("Paste a permitted video URL")?.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      setStatus("Video URLs must use http or https.");
+      return;
+    }
+    const itemId = `${Date.now()}-url`;
+    setUploadItems((current) => [...current, { id: itemId, filename: url, status: "uploading", progress: 0 }]);
+    try {
+      const response = await fetch("/api/proxy/v1/videos/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, max_height: 480, transcribe: true, thread_id: activeThreadId }),
+      });
+      if (!response.ok) throw new Error(`URL ingest failed (${response.status})`);
+      const job = (await response.json()) as { id: string; video_id?: string };
+      setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
+      await watchUploadJob(itemId, job.id);
+      await refreshThreadSources(activeThreadId);
+    } catch (cause) {
+      setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "URL ingest failed" } : item));
+    }
+  }
+
+  async function uploadVideos(files: FileList | File[]) {
+    if (!activeThreadId) {
+      setStatus("Create a thread before attaching videos.");
+      return;
+    }
+    const selected = Array.from(files);
+    for (const file of selected) {
+      const itemId = `${Date.now()}-${file.name}`;
+      if (!file.type.startsWith("video/")) {
+        setUploadItems((current) => [...current, { id: itemId, filename: file.name, status: "rejected", progress: 0, error: "Choose a video file." }]);
+        continue;
+      }
+      if (file.size > 512 * 1024 * 1024) {
+        setUploadItems((current) => [...current, { id: itemId, filename: file.name, status: "rejected", progress: 0, error: "Videos must be 512 MB or smaller." }]);
+        continue;
+      }
+      setUploadItems((current) => [...current, { id: itemId, filename: file.name, status: "uploading", progress: 0 }]);
+      const form = new FormData();
+      form.append("file", file);
+      form.append("transcribe", "true");
+      form.append("thread_id", activeThreadId);
+      try {
+        const response = await fetch("/api/proxy/v1/videos/upload", { method: "POST", body: form });
+        if (!response.ok) throw new Error(`Upload failed (${response.status})`);
+        const job = (await response.json()) as { id: string; video_id?: string };
+        setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
+        await watchUploadJob(itemId, job.id);
+        await refreshThreadSources(activeThreadId);
+        setVideosLoaded(true);
+      } catch (cause) {
+        setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } : item));
+      }
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextQuestion = question.trim();
@@ -188,7 +323,6 @@ export function SearchContent({
     setQuestion("");
     const requestStartedAt = Date.now();
     setLoading(true);
-    void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
     setStartedAt(requestStartedAt);
     setElapsedSeconds(0);
     setStatus("Finding evidence, then preparing an answer...");
@@ -203,6 +337,9 @@ export function SearchContent({
           video_id: videoId || null,
           video_ids: videoIds,
           thread_id: activeThreadId || null,
+          focus_video_id: momentContext?.videoId || null,
+          focus_start_time: momentContext?.startTime ?? null,
+          focus_end_time: momentContext?.endTime ?? null,
           model: chatModel,
         }),
       });
@@ -217,6 +354,7 @@ export function SearchContent({
       setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, title: payload.title || thread.title, turns: [...thread.turns, assistantTurn], updatedAt: new Date().toISOString() } : thread));
       recordRecentSearch(nextQuestion);
       appendActivity(activeWorkspace, "search.performed", nextQuestion);
+      setMomentContext(null);
       setStatus(payload.citations.length ? `Answer ready in ${seconds}s with ${payload.citations.length} cited evidence range(s).` : `Answer ready in ${seconds}s. No cited evidence yet.`);
     } catch (cause) {
       setStatus(cause instanceof Error ? cause.message : "Chat failed");
@@ -229,14 +367,16 @@ export function SearchContent({
   async function startNewThread() {
     const response = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
     if (!response.ok) return;
-    const thread = (await response.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[] };
-    const nextThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages };
+    const thread = (await response.json()) as { id: string; title: string; updated_at: string; messages: ChatTurn[]; sources?: ThreadSource[] };
+    const nextThread = { id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] };
     setThreads((current) => [nextThread, ...current]);
     setActiveThreadId(nextThread.id);
     setTurns([]);
     setQuestion("");
     setStatus(null);
     setExpandedCitations({});
+    setActiveEvidence(null);
+    setMomentContext(null);
   }
 
   function openThread(thread: ChatThread) {
@@ -245,6 +385,8 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setExpandedCitations({});
+    setActiveEvidence(null);
+    setMomentContext(null);
     setThreadMenuId(null);
   }
 
@@ -276,9 +418,12 @@ export function SearchContent({
   const firstName = (profileName || "there").split(/[ @]/)[0];
   const greetingSeed = Array.from(profileName || "there").reduce((sum, character) => sum + character.charCodeAt(0), 0);
   const greeting = GREETINGS[greetingSeed % GREETINGS.length];
+  const activeThread = threads.find((thread) => thread.id === activeThreadId);
+  const threadSources = activeThread?.sources || [];
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting;
+  const activeEvidenceSource = activeEvidence ? videos.find((video) => video.id === activeEvidence.video_id) || threadSources.find((source) => source.video_id === activeEvidence.video_id) : null;
 
   return (
     <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={profileName}>
@@ -324,9 +469,38 @@ export function SearchContent({
 
         <div className="search-main">
           <section className="surface-section search-query">
+            <input
+              ref={uploadInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={(event) => {
+                if (event.target.files?.length) void uploadVideos(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            {threadSources.length || uploadItems.length ? (
+              <div className="chat-source-rail" aria-label="Thread video sources">
+                {threadSources.map((source) => (
+                  <span key={source.video_id} className={`chat-source-chip chat-source-${source.status}`}>
+                    <span className="chat-source-dot" aria-hidden="true" />
+                    {source.filename}
+                    <button type="button" onClick={() => void fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/sources/${source.video_id}`, { method: "DELETE" }).then(() => refreshThreadSources(activeThreadId))} aria-label={`Remove ${source.filename}`}>×</button>
+                  </span>
+                ))}
+                {uploadItems.filter((item) => !item.videoId || !threadSources.some((source) => source.video_id === item.videoId)).map((item) => (
+                  <span key={item.id} className={`chat-source-chip chat-source-${item.status}`}>
+                    <span className="chat-source-dot" aria-hidden="true" />
+                    {item.filename} {item.progress > 0 ? `${Math.round(item.progress * 100)}%` : item.status}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <form className="chat-composer" onSubmit={submit}>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
+                {momentContext ? <button type="button" className="chat-moment-context" onClick={() => setMomentContext(null)}>Focused on {momentContext.filename} · {fmt(momentContext.startTime)} ×</button> : null}
                 <textarea
                   id="query"
                   rows={1}
@@ -341,8 +515,9 @@ export function SearchContent({
               </button>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
-                  <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Choose videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Choose videos</span></button>
+                  <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach videos</span></button>
                   <button type="button" onClick={() => document.getElementById("query")?.focus()} aria-label="Focus question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-7-7 7 7-7 7" /></svg><span>Focus question</span></button>
+                  <button type="button" onClick={() => void ingestVideoUrl()} aria-label="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
                   <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Browse videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse videos</span></button>
                   <div className="chat-model-control">
                     <span>Model</span>
@@ -421,9 +596,17 @@ export function SearchContent({
                               <span>{citation.filename} • {fmt(citation.start_time)} - {fmt(citation.end_time)}</span>
                               <strong className="detail-wrap">{citation.text}</strong>
                               <p className="muted">{citation.source_uri}</p>
-                              <Link className="button-secondary" href={`/dashboard/library?video_id=${encodeURIComponent(citation.video_id)}`}>
-                                Open video
-                              </Link>
+                              <div className="search-citation-actions">
+                                <button className="button-secondary" type="button" onClick={() => setActiveEvidence(citation)}>
+                                  Watch moment
+                                </button>
+                                <button className="button-secondary" type="button" onClick={() => { setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time }); document.getElementById("query")?.focus(); }}>
+                                  Ask about this moment
+                                </button>
+                                <Link className="button-secondary" href={`/dashboard/library?video_id=${encodeURIComponent(citation.video_id)}&t=${Math.floor(citation.start_time)}`}>
+                                  Open full video
+                                </Link>
+                              </div>
                             </article>
                           ))}
                           {citations.length > 3 ? (
@@ -443,6 +626,30 @@ export function SearchContent({
               )}
             </section>
           </section>
+          {activeEvidence ? (
+            <section className="chat-evidence-player" aria-label="Video evidence">
+              <div className="chat-evidence-player-head">
+                <div>
+                  <span className="muted">Evidence moment</span>
+                  <strong>{activeEvidence.filename} · {fmt(activeEvidence.start_time)}–{fmt(activeEvidence.end_time)}</strong>
+                </div>
+                <button type="button" className="history-toggle" onClick={() => setActiveEvidence(null)} aria-label="Close video evidence">×</button>
+              </div>
+              {activeEvidenceSource?.url ? (
+                <video
+                  key={`${activeEvidence.video_id}-${activeEvidence.start_time}`}
+                  className="chat-evidence-video"
+                  controls
+                  preload="metadata"
+                  src={activeEvidenceSource.url}
+                  onLoadedMetadata={(event) => { event.currentTarget.currentTime = activeEvidence.start_time; }}
+                />
+              ) : (
+                <p className="muted">This source is still processing or its playback URL is unavailable.</p>
+              )}
+              <p className="chat-evidence-transcript">{activeEvidence.text}</p>
+            </section>
+          ) : null}
         </div>
 
         <aside className="surface-section search-preview chat-history">

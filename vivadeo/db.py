@@ -159,6 +159,20 @@ class ChatThread(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     messages: Mapped[list["ChatThreadMessage"]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="ChatThreadMessage.created_at")
+    sources: Mapped[list["ChatThreadVideo"]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="ChatThreadVideo.created_at")
+
+
+class ChatThreadVideo(Base):
+    __tablename__ = "chat_thread_videos"
+    __table_args__ = (UniqueConstraint("thread_id", "video_id", name="uq_chat_thread_video"),)
+
+    thread_id: Mapped[str] = mapped_column(String(36), ForeignKey("chat_threads.id", ondelete="CASCADE"), primary_key=True)
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    thread: Mapped[ChatThread] = relationship(back_populates="sources")
+    video: Mapped[Video] = relationship()
 
 
 class ChatThreadMessage(Base):

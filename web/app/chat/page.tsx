@@ -21,8 +21,8 @@ export default async function ChatPage({
       fetch(getBackendUrl("/v1/chat/onboarding"), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" }),
     ]);
     if (threadsResponse.ok) {
-      const payload = (await threadsResponse.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatThread["turns"] }>;
-      initialThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages }));
+      const payload = (await threadsResponse.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatThread["turns"]; sources?: ChatThread["sources"] }>;
+      initialThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages, sources: thread.sources || [] }));
     }
     if (onboardingResponse.ok) onboardingCompleted = Boolean((await onboardingResponse.json()).completed);
   } catch {

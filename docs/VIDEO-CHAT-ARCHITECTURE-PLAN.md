@@ -1,5 +1,19 @@
 # Vivadeo Video Chat Architecture Plan
 
+## Implementation status
+
+The first implementation slice is now active on the `chat` branch:
+
+- Durable `chat_thread_videos` relationships and migration `0008_chat_thread_sources`
+- Chat-first multi-file upload and permitted URL ingest
+- Inline job progress through the existing SSE route
+- Thread source chips with remove actions and ready-state scope
+- Timestamped citation player with `Watch moment`
+- `Ask about this moment` context sent with the next chat request
+- Library deep links that seek to the cited timestamp
+
+Server-side frame extraction and cached derived clips remain a follow-up slice after timestamp playback is validated.
+
 ## 1. Goal
 
 Make Chat the primary workspace for video understanding. A user should be able to attach one or more videos, watch ingest progress in the conversation, ask questions against the ready sources, and open the exact evidence moment without leaving Chat.

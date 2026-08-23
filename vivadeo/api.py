@@ -17,6 +17,7 @@ from .db import (
     Base,
     ChatThread,
     ChatThreadMessage,
+    ChatThreadVideo,
     Clip,
     DeadLetterEntry,
     Job,
@@ -40,6 +41,8 @@ from .schemas import (
     ChatRequest,
     ChatOnboardingState,
     ChatResponse,
+    ChatThreadSourceRequest,
+    ChatThreadSourceResponse,
     ChatThreadUpdate,
     ChatThreadResponse,
     ClipRequest,
@@ -389,6 +392,28 @@ def update_settings(
     )
 
 
+def _get_chat_thread(session: Session, thread_id: str | None, organization_id: str) -> ChatThread | None:
+    if not thread_id:
+        return None
+    thread = session.scalar(select(ChatThread).where(ChatThread.id == thread_id, ChatThread.organization_id == organization_id))
+    if thread is None:
+        raise HTTPException(status_code=404, detail="Chat thread not found")
+    return thread
+
+
+def _attach_thread_sources(session: Session, thread: ChatThread, video_ids: list[str], organization_id: str) -> None:
+    unique_ids = list(dict.fromkeys(video_ids))
+    videos = session.scalars(select(Video).where(Video.organization_id == organization_id, Video.id.in_(unique_ids))).all()
+    found = {video.id: video for video in videos}
+    missing = [video_id for video_id in unique_ids if video_id not in found]
+    if missing:
+        raise HTTPException(status_code=404, detail="One or more videos not found")
+    attached = {source.video_id for source in thread.sources}
+    for video_id in unique_ids:
+        if video_id not in attached:
+            thread.sources.append(ChatThreadVideo(thread_id=thread.id, video_id=video_id, organization_id=organization_id))
+
+
 @app.post(
     "/v1/videos/upload",
     response_model=JobResponse,
@@ -397,10 +422,12 @@ def update_settings(
 async def upload_video(
     file: UploadFile = File(...),
     transcribe: bool = Form(True),
+    thread_id: str | None = Form(None),
     session: Session = Depends(db_dep),
     organization_id: str = Depends(workspace_dep),
 ):
     _get_workspace(session, organization_id)
+    thread = _get_chat_thread(session, thread_id, organization_id)
     video_id = new_id()
     job_id = new_id()
     filename = Path(file.filename or f"{video_id}.mp4").name
@@ -426,6 +453,8 @@ async def upload_video(
     )
     session.add(video)
     session.flush()
+    if thread is not None:
+        thread.sources.append(ChatThreadVideo(thread_id=thread.id, video_id=video_id, organization_id=organization_id))
     job = Job(
         id=job_id,
         organization_id=organization_id,
@@ -451,6 +480,7 @@ def ingest_video_url(
     organization_id: str = Depends(workspace_dep),
 ):
     _get_workspace(session, organization_id)
+    thread = _get_chat_thread(session, request.thread_id, organization_id) if request.thread_id else None
     video_id = new_id()
     job_id = new_id()
     video = Video(
@@ -463,6 +493,8 @@ def ingest_video_url(
     )
     session.add(video)
     session.flush()
+    if thread is not None:
+        thread.sources.append(ChatThreadVideo(thread_id=thread.id, video_id=video_id, organization_id=organization_id))
     job = Job(
         id=job_id,
         organization_id=organization_id,
@@ -966,6 +998,18 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
         title=thread.title,
         created_at=thread.created_at,
         updated_at=thread.updated_at,
+        sources=[
+            {
+                "video_id": source.video.id,
+                "filename": source.video.filename,
+                "status": source.video.status,
+                "duration": source.video.duration,
+                "url": None,
+                "created_at": source.created_at,
+            }
+            for source in thread.sources
+            if source.video is not None and source.video.status != "archived"
+        ],
         messages=[
             {
                 "id": message.id,
@@ -1048,6 +1092,59 @@ def create_chat_thread(
     return _chat_thread_response(thread)
 
 
+@app.get(
+    "/v1/chat/threads/{thread_id}/sources",
+    response_model=list[ChatThreadSourceResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def list_chat_thread_sources(
+    thread_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    return _chat_thread_response(thread).sources
+
+
+@app.post(
+    "/v1/chat/threads/{thread_id}/sources",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def add_chat_thread_sources(
+    thread_id: str,
+    request: ChatThreadSourceRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    _attach_thread_sources(session, thread, request.video_ids, organization_id)
+    thread.updated_at = utcnow()
+    session.commit()
+    session.refresh(thread)
+    return _chat_thread_response(thread)
+
+
+@app.delete(
+    "/v1/chat/threads/{thread_id}/sources/{video_id}",
+    status_code=204,
+    dependencies=[Depends(require_api_key)],
+)
+def remove_chat_thread_source(
+    thread_id: str,
+    video_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    source = next((item for item in thread.sources if item.video_id == video_id), None)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Thread source not found")
+    session.delete(source)
+    thread.updated_at = utcnow()
+    session.commit()
+
+
 @app.patch(
     "/v1/chat/threads/{thread_id}",
     response_model=ChatThreadResponse,
@@ -1110,17 +1207,34 @@ def search_chat(
     if thread is not None and (not thread.messages or thread.messages[-1].role != "user" or thread.messages[-1].content != question):
         thread.messages.append(ChatThreadMessage(id=new_id(), role="user", content=question))
 
+    scope_video_ids = list(dict.fromkeys(request.video_ids))
+    if not request.video_id and not scope_video_ids and thread is not None:
+        scope_video_ids = [source.video_id for source in thread.sources if source.video and source.video.status not in {"archived", "failed", "canceled"}]
+    if request.focus_video_id:
+        focused_video = session.scalar(select(Video).where(Video.id == request.focus_video_id, Video.organization_id == organization_id))
+        if focused_video is None:
+            raise HTTPException(status_code=404, detail="Focused video not found")
+        if thread is not None and not any(source.video_id == request.focus_video_id for source in thread.sources):
+            raise HTTPException(status_code=400, detail="Focused video is not attached to this thread")
+
     try:
         embedding = get_embedder().embed_query(question)
         chunk_hits = PostgresVideoStore(session).search(
             embedding,
-            n_results=request.results,
+            n_results=max(request.results, 30) if request.focus_video_id and request.focus_start_time is not None else request.results,
             organization_id=organization_id,
-            video_id=request.video_id,
-            **({"video_ids": request.video_ids} if request.video_ids else {}),
+            video_id=request.focus_video_id or request.video_id,
+            **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
         )
     finally:
         reset_embedder()
+
+    if request.focus_video_id and request.focus_start_time is not None:
+        focus_end = request.focus_end_time if request.focus_end_time is not None else request.focus_start_time + 15
+        chunk_hits = [
+            hit for hit in chunk_hits
+            if hit["video_id"] == request.focus_video_id and hit["end_time"] >= request.focus_start_time and hit["start_time"] <= focus_end
+        ]
 
     citations = []
     seen_segment_ids: set[str] = set()
