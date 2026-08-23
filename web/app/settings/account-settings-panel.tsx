@@ -20,6 +20,7 @@ export function AccountSettingsPanel({
   const nameParts = displayName.trim().split(/\s+/).filter(Boolean);
   const [firstName, setFirstName] = useState(nameParts[0] || "");
   const [surname, setSurname] = useState(nameParts.slice(1).join(" "));
+  const [savedProfileName, setSavedProfileName] = useState(displayName.trim());
   const [city, setCity] = useState("Nairobi");
   const [timezone, setTimezone] = useState("Africa/Nairobi");
   const [dateFormat, setDateFormat] = useState("dd/MM/yyyy HH:mm");
@@ -45,15 +46,19 @@ export function AccountSettingsPanel({
       .catch(() => undefined);
   }, []);
 
+  const profileName = [firstName.trim(), surname.trim()].filter(Boolean).join(" ");
+  const profileChanged = profileName !== savedProfileName;
+
   async function saveProfile() {
     setProfileStatus({ state: "loading" });
     try {
       const response = await fetch("/api/auth/update-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: [firstName.trim(), surname.trim()].filter(Boolean).join(" ") }),
+        body: JSON.stringify({ name: profileName }),
       });
       if (!response.ok) throw new Error(`Profile update failed (${response.status})`);
+      setSavedProfileName(profileName);
       setProfileStatus({ state: "ok", message: "Profile updated." });
     } catch (cause) {
       setProfileStatus({
@@ -187,12 +192,14 @@ export function AccountSettingsPanel({
               <label htmlFor="email">Email</label>
               <input id="email" value={email} readOnly />
             </div>
-            <div className="dashboard-panel-links">
-              <button className="button" type="button" onClick={saveProfile}>Save profile</button>
-              {!emailVerified ? (
-                <button className="button-secondary" type="button" onClick={resendVerification}>Send verification email</button>
-              ) : null}
-            </div>
+            {profileChanged || !emailVerified ? (
+              <div className="dashboard-panel-links">
+                {profileChanged ? <button className="button" type="button" onClick={saveProfile}>Save profile</button> : null}
+                {!emailVerified ? (
+                  <button className="button-secondary" type="button" onClick={resendVerification}>Send verification email</button>
+                ) : null}
+              </div>
+            ) : null}
             {renderStatus(profileStatus)}
             {renderStatus(verifyStatus)}
           </div>
