@@ -81,11 +81,11 @@ export function DashboardShell({
           <NavItem href="/chat" label="Chat" icon="chat" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="Jobs" icon="jobs" />
+          <NavItem href="/settings" label="Settings" icon="settings" />
         </nav>
         <div className="dashboard-account">
           {accountMenuOpen ? (
             <div className="dashboard-account-menu">
-              <Link href="/settings"><span>⚙</span> Settings</Link>
               <Link href="/settings#help"><span>?</span> Help &amp; Feedback</Link>
               <form action="/api/auth/sign-out" method="post"><button type="submit"><span>↪</span> Log out</button></form>
             </div>

@@ -95,7 +95,7 @@ export function AccountSettingsPanel({
   }
 
   return (
-    <section className="settings-section">
+    <section id="account" className="settings-section">
       <div className="settings-section-head">
         <h2>Account details</h2>
         <p className="muted">Update your profile, email verification, and password.</p>
@@ -122,7 +122,9 @@ export function AccountSettingsPanel({
         {renderStatus(verifyStatus)}
       </div>
 
-      <div className="form">
+      <div id="security" className="form settings-subsection">
+        <h3>Password</h3>
+        <p className="muted">Change your password without leaving settings.</p>
         <div className="field">
           <label htmlFor="currentPassword">Current password</label>
           <input

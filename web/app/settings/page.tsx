@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { headers } from "next/headers";
-import { AppTopbar } from "@/components/app-topbar";
+import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { auth } from "@/lib/auth";
 import { AccountSettingsPanel } from "./account-settings-panel";
 import { DeleteAccountPanel } from "./delete-account-panel";
@@ -12,16 +13,16 @@ export default async function SettingsPage() {
   const email = user?.email || "your@email.example";
   const emailVerified = Boolean(user && "emailVerified" in user ? user.emailVerified : false);
   const initial = (displayName || "V").trim().slice(0, 1).toUpperCase();
+  const workspace = (await cookies()).get("vivadeo_workspace")?.value || "default-workspace";
 
   return (
-    <div className="shell page">
-      <AppTopbar profileInitial={initial} />
+    <DashboardShell workspace={workspace} profileInitial={initial} profileName={displayName}>
 
       <header className="settings-header fade-in">
         <div>
           <p className="eyebrow">Personal workspace</p>
           <h1>Settings</h1>
-          <p className="muted">Manage your profile, password, and account preferences.</p>
+          <p className="muted">Manage your account settings and preferences.</p>
         </div>
         <div className="settings-header-actions">
           <Link href="/chat" className="button-secondary">Back to dashboard</Link>
@@ -31,6 +32,12 @@ export default async function SettingsPage() {
         </div>
       </header>
 
+      <nav className="settings-tabs" aria-label="Settings sections">
+        <a className="is-active" href="#account">Account</a>
+        <a href="#security">Security</a>
+        <a href="#privacy">Data &amp; privacy</a>
+      </nav>
+
       <div className="settings-surface settings-content fade-in">
         <AccountSettingsPanel
           email={email}
@@ -39,6 +46,6 @@ export default async function SettingsPage() {
         />
         <DeleteAccountPanel />
       </div>
-    </div>
+    </DashboardShell>
   );
 }

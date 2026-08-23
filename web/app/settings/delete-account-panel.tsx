@@ -24,7 +24,7 @@ export function DeleteAccountPanel() {
   }
 
   return (
-    <section className="settings-section settings-danger-section">
+    <section id="privacy" className="settings-section settings-danger-section">
       <div className="settings-section-head">
         <h2>Delete account</h2>
         <p className="muted">Request a confirmation link before permanently deleting your account.</p>
