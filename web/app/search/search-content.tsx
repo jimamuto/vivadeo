@@ -258,12 +258,7 @@ export function SearchContent({
           return;
         }
         if (threads.length) return;
-        const created = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
-        if (!created.ok) return;
-        const thread = (await created.json()) as Parameters<typeof normalizeThread>[0];
-        const initialThread = normalizeThread(thread);
-        setThreads([initialThread]);
-        setActiveThreadId(thread.id);
+        await ensureActiveThread();
       })
       .catch(() => undefined);
   }, []);
@@ -820,20 +815,20 @@ export function SearchContent({
                 if (selectedFiles.length) void uploadVideos(selectedFiles);
               }}
             />
-            {threadSources.length || uploadItems.length ? (
-              <div className="chat-source-rail" aria-label="Thread video sources">
-                {threadSources.map((source) => (
-                  <span key={source.video_id} className={`chat-source-chip chat-source-${source.status}`}>
-                    <span className="chat-source-dot" aria-hidden="true" />
-                    {source.filename}
-                    <button type="button" onClick={() => void fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/sources/${source.video_id}`, { method: "DELETE" }).then(() => refreshThreadSources(activeThreadId))} aria-label={`Remove ${source.filename}`}>×</button>
-                  </span>
-                ))}
-              </div>
-            ) : null}
             <form className="chat-composer" onSubmit={submit}>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
+                {threadSources.length ? (
+                  <div className="chat-source-rail" aria-label="Thread video sources">
+                    {threadSources.map((source) => (
+                      <span key={source.video_id} className={`chat-source-chip chat-source-${source.status}`}>
+                        <span className="chat-source-dot" aria-hidden="true" />
+                        {source.filename}
+                        <button type="button" onClick={() => void fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/sources/${source.video_id}`, { method: "DELETE" }).then(() => refreshThreadSources(activeThreadId))} aria-label={`Remove ${source.filename}`}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 {momentContext ? <button type="button" className="chat-moment-context" onClick={() => setMomentContext(null)}>Focused on {momentContext.filename} · {fmt(momentContext.startTime)} ×</button> : null}
                 <textarea
                   id="query"
@@ -1087,7 +1082,7 @@ export function SearchContent({
                 {filteredThreads.length ? filteredThreads.map((thread) => (
                   <div key={thread.id} className="chat-history-row">
                     <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
-                      <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
+                      <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
                     </button>
                     <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage thread">•••</button>
                     <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete thread">×</button>
