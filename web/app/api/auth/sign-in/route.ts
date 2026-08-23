@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { forwardAuthCookies } from "@/lib/auth-cookies";
-import { postAuthEndpoint } from "@/lib/auth";
+import { getWorkspaceForEmail, postAuthEndpoint } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   return NextResponse.redirect(new URL("/sign-in", request.url));
@@ -8,8 +8,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const form = await request.formData();
+  const email = String(form.get("email") || "").trim().toLowerCase();
   const authResponse = await postAuthEndpoint(request, "/sign-in/email", {
-    email: String(form.get("email") || ""),
+    email,
     password: String(form.get("password") || ""),
     callbackURL: new URL("/dashboard", request.url).toString(),
   });
@@ -17,11 +18,11 @@ export async function POST(request: NextRequest) {
   if (authResponse.ok) {
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
     forwardAuthCookies(authResponse, response);
+    const requestedWorkspace = request.nextUrl.searchParams.get("workspace") || request.cookies.get("vivadeo_workspace")?.value;
     const workspace =
-      request.nextUrl.searchParams.get("workspace") ||
-      request.cookies.get("vivadeo_workspace")?.value ||
-      process.env.VIVADEO_DEFAULT_ORG_ID ||
-      "default-workspace";
+      requestedWorkspace && requestedWorkspace !== "default-workspace"
+        ? requestedWorkspace
+        : (await getWorkspaceForEmail(email)) || requestedWorkspace || process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace";
     response.cookies.set("vivadeo_workspace", workspace, {
       httpOnly: true,
       sameSite: "lax",

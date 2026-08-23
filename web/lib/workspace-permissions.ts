@@ -12,19 +12,11 @@ function normalizeRole(role: string | null | undefined): WorkspaceRole {
   return "viewer";
 }
 
-export function useWorkspacePermissions(workspace?: string) {
+export function useWorkspacePermissions(_workspace?: string) {
   const [role, setRole] = useState<WorkspaceRole>("viewer");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const activeWorkspace =
-      workspace ||
-      document.cookie
-        .split("; ")
-        .find((item) => item.startsWith("vivadeo_workspace="))
-        ?.split("=")[1] ||
-      "default-workspace";
-
     void (async () => {
       try {
         const [sessionResponse, settingsResponse] = await Promise.all([
@@ -50,25 +42,20 @@ export function useWorkspacePermissions(workspace?: string) {
             return;
           }
         }
-        const membersResponse = await fetch(
-          `/api/auth/organization/list-members?organizationId=${encodeURIComponent(activeWorkspace)}`,
-        );
-        if (!membersResponse.ok) {
-          setRole(activeWorkspace === "default-workspace" ? "editor" : "viewer");
+        const roleResponse = await fetch("/api/workspace/role", { cache: "no-store" });
+        if (!roleResponse.ok) {
+          setRole("viewer");
           return;
         }
-        const membersPayload = (await membersResponse.json()) as {
-          members: Array<{ role: string; user?: { email?: string | null } }>;
-        };
-        const member = membersPayload.members.find((item) => item.user?.email === email);
-        setRole(member ? normalizeRole(member.role) : activeWorkspace === "default-workspace" ? "editor" : "viewer");
+        const rolePayload = (await roleResponse.json()) as { role?: string | null };
+        setRole(normalizeRole(rolePayload.role));
       } catch {
         setRole("viewer");
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [workspace]);
+  }, [_workspace]);
 
   return {
     role,

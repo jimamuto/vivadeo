@@ -245,41 +245,58 @@ function normalizeWorkspaceRole(role: string | null | undefined): WorkspaceRole 
   return "viewer";
 }
 
+async function getWorkspaceForEmail(email: string): Promise<string | null> {
+  if (!databaseUrl) return null;
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const rows = await sql<{ organization_id: string }[]>`
+      SELECT m.organization_id
+      FROM member m
+      JOIN "user" u ON u.id = m.user_id
+      WHERE lower(u.email) = ${email.trim().toLowerCase()}
+      ORDER BY m.created_at ASC
+      LIMIT 1
+    `;
+    return rows[0]?.organization_id || null;
+  } finally {
+    await sql.end();
+  }
+}
+
+async function getSessionEmail(request: Request): Promise<string | null> {
+  const sessionResponse = await authHandlers.GET(
+    createAuthEndpointRequest(request, "/get-session"),
+  );
+  if (!sessionResponse.ok) return null;
+  const sessionPayload = (await sessionResponse.json()) as { user?: { email?: string | null } };
+  return sessionPayload.user?.email?.trim().toLowerCase() || null;
+}
+
 async function getWorkspaceRoleForRequest(
   request: Request,
   organizationId: string,
 ): Promise<WorkspaceRole> {
-  const sessionResponse = await authHandlers.GET(
-    createAuthEndpointRequest(request, "/get-session"),
-  );
-  if (!sessionResponse.ok) return "viewer";
-  const sessionPayload = (await sessionResponse.json()) as {
-    user?: { email?: string | null };
-  };
-  const email = sessionPayload.user?.email;
+  const email = await getSessionEmail(request);
   if (!email) return "viewer";
 
   const overrides = await getWorkspaceRoleOverrides(organizationId);
   const overrideRole = overrides.workspaceRoles[email] || overrides.inviteRoles[email];
   if (overrideRole) return overrideRole;
 
-  const membersUrl = new URL(
-    `/api/auth/organization/list-members?organizationId=${encodeURIComponent(organizationId)}`,
-    request.url,
-  );
-  const membersResponse = await fetch(membersUrl, {
-    headers: {
-      cookie: request.headers.get("cookie") || "",
-      accept: "application/json",
-    },
-    cache: "no-store",
-  });
-  if (!membersResponse.ok) return organizationId === "default-workspace" ? "editor" : "viewer";
-  const membersPayload = (await membersResponse.json()) as {
-    members?: Array<{ role?: string | null; user?: { email?: string | null } }>;
-  };
-  const membership = membersPayload.members?.find((member) => member.user?.email === email);
-  return membership ? normalizeWorkspaceRole(membership.role) : organizationId === "default-workspace" ? "editor" : "viewer";
+  if (!databaseUrl) return "viewer";
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const rows = await sql<{ role: string | null }[]>`
+      SELECT m.role
+      FROM member m
+      JOIN "user" u ON u.id = m.user_id
+      WHERE m.organization_id = ${organizationId} AND lower(u.email) = ${email}
+      LIMIT 1
+    `;
+    return rows[0] ? normalizeWorkspaceRole(rows[0].role) : "viewer";
+  } finally {
+    await sql.end();
+  }
 }
 
-export { authHandlers, getWorkspaceRoleForRequest, normalizeWorkspaceRole, postAuthEndpoint };
+export { authHandlers, getSessionEmail, getWorkspaceRoleForRequest, getWorkspaceForEmail, normalizeWorkspaceRole, postAuthEndpoint };
