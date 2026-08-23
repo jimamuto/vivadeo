@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default async function ResetPasswordPage({
   searchParams,
@@ -10,10 +11,7 @@ export default async function ResetPasswordPage({
   return (
     <div className="shell page">
       <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
-        </div>
+        <div className="brand"><BrandLogo /></div>
         <Link href="/sign-in" className="button-secondary">
           Back to sign in
         </Link>

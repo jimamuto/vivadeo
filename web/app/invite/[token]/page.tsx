@@ -1,14 +1,12 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   return (
     <div className="shell" style={{ padding: "28px 0 48px" }}>
       <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
-        </div>
+        <div className="brand"><BrandLogo /></div>
         <Link href="/sign-in" className="button-secondary">Sign in</Link>
       </div>
 

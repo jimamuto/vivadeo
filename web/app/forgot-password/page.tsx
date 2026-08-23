@@ -1,13 +1,11 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function ForgotPasswordPage() {
   return (
     <div className="shell page">
       <div className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          Vivadeo
-        </div>
+        <div className="brand"><BrandLogo /></div>
         <Link href="/sign-in" className="button-secondary">Back to sign in</Link>
       </div>
 

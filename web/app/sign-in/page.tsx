@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SigninForm } from "./signin-form";
+import { BrandLogo } from "@/components/brand-logo";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: "Your email address has not been verified. Enter the code from your inbox.",
@@ -28,11 +29,11 @@ export default async function SignInPage({
   return (
     <div className="auth-minimal-page">
       <header className="auth-minimal-header">
-        <Link href="/" className="auth-minimal-brand">Vivadeo</Link>
+        <Link href="/" className="auth-minimal-brand"><BrandLogo /></Link>
       </header>
       <main className="auth-minimal-main">
         <section className="auth-minimal-card fade-in">
-          <div className="auth-minimal-logo">Vivadeo</div>
+          <div className="auth-minimal-logo"><BrandLogo /></div>
           <h1>Sign in</h1>
           <p className="muted">Use your workspace account to continue.</p>
 

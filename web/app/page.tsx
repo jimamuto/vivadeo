@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { BrandLogo } from "@/components/brand-logo";
 
 const services = [
   { title: "Search", body: "Ask about footage and get transcript-grounded answers with timestamp citations.", meta: "Cited answers" },
@@ -23,7 +24,7 @@ export default async function HomePage() {
     <div className="shell page">
       <header className="topbar">
         <div className="topbar-shell">
-          <Link href="/" className="brand">Vivadeo</Link>
+          <Link href="/" className="brand"><BrandLogo /></Link>
           <div className="nav-center">
             <Link href="/" className="nav-link">Home</Link>
             <Link href="#about" className="nav-link">About</Link>
@@ -191,7 +192,7 @@ export default async function HomePage() {
 
       <footer className="footer">
         <div>
-          <Link href="/" className="brand">Vivadeo</Link>
+          <Link href="/" className="brand"><BrandLogo /></Link>
           <p>Video search and clip review for workspace teams.</p>
         </div>
         <div>

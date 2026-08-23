@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SubmitButton } from "@/components/submit-button";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default async function VerifyEmailPage({
   searchParams,
@@ -18,7 +19,7 @@ export default async function VerifyEmailPage({
     <div className="shell page">
       <div className="topbar">
         <div className="topbar-shell">
-          <div className="brand">Vivadeo</div>
+          <div className="brand"><BrandLogo /></div>
           <Link href="/sign-in" className="button-secondary">Back to sign in</Link>
         </div>
       </div>

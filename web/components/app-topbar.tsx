@@ -1,3 +1,5 @@
+import { BrandLogo } from "@/components/brand-logo";
+
 type AppTopbarProps = {
   profileInitial?: string;
   title?: string;
@@ -18,7 +20,7 @@ export function AppTopbar({ profileInitial = "V", title, sidebarCollapsed = fals
             ) : null}
             <strong className="topbar-title">{title}</strong>
           </div>
-        ) : <strong className="brand">Vivadeo</strong>}
+        ) : <BrandLogo className="topbar-brand-logo" />}
         <div className="nav-spacer" />
         <div className="nav-actions" aria-hidden="true" />
       </div>

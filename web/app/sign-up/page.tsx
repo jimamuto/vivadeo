@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SignupForm } from "./signup-form";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default async function SignUpPage({
   searchParams,
@@ -16,11 +17,11 @@ export default async function SignUpPage({
   return (
     <div className="auth-minimal-page">
       <header className="auth-minimal-header">
-        <Link href="/" className="auth-minimal-brand">Vivadeo</Link>
+        <Link href="/" className="auth-minimal-brand"><BrandLogo /></Link>
       </header>
       <main className="auth-minimal-main">
         <section className="auth-minimal-card auth-minimal-card-signup fade-in">
-          <div className="auth-minimal-logo">Vivadeo</div>
+          <div className="auth-minimal-logo"><BrandLogo /></div>
           <h1>{params.verify === "sent" ? "Verify your email" : "Create your workspace"}</h1>
           <p className="muted">{params.verify === "sent" ? `Enter the six-digit code sent to ${params.email || "your email address"}.` : "Set up your private video archive."}</p>
           <SignupForm initialError={params.error} verificationEmail={params.email} verificationSent={params.verify === "sent"} />
