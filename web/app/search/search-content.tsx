@@ -63,8 +63,10 @@ export function SearchContent({
   initialVideoId = "",
   initialVideoIds = [],
   initialThreads = [],
+  initialOnboardingCompleted = false,
 }: {
   initialThreads?: ChatThread[];
+  initialOnboardingCompleted?: boolean;
   profileInitial: string;
   profileName?: string;
   initialQuery?: string;
@@ -79,7 +81,7 @@ export function SearchContent({
   const [modelOpen, setModelOpen] = useState(false);
   const [videos, setVideos] = useState<VideoOption[]>([]);
   const [videosLoaded, setVideosLoaded] = useState(false);
-  const [onboardingSeen, setOnboardingSeen] = useState(false);
+  const [onboardingSeen, setOnboardingSeen] = useState(initialOnboardingCompleted);
   const [turns, setTurns] = useState<ChatTurn[]>(initialThreads[0]?.turns || []);
   const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
   const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
@@ -92,6 +94,13 @@ export function SearchContent({
   const [historyOpen, setHistoryOpen] = useState(true);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
   const initialQuerySubmitted = useRef(false);
+
+  useEffect(() => {
+    if (!threadMenuId) return;
+    const closeMenu = () => setThreadMenuId(null);
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [threadMenuId]);
 
   useEffect(() => {
     const workspace = document.cookie
@@ -113,7 +122,7 @@ export function SearchContent({
   }, []);
 
   useEffect(() => {
-    setOnboardingSeen(window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true");
+    if (window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true") setOnboardingSeen(true);
   }, []);
 
   useEffect(() => {
@@ -175,9 +184,11 @@ export function SearchContent({
     setThreads((current) => current.map((thread) => thread.id === activeThreadId ? { ...thread, turns: nextTurns, updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
+    void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
     setQuestion("");
     const requestStartedAt = Date.now();
     setLoading(true);
+    void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
     setStartedAt(requestStartedAt);
     setElapsedSeconds(0);
     setStatus("Finding evidence, then preparing an answer...");
@@ -234,6 +245,19 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setExpandedCitations({});
+    setThreadMenuId(null);
+  }
+
+  async function renameThread(thread: ChatThread) {
+    const title = window.prompt("Rename thread", thread.title)?.trim();
+    if (!title || title === thread.title) return;
+    const response = await fetch(`/api/proxy/v1/chat/threads/${thread.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) return;
+    setThreads((current) => current.map((item) => item.id === thread.id ? { ...item, title } : item));
     setThreadMenuId(null);
   }
 
@@ -439,8 +463,9 @@ export function SearchContent({
                     <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage thread">•••</button>
                     <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete thread">×</button>
                     {threadMenuId === thread.id ? (
-                      <div className="chat-thread-menu">
+                      <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => openThread(thread)}>Open thread</button>
+                        <button type="button" onClick={() => void renameThread(thread)}>Rename thread</button>
                         <button type="button" onClick={() => void deleteThread(thread)}>Delete thread</button>
                       </div>
                     ) : null}

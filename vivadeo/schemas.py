@@ -133,6 +133,14 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatThreadUpdate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
+
+
+class ChatOnboardingState(BaseModel):
+    completed: bool
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     results: int = Field(8, ge=1, le=30)

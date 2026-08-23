@@ -38,7 +38,9 @@ from .production_store import PostgresVideoStore
 from .schemas import (
     ChatMessage,
     ChatRequest,
+    ChatOnboardingState,
     ChatResponse,
+    ChatThreadUpdate,
     ChatThreadResponse,
     ClipRequest,
     ClipResponse,
@@ -978,6 +980,42 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
 
 
 @app.get(
+    "/v1/chat/onboarding",
+    response_model=ChatOnboardingState,
+    dependencies=[Depends(require_api_key)],
+)
+def get_chat_onboarding(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    setting = session.get(OrganizationSetting, organization_id)
+    settings = setting.settings if setting and isinstance(setting.settings, dict) else {}
+    has_activity = session.scalar(select(ChatThreadMessage.id).join(ChatThread).where(ChatThread.organization_id == organization_id).limit(1)) is not None
+    has_videos = session.scalar(select(Video.id).where(Video.organization_id == organization_id).limit(1)) is not None
+    return ChatOnboardingState(completed=bool(settings.get("chat_onboarding_completed") or has_activity or has_videos))
+
+
+@app.post(
+    "/v1/chat/onboarding/complete",
+    response_model=ChatOnboardingState,
+    dependencies=[Depends(require_api_key)],
+)
+def complete_chat_onboarding(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    setting = session.get(OrganizationSetting, organization_id)
+    if setting is None:
+        setting = OrganizationSetting(organization_id=organization_id, settings={})
+        session.add(setting)
+    settings = dict(setting.settings or {})
+    settings["chat_onboarding_completed"] = True
+    setting.settings = settings
+    session.commit()
+    return ChatOnboardingState(completed=True)
+
+
+@app.get(
     "/v1/chat/threads",
     response_model=list[ChatThreadResponse],
     dependencies=[Depends(require_api_key)],
@@ -1005,6 +1043,26 @@ def create_chat_thread(
 ):
     thread = ChatThread(id=new_id(), organization_id=organization_id, title="New thread")
     session.add(thread)
+    session.commit()
+    session.refresh(thread)
+    return _chat_thread_response(thread)
+
+
+@app.patch(
+    "/v1/chat/threads/{thread_id}",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def rename_chat_thread(
+    thread_id: str,
+    request: ChatThreadUpdate,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = session.scalar(select(ChatThread).where(ChatThread.id == thread_id, ChatThread.organization_id == organization_id))
+    if not thread:
+        raise HTTPException(status_code=404, detail="Chat thread not found")
+    thread.title = request.title.strip()
     session.commit()
     session.refresh(thread)
     return _chat_thread_response(thread)

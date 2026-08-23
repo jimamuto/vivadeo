@@ -14,15 +14,17 @@ export default async function ChatPage({
   const params = await searchParams;
   const workspace = (await cookies()).get("vivadeo_workspace")?.value || "default-workspace";
   let initialThreads: ChatThread[] = [];
+  let onboardingCompleted = false;
   try {
-    const response = await fetch(getBackendUrl("/v1/chat/threads"), {
-      headers: getBackendHeaders(undefined, workspace),
-      cache: "no-store",
-    });
-    if (response.ok) {
-      const payload = (await response.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatThread["turns"] }>;
+    const [threadsResponse, onboardingResponse] = await Promise.all([
+      fetch(getBackendUrl("/v1/chat/threads"), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" }),
+      fetch(getBackendUrl("/v1/chat/onboarding"), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" }),
+    ]);
+    if (threadsResponse.ok) {
+      const payload = (await threadsResponse.json()) as Array<{ id: string; title: string; updated_at: string; messages: ChatThread["turns"] }>;
       initialThreads = payload.map((thread) => ({ id: thread.id, title: thread.title, updatedAt: thread.updated_at, turns: thread.messages }));
     }
+    if (onboardingResponse.ok) onboardingCompleted = Boolean((await onboardingResponse.json()).completed);
   } catch {
     initialThreads = [];
   }
@@ -36,6 +38,7 @@ export default async function ChatPage({
         initialVideoId={params.video_id || ""}
         initialVideoIds={params.video_ids ? params.video_ids.split(",").filter(Boolean) : []}
         initialThreads={initialThreads}
+        initialOnboardingCompleted={onboardingCompleted}
       />
     </Suspense>
   );
