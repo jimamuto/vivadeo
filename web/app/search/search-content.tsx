@@ -370,70 +370,113 @@ export function SearchContent({
 
   function watchChatJob(jobId: string) {
     return new Promise<{ status: string; message?: string | null; error?: string | null }>((resolve) => {
+      let polling = false;
+      let settled = false;
       const stream = new EventSource(`/api/chat-events/${jobId}`);
+      const finish = (payload: { status: string; message?: string | null; error?: string | null }) => {
+        if (settled) return;
+        settled = true;
+        stream.close();
+        resolve(payload);
+      };
+      const poll = async () => {
+        if (settled) return;
+        try {
+          const response = await fetch(`/api/proxy/v1/jobs/${jobId}`, { cache: "no-store" });
+          if (response.ok) {
+            const payload = await response.json() as { status: string; message?: string | null; error?: string | null };
+            setStatus(payload.message || "Preparing answer...");
+            if (["succeeded", "failed", "canceled"].includes(payload.status)) return finish(payload);
+          }
+        } catch { /* retry while the job continues */ }
+        window.setTimeout(() => void poll(), 1500);
+      };
+      const recover = () => {
+        if (polling || settled) return;
+        polling = true;
+        void poll();
+      };
       stream.addEventListener("job", (event) => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as { status: string; message?: string | null; error?: string | null };
           setStatus(payload.message || "Preparing answer...");
-          if (["succeeded", "failed", "canceled"].includes(payload.status)) {
-            stream.close();
-            resolve(payload);
-          }
-        } catch {
-          stream.close();
-          resolve({ status: "failed", error: "Progress connection lost" });
-        }
+          if (["succeeded", "failed", "canceled"].includes(payload.status)) finish(payload);
+        } catch { recover(); }
       });
-      stream.onerror = () => {
-        stream.close();
-        resolve({ status: "unknown", error: "Progress connection lost" });
-      };
+      stream.onerror = recover;
     });
   }
 
   function waitForJob(jobId: string) {
     return new Promise<{ status: string }>((resolve) => {
+      let polling = false;
+      let settled = false;
       const stream = new EventSource(`/api/job-events/${jobId}`);
+      const finish = (payload: { status: string }) => {
+        if (settled) return;
+        settled = true;
+        stream.close();
+        resolve(payload);
+      };
+      const poll = async () => {
+        if (settled) return;
+        try {
+          const response = await fetch(`/api/proxy/v1/jobs/${jobId}`, { cache: "no-store" });
+          if (response.ok) {
+            const payload = await response.json() as { status: string };
+            if (["succeeded", "failed", "canceled"].includes(payload.status)) return finish(payload);
+          }
+        } catch { /* retry while the job continues */ }
+        window.setTimeout(() => void poll(), 1500);
+      };
+      const recover = () => {
+        if (polling || settled) return;
+        polling = true;
+        void poll();
+      };
       stream.addEventListener("job", (event) => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as { status: string };
-          if (["succeeded", "failed", "canceled"].includes(payload.status)) {
-            stream.close();
-            resolve(payload);
-          }
-        } catch {
-          stream.close();
-          resolve({ status: "failed" });
-        }
+          if (["succeeded", "failed", "canceled"].includes(payload.status)) finish(payload);
+        } catch { recover(); }
       });
-      stream.onerror = () => {
-        stream.close();
-        resolve({ status: "unknown" });
-      };
+      stream.onerror = recover;
     });
   }
 
   function watchUploadJob(itemId: string, jobId: string) {
     return new Promise<void>((resolve) => {
+      let polling = false;
+      let settled = false;
       const stream = new EventSource(`/api/job-events/${jobId}`);
-      stream.addEventListener("job", (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress: number; message?: string | null; error?: string | null };
-          setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: payload.status, progress: ["succeeded", "ready"].includes(payload.status) ? 1 : payload.progress, message: payload.message, error: payload.error } : item));
-          if (["succeeded", "failed", "canceled"].includes(payload.status)) {
-            stream.close();
-            resolve();
-          }
-        } catch {
+      const apply = (payload: { status: string; progress?: number; message?: string | null; error?: string | null }) => {
+        setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: payload.status, progress: ["succeeded", "ready"].includes(payload.status) ? 1 : payload.progress ?? item.progress, message: payload.message, error: payload.error } : item));
+        if (["succeeded", "failed", "canceled"].includes(payload.status)) {
+          settled = true;
           stream.close();
           resolve();
         }
-      });
-      stream.onerror = () => {
-        stream.close();
-        setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "unknown", message: "Progress connection lost" } : item));
-        resolve();
       };
+      const poll = async () => {
+        if (settled) return;
+        try {
+          const response = await fetch(`/api/proxy/v1/jobs/${jobId}`, { cache: "no-store" });
+          if (response.ok) apply(await response.json() as { status: string; progress?: number; message?: string | null; error?: string | null });
+        } catch { /* retry while the job continues */ }
+        if (!settled) window.setTimeout(() => void poll(), 1500);
+      };
+      const recover = () => {
+        if (polling || settled) return;
+        polling = true;
+        setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, message: "Checking progress…" } : item));
+        void poll();
+      };
+      stream.addEventListener("job", (event) => {
+        try {
+          apply(JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null });
+        } catch { recover(); }
+      });
+      stream.onerror = recover;
     });
   }
 
@@ -718,7 +761,7 @@ export function SearchContent({
   const threadSources = activeThread?.sources || [];
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
-  const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting;
+  const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
   const activeEvidenceSource = activeEvidence ? videos.find((video) => video.id === activeEvidence.video_id) || threadSources.find((source) => source.video_id === activeEvidence.video_id) : null;
 
   return (
