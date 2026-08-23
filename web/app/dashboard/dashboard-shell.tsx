@@ -13,7 +13,7 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
-    settings: "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7 M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6L7 7 M17 17l1.4 1.4 M18.4 5.6L17 7 M7 17l-1.4 1.4",
+    settings: "M9.4 3.8 10 2h4l.6 1.8 1.7.8 1.8-.6 2.8 2.8-.6 1.8.8 1.7L23 11v4l-1.9.7-.8 1.7.6 1.8-2.8 2.8-1.8-.6-1.7.8L14 23h-4l-.7-1.9-1.7-.8-1.8.6L3 18.1l.6-1.8-.8-1.7L1 15v-4l1.8-.6.8-1.7L3 6.9l2.8-2.8 1.8.6 1.8-.9ZM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
   };
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }

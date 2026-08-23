@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
@@ -20,15 +19,8 @@ export default async function SettingsPage() {
 
       <header className="settings-header fade-in">
         <div>
-          <p className="eyebrow">Personal workspace</p>
           <h1>Settings</h1>
           <p className="muted">Manage your account settings and preferences.</p>
-        </div>
-        <div className="settings-header-actions">
-          <Link href="/chat" className="button-secondary">Back to dashboard</Link>
-          <form action="/api/auth/sign-out" method="post">
-            <button className="button-secondary" type="submit">Sign out</button>
-          </form>
         </div>
       </header>
 

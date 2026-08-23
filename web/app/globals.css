@@ -2220,14 +2220,14 @@ main { width: 100%; }
 }
 
 .page > .topbar + .settings-header { margin-top: 28px; }
-.settings-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; max-width: 1180px; margin-right: auto; margin-left: auto; padding: 0 8px 18px; }
+.settings-header { display: flex; align-items: flex-end; justify-content: flex-start; gap: 24px; max-width: none; margin: 0; padding: 0 8px 18px; text-align: left; }
 .settings-header h1 { margin: 2px 0 6px; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.2rem); letter-spacing: -.04em; }
 .settings-header p { margin: 0; }
 .settings-header .eyebrow { color: var(--color-oxblood); font-size: .7rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 .settings-header-actions { display: flex; align-items: center; gap: 8px; }
 .settings-header-actions form { margin: 0; }
-.settings-content { max-width: 1180px; margin: 0 auto; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
-.settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; max-width: 1180px; margin: 0 auto 18px; padding: 0 8px 14px; border-bottom: 1px solid rgba(86, 86, 86, .14); }
+.settings-content { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; max-width: none; margin: 0 0 18px; padding: 0 8px 14px; border-bottom: 1px solid rgba(86, 86, 86, .14); }
 .settings-tabs a { padding: 9px 17px; border-radius: 999px; color: var(--color-content); font-size: .84rem; text-decoration: none; }
 .settings-tabs a:hover { background: rgba(86, 86, 86, .08); }
 .settings-tabs a.is-active { background: var(--color-content); color: var(--color-surface-solid); }
@@ -2239,7 +2239,7 @@ main { width: 100%; }
 .settings-subsection > p { margin: 0 0 18px; font-size: .82rem; }
 .settings-section-head h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: clamp(1.45rem, 2.4vw, 2rem); letter-spacing: -.03em; }
 .settings-section-head p { margin: 0; }
-.settings-danger-section { background: rgba(118, 50, 63, .035); }
+.settings-danger-section { background: transparent; }
 
 .feature h3, .card h3 { margin-top: 0; letter-spacing: -0.02em; }
 
