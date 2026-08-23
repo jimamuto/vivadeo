@@ -95,10 +95,10 @@ export function AccountSettingsPanel({
   }
 
   return (
-    <article className="surface-section dashboard-panel">
-      <div className="dashboard-panel-head">
-        <h1>Account settings</h1>
-        <p className="muted">Profile, password, email verification, and session controls live here.</p>
+    <section className="settings-section">
+      <div className="settings-section-head">
+        <h2>Account details</h2>
+        <p className="muted">Update your profile, email verification, and password.</p>
       </div>
 
       <div className="form">
@@ -146,6 +146,6 @@ export function AccountSettingsPanel({
         </div>
         {renderStatus(passwordStatus)}
       </div>
-    </article>
+    </section>
   );
 }

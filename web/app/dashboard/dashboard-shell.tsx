@@ -79,7 +79,6 @@ export function DashboardShell({
         </form>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <NavItem href="/chat" label="Chat" icon="chat" />
-          <NavItem href="/dashboard/ingest" label="Ingest" icon="ingest" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="Jobs" icon="jobs" />
         </nav>

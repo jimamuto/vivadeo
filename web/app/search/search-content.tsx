@@ -135,6 +135,10 @@ export function SearchContent({
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
   const [activeEvidence, setActiveEvidence] = useState<Citation | null>(null);
   const [evidenceFrame, setEvidenceFrame] = useState<EvidenceFrame | null>(null);
+  const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+  const [urlValue, setUrlValue] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
@@ -314,7 +318,7 @@ export function SearchContent({
       stream.addEventListener("job", (event) => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress: number; message?: string | null; error?: string | null };
-          setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: payload.status, progress: payload.progress, message: payload.message, error: payload.error } : item));
+          setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: payload.status, progress: ["succeeded", "ready"].includes(payload.status) ? 1 : payload.progress, message: payload.message, error: payload.error } : item));
           if (["succeeded", "failed", "canceled"].includes(payload.status)) {
             stream.close();
             resolve();
@@ -332,15 +336,18 @@ export function SearchContent({
     });
   }
 
-  async function ingestVideoUrl() {
+  async function ingestVideoUrl(rawUrl: string) {
     const threadId = await ensureActiveThread();
     if (!threadId) return;
-    const url = window.prompt("Paste a permitted video URL")?.trim();
+    const url = rawUrl.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) {
-      setStatus("Video URLs must use http or https.");
+      setUrlError("Use a full http or https URL.");
       return;
     }
+    setUrlDialogOpen(false);
+    setUrlValue("");
+    setUrlError(null);
     const itemId = `${Date.now()}-url`;
     setUploadItems((current) => [...current, { id: itemId, filename: url, status: "uploading", progress: 0 }]);
     try {
@@ -357,6 +364,23 @@ export function SearchContent({
     } catch (cause) {
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "URL ingest failed" } : item));
     }
+  }
+
+  async function attachExistingVideo(videoIdToAttach: string) {
+    const threadId = await ensureActiveThread();
+    if (!threadId) return;
+    const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/sources`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_ids: [videoIdToAttach] }),
+    });
+    if (!response.ok) {
+      setStatus("Could not attach that video to this thread.");
+      return;
+    }
+    await refreshThreadSources(threadId);
+    setBrowseOpen(false);
+    setStatus("Video added to this thread.");
   }
 
   async function uploadVideos(files: FileList | File[]) {
@@ -574,12 +598,6 @@ export function SearchContent({
                     <button type="button" onClick={() => void fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/sources/${source.video_id}`, { method: "DELETE" }).then(() => refreshThreadSources(activeThreadId))} aria-label={`Remove ${source.filename}`}>×</button>
                   </span>
                 ))}
-                {uploadItems.filter((item) => !item.videoId || !threadSources.some((source) => source.video_id === item.videoId)).map((item) => (
-                  <span key={item.id} className={`chat-source-chip chat-source-${item.status}`}>
-                    <span className="chat-source-dot" aria-hidden="true" />
-                    {item.filename} {item.progress > 0 ? `${Math.round(item.progress * 100)}%` : item.status}
-                  </span>
-                ))}
               </div>
             ) : null}
             <form className="chat-composer" onSubmit={submit}>
@@ -601,9 +619,8 @@ export function SearchContent({
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
                   <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach videos</span></button>
-                  <button type="button" onClick={() => document.getElementById("query")?.focus()} aria-label="Focus question"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-7-7 7 7-7 7" /></svg><span>Focus question</span></button>
-                  <button type="button" onClick={() => void ingestVideoUrl()} aria-label="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
-                  <button type="button" onClick={() => document.getElementById("video-scope")?.focus()} aria-label="Browse videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse videos</span></button>
+                  <button type="button" onClick={() => { setUrlDialogOpen(true); setUrlError(null); }} aria-label="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
+                  <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse videos</span></button>
                   <div className="chat-model-control">
                     <span>Model</span>
                     <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => setModelOpen((open) => !open)}>
@@ -622,6 +639,49 @@ export function SearchContent({
                 <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
               </div>
             </form>
+            {urlDialogOpen ? (
+              <form className="chat-tool-panel" onSubmit={(event) => { event.preventDefault(); void ingestVideoUrl(urlValue); }}>
+                <div>
+                  <strong>Add a video URL</strong>
+                  <p className="muted">Paste a permitted http or https video link. It will be added to this thread and processed in the background.</p>
+                </div>
+                <div className="chat-tool-row">
+                  <input autoFocus value={urlValue} onChange={(event) => { setUrlValue(event.target.value); setUrlError(null); }} placeholder="https://example.com/video.mp4" aria-label="Video URL" />
+                  <button className="button" type="submit">Add video</button>
+                  <button className="button-secondary" type="button" onClick={() => { setUrlDialogOpen(false); setUrlValue(""); setUrlError(null); }}>Cancel</button>
+                </div>
+                {urlError ? <p className="chat-tool-error" role="alert">{urlError}</p> : null}
+              </form>
+            ) : null}
+            {browseOpen ? (
+              <div className="chat-tool-panel" role="dialog" aria-label="Browse workspace videos">
+                <div>
+                  <strong>Browse workspace videos</strong>
+                  <p className="muted">Choose an existing video to add to this thread.</p>
+                </div>
+                {videos.length ? (
+                  <div className="chat-video-picker">
+                    {videos.map((video) => {
+                      const attached = threadSources.some((source) => source.video_id === video.id);
+                      return <button key={video.id} type="button" className="chat-video-picker-item" disabled={attached} onClick={() => void attachExistingVideo(video.id)}><span>{video.filename}</span><small>{attached ? "Already attached" : video.status}</small></button>;
+                    })}
+                  </div>
+                ) : <p className="muted">No videos are available yet. Attach a file or add a URL first.</p>}
+              </div>
+            ) : null}
+            {uploadItems.length ? (
+              <section className="chat-upload-panel" aria-live="polite" aria-label="Video upload progress">
+                <div className="chat-upload-head"><strong>Video attachments</strong><span>{uploadItems.filter((item) => ["succeeded", "ready"].includes(item.status)).length} of {uploadItems.length} ready</span></div>
+                {uploadItems.map((item) => {
+                  const percent = Math.max(0, Math.min(100, Math.round(item.progress * 100)));
+                  return <div key={item.id} className={`chat-upload-item chat-upload-${item.status}`}>
+                    <div className="chat-upload-meta"><strong title={item.filename}>{item.filename}</strong><span>{item.error || item.message || (item.status === "succeeded" ? "Ready for questions" : item.status)}</span></div>
+                    <div className="chat-upload-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></div>
+                    <small>{percent}%</small>
+                  </div>;
+                })}
+              </section>
+            ) : null}
             <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts.</p>
             {status ? (
               <div className="search-status" aria-live="polite">

@@ -24,15 +24,15 @@ export function DeleteAccountPanel() {
   }
 
   return (
-    <article className="surface-section dashboard-panel">
-      <div className="dashboard-panel-head">
-        <h3>Delete account</h3>
-        <p className="muted">Starts verified deletion flow. Better Auth sends confirmation email before deleting user.</p>
+    <section className="settings-section settings-danger-section">
+      <div className="settings-section-head">
+        <h2>Delete account</h2>
+        <p className="muted">Request a confirmation link before permanently deleting your account.</p>
       </div>
       <div className="dashboard-panel-links">
         <button type="button" className="button-secondary" onClick={requestDeletion}>Request account deletion</button>
       </div>
       {status.state !== "idle" ? <p className="muted">{status.state === "loading" ? "Working..." : status.message}</p> : null}
-    </article>
+    </section>
   );
 }

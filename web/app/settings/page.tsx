@@ -4,7 +4,6 @@ import { AppTopbar } from "@/components/app-topbar";
 import { auth } from "@/lib/auth";
 import { AccountSettingsPanel } from "./account-settings-panel";
 import { DeleteAccountPanel } from "./delete-account-panel";
-import { SessionPanel } from "./session-panel";
 
 export default async function SettingsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -18,33 +17,26 @@ export default async function SettingsPage() {
     <div className="shell page">
       <AppTopbar profileInitial={initial} />
 
-      <div className="split settings-surface fade-in">
+      <header className="settings-header fade-in">
+        <div>
+          <p className="eyebrow">Personal workspace</p>
+          <h1>Settings</h1>
+          <p className="muted">Manage your profile, password, and account preferences.</p>
+        </div>
+        <div className="settings-header-actions">
+          <Link href="/chat" className="button-secondary">Back to dashboard</Link>
+          <form action="/api/auth/sign-out" method="post">
+            <button className="button-secondary" type="submit">Sign out</button>
+          </form>
+        </div>
+      </header>
+
+      <div className="settings-surface settings-content fade-in">
         <AccountSettingsPanel
           email={email}
           displayName={displayName}
           emailVerified={emailVerified}
         />
-
-        <article className="surface-section">
-          <h3>Admin controls</h3>
-          <p className="muted">Workspace roles, invites, and billing settings are scoped to the active organization.</p>
-          <p><Link href="/dashboard/workspace" className="button-secondary">Manage workspace</Link></p>
-          <ul>
-            <li>Invite teammates</li>
-            <li>Review workspace role assignments</li>
-            <li>Update plan and support settings</li>
-          </ul>
-          <form action="/api/auth/sign-out" method="post">
-            <button className="button-secondary" type="submit">Sign out</button>
-          </form>
-        </article>
-      </div>
-
-      <div className="settings-surface fade-in" style={{ marginTop: 18 }}>
-        <SessionPanel />
-      </div>
-
-      <div className="settings-surface fade-in" style={{ marginTop: 18 }}>
         <DeleteAccountPanel />
       </div>
     </div>
