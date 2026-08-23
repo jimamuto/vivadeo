@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     api_key: str = Field("change-me", alias="VIVADEO_API_KEY")
     api_url: str | None = Field(None, alias="VIVADEO_API_URL")
     internal_service_key: str = Field("change-me", alias="VIVADEO_INTERNAL_SERVICE_KEY")
+    settings_encryption_key: str | None = Field(None, alias="VIVADEO_SETTINGS_ENCRYPTION_KEY")
     default_org_id: str = Field("default-workspace", alias="VIVADEO_DEFAULT_ORG_ID")
 
     database_url: str = Field(
@@ -41,6 +42,14 @@ class Settings(BaseSettings):
     modal_gemma_app: str = Field("vivadeo-qwen3-vl-embedding-2b", alias="VIVADEO_MODAL_GEMMA_APP")
     modal_gemma_function: str = Field("GemmaAnswerer.answer", alias="VIVADEO_MODAL_GEMMA_FUNCTION")
     chat_context_segments: int = Field(8, alias="VIVADEO_CHAT_CONTEXT_SEGMENTS")
+    pro_llm_api_key: str | None = Field(None, alias="VIVADEO_PRO_LLM_API_KEY")
+    pro_llm_base_url: str | None = Field(None, alias="VIVADEO_PRO_LLM_BASE_URL")
+    pro_llm_model: str = Field("gpt-5.6-luna", alias="VIVADEO_PRO_LLM_MODEL")
+    pro_llm_timeout: int = Field(120, alias="VIVADEO_PRO_LLM_TIMEOUT")
+    pro_embedding_api_key: str | None = Field(None, alias="VIVADEO_PRO_EMBEDDING_API_KEY")
+    pro_embedding_base_url: str = Field("https://integrate.api.nvidia.com/v1", alias="VIVADEO_PRO_EMBEDDING_BASE_URL")
+    pro_embedding_model: str = Field("nvidia/nemotron-3-embed-1b", alias="VIVADEO_PRO_EMBEDDING_MODEL")
+    pro_embedding_timeout: int = Field(120, alias="VIVADEO_PRO_EMBEDDING_TIMEOUT")
 
     chunk_duration: int = Field(30, alias="VIVADEO_CHUNK_DURATION")
     chunk_overlap: int = Field(5, alias="VIVADEO_CHUNK_OVERLAP")

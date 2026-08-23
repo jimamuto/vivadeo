@@ -21,7 +21,7 @@ export default async function ChatPage({
       fetch(getBackendUrl("/v1/chat/onboarding"), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" }),
     ]);
     if (threadsResponse.ok) {
-      const payload = (await threadsResponse.json()) as Array<{ id: string; title: string; updated_at: string; current_message_id?: string | null; messages: ChatThread["turns"]; sources?: ChatThread["sources"] }>;
+      const payload = (await threadsResponse.json()) as Array<{ id: string; title: string; updated_at: string; current_message_id?: string | null; pinned?: boolean; archived?: boolean; read?: boolean; messages: ChatThread["turns"]; sources?: ChatThread["sources"] }>;
       initialThreads = payload.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -29,6 +29,9 @@ export default async function ChatPage({
         messages: thread.messages,
         turns: thread.messages,
         currentMessageId: thread.current_message_id,
+        pinned: thread.pinned,
+        archived: thread.archived,
+        read: thread.read,
         sources: thread.sources || [],
       }));
     }

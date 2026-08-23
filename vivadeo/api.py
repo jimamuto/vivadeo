@@ -6,7 +6,7 @@ import tempfile
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
 from redis import Redis
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, or_, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
@@ -15,6 +15,7 @@ from .config import Settings
 from .config import get_settings as get_runtime_settings
 from .db import (
     Base,
+    ChatMessageVideo,
     ChatThread,
     ChatThreadMessage,
     ChatThreadVideo,
@@ -34,11 +35,16 @@ from .db import (
 )
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
+from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat
 from .modal_gemma import ModalGemmaChat
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
+from .secrets import decrypt_secret, encrypt_secret
 from .schemas import (
     ChatMessage,
+    ChatMessageAttachmentRequest,
+    ChatMessageRequest,
+    ChatMessageVideoResponse,
     ChatRequest,
     ChatOnboardingState,
     ChatResponse,
@@ -53,6 +59,8 @@ from .schemas import (
     EvidenceFrameResponse,
     JobResponse,
     LocalPathIngestRequest,
+    LlmSettingsRequest,
+    LlmSettingsResponse,
     SearchRequest,
     SearchResponse,
     UrlIngestRequest,
@@ -69,6 +77,7 @@ from .worker import (
     ingest_local_path,
     ingest_uploaded_object,
     ingest_url,
+    generate_chat_task,
     trim_clip_task,
 )
 
@@ -428,6 +437,91 @@ def _attach_thread_sources(session: Session, thread: ChatThread, video_ids: list
     for video_id in unique_ids:
         if video_id not in attached:
             thread.sources.append(ChatThreadVideo(thread_id=thread.id, video_id=video_id, organization_id=organization_id))
+
+
+def _attach_message_videos(session: Session, message: ChatThreadMessage, video_ids: list[str], organization_id: str) -> None:
+    unique_ids = list(dict.fromkeys(video_ids))
+    if not unique_ids:
+        return
+    videos = session.scalars(select(Video).where(Video.organization_id == organization_id, Video.id.in_(unique_ids))).all()
+    found = {video.id: video for video in videos}
+    if len(found) != len(unique_ids):
+        raise HTTPException(status_code=404, detail="One or more videos not found")
+    attached = {attachment.video_id for attachment in message.attachments}
+    for video_id in unique_ids:
+        if video_id not in attached:
+            message.attachments.append(
+                ChatMessageVideo(
+                    id=new_id(),
+                    message_id=message.id,
+                    video_id=video_id,
+                    organization_id=organization_id,
+                )
+            )
+
+
+@app.get(
+    "/v1/settings/llm",
+    response_model=LlmSettingsResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def get_llm_settings(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    _get_workspace(session, organization_id)
+    settings = session.get(OrganizationSetting, organization_id)
+    llm = settings.settings.get("llm", {}) if settings and isinstance(settings.settings, dict) else {}
+    return LlmSettingsResponse(
+        organization_id=organization_id,
+        provider=llm.get("provider", "vivadeo-auto"),
+        base_url=llm.get("base_url", ""),
+        model=llm.get("model", ""),
+        api_key_configured=bool(decrypt_secret(llm.get("api_key"))),
+    )
+
+
+@app.put(
+    "/v1/settings/llm",
+    response_model=LlmSettingsResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def update_llm_settings(
+    request: LlmSettingsRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    _get_workspace(session, organization_id)
+    if request.provider not in {"vivadeo-auto", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
+        raise HTTPException(status_code=400, detail="Unsupported chat provider")
+    if request.provider != "vivadeo-auto" and (not request.base_url or not request.model):
+        raise HTTPException(status_code=400, detail="Endpoint and model are required")
+    settings = session.get(OrganizationSetting, organization_id)
+    if settings is None:
+        settings = OrganizationSetting(organization_id=organization_id, settings={})
+        session.add(settings)
+    payload = dict(settings.settings or {})
+    llm = {
+        "provider": request.provider,
+        "base_url": request.base_url,
+        "model": request.model,
+    }
+    if request.api_key == "":
+        llm["api_key"] = None
+    elif request.api_key:
+        llm["api_key"] = encrypt_secret(request.api_key)
+    elif isinstance(payload.get("llm"), dict):
+        llm["api_key"] = payload["llm"].get("api_key")
+    payload["llm"] = llm
+    settings.settings = payload
+    session.commit()
+    return LlmSettingsResponse(
+        organization_id=organization_id,
+        provider=request.provider,
+        base_url=request.base_url,
+        model=request.model,
+        api_key_configured=bool(decrypt_secret(llm.get("api_key"))),
+    )
 
 
 @app.post(
@@ -1085,6 +1179,12 @@ def cancel_job(
         if frame and frame.organization_id == organization_id and frame.status == "queued":
             frame.status = "canceled"
             frame.error = "Canceled by user"
+    if job.kind == "chat_generation":
+        message = session.get(ChatThreadMessage, (job.payload or {}).get("message_id"))
+        if message:
+            message.status = "canceled"
+            message.error = "Canceled by user"
+            message.updated_at = utcnow()
     session.commit()
     return _job_response(job)
 
@@ -1240,6 +1340,84 @@ def _append_chat_message(
     return message
 
 
+def _complete_chat_message(
+    *,
+    session: Session,
+    organization_id: str,
+    thread_id: str,
+    message_id: str,
+    request: ChatMessageRequest,
+) -> ChatThread:
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    assistant = session.scalar(
+        select(ChatThreadMessage).where(
+            ChatThreadMessage.id == message_id,
+            ChatThreadMessage.thread_id == thread.id,
+        )
+    )
+    if assistant is None or assistant.role != "assistant":
+        raise HTTPException(status_code=404, detail="Pending chat message not found")
+    if not assistant.parent_id:
+        raise HTTPException(status_code=409, detail="Pending chat message has no user prompt")
+    parent = next((item for item in thread.messages if item.id == assistant.parent_id), None)
+    if parent is None or parent.role != "user":
+        raise HTTPException(status_code=409, detail="Chat message history is incomplete")
+
+    history = _chat_message_path(thread, parent.id)
+    source_ids = [
+        source.video_id
+        for source in thread.sources
+        if source.video is not None and source.video.status not in {"archived", "failed", "canceled"}
+    ]
+    stored_llm = session.get(OrganizationSetting, organization_id)
+    stored_config = stored_llm.settings.get("llm", {}) if stored_llm and isinstance(stored_llm.settings, dict) else {}
+    if request.provider != "vivadeo-auto" and isinstance(stored_config, dict):
+        request = request.model_copy(update={
+            "custom_base_url": request.custom_base_url or stored_config.get("base_url"),
+            "custom_model": request.custom_model or stored_config.get("model"),
+            "custom_api_key": request.custom_api_key or decrypt_secret(stored_config.get("api_key")),
+        })
+    try:
+        answer = search_chat(
+            ChatRequest(
+                messages=[ChatMessage(role=item.role, content=item.content) for item in history],
+                results=request.results,
+                video_id=request.video_id if request.video_id in source_ids else None,
+                video_ids=[video_id for video_id in request.video_ids if video_id in source_ids] or source_ids,
+                provider=request.provider,
+                custom_base_url=request.custom_base_url,
+                custom_api_key=request.custom_api_key,
+                custom_model=request.custom_model,
+                focus_video_id=request.focus_video_id,
+                focus_start_time=request.focus_start_time,
+                focus_end_time=request.focus_end_time,
+            ),
+            session=session,
+            organization_id=organization_id,
+        )
+    except Exception:
+        assistant.status = "failed"
+        assistant.error = "Vivadeo could not prepare an answer."
+        assistant.updated_at = utcnow()
+        thread.current_message_id = assistant.id
+        thread.updated_at = utcnow()
+        session.commit()
+        raise
+
+    assistant.content = answer.answer
+    assistant.citations = [citation.model_dump() for citation in answer.citations]
+    assistant.status = "completed"
+    assistant.error = None
+    assistant.updated_at = utcnow()
+    if thread.title == "New thread":
+        thread.title = " ".join(parent.content.split())[:255] or "New thread"
+    thread.current_message_id = assistant.id
+    thread.updated_at = utcnow()
+    session.commit()
+    session.refresh(thread)
+    return thread
+
+
 def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
     return ChatThreadResponse(
         id=thread.id,
@@ -1247,6 +1425,9 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
         created_at=thread.created_at,
         updated_at=thread.updated_at,
         current_message_id=thread.current_message_id,
+        pinned=thread.pinned,
+        archived=thread.archived,
+        read=thread.read_at is not None,
         sources=[
             {
                 "video_id": source.video.id,
@@ -1266,6 +1447,17 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
                 "role": message.role,
                 "content": message.content,
                 "citations": message.citations or [],
+                "attachments": [
+                    {
+                        "video_id": attachment.video.id,
+                        "filename": attachment.video.filename,
+                        "status": attachment.video.status,
+                        "duration": attachment.video.duration,
+                        "created_at": attachment.created_at,
+                    }
+                    for attachment in message.attachments
+                    if attachment.video is not None
+                ],
                 "status": message.status,
                 "error": message.error,
                 "created_at": message.created_at,
@@ -1324,7 +1516,7 @@ def list_chat_threads(
     threads = session.scalars(
         select(ChatThread)
         .where(ChatThread.organization_id == organization_id)
-        .order_by(ChatThread.updated_at.desc())
+        .order_by(ChatThread.pinned.desc(), ChatThread.updated_at.desc())
     ).all()
     return [_chat_thread_response(thread) for thread in threads]
 
@@ -1343,6 +1535,193 @@ def create_chat_thread(
     session.commit()
     session.refresh(thread)
     return _chat_thread_response(thread)
+
+
+@app.get(
+    "/v1/chat/threads/search",
+    response_model=list[ChatThreadResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def search_chat_threads(
+    q: str = "",
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    query = q.strip()
+    statement = select(ChatThread).where(ChatThread.organization_id == organization_id)
+    if query:
+        statement = statement.outerjoin(ChatThreadMessage).where(
+            or_(ChatThread.title.ilike(f"%{query}%"), ChatThreadMessage.content.ilike(f"%{query}%"))
+        ).distinct()
+    threads = session.scalars(statement.order_by(ChatThread.pinned.desc(), ChatThread.updated_at.desc()).limit(100)).all()
+    return [_chat_thread_response(thread) for thread in threads]
+
+
+@app.get(
+    "/v1/chat/threads/{thread_id}",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def get_chat_thread(
+    thread_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    return _chat_thread_response(_get_chat_thread(session, thread_id, organization_id))
+
+
+@app.post(
+    "/v1/chat/threads/{thread_id}/messages",
+    response_model=JobResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def create_chat_message(
+    thread_id: str,
+    request: ChatMessageRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    question = request.content.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+    configured_llm = session.get(OrganizationSetting, organization_id)
+    configured_llm_data = configured_llm.settings.get("llm", {}) if configured_llm and isinstance(configured_llm.settings, dict) else {}
+    configured_key = decrypt_secret(configured_llm_data.get("api_key")) if isinstance(configured_llm_data, dict) else None
+    if request.provider in {"custom", "openai", "anthropic", "gemini", "nvidia"} and (not request.custom_base_url or not request.custom_model or (not request.custom_api_key and not configured_key)):
+        raise HTTPException(status_code=400, detail="AI endpoint, API key, and model are required")
+    if request.provider == "ollama" and (not request.custom_base_url or not request.custom_model):
+        raise HTTPException(status_code=400, detail="Ollama endpoint and model are required")
+    if request.provider not in {"vivadeo-auto", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
+        raise HTTPException(status_code=400, detail="Unsupported chat provider")
+
+    requested_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
+    if requested_video_ids:
+        _attach_thread_sources(session, thread, requested_video_ids, organization_id)
+    if request.focus_video_id:
+        if not any(source.video_id == request.focus_video_id for source in thread.sources):
+            raise HTTPException(status_code=400, detail="Focused video is not attached to this thread")
+
+    current = _current_chat_message(thread)
+    user_message = _append_chat_message(
+        thread,
+        role="user",
+        content=question,
+        parent_id=current.id if current is not None else None,
+    )
+    message_video_ids = requested_video_ids or [source.video_id for source in thread.sources if source.video is not None]
+    _attach_message_videos(session, user_message, message_video_ids, organization_id)
+    assistant_message = _append_chat_message(
+        thread,
+        role="assistant",
+        content="",
+        parent_id=user_message.id,
+        status="pending",
+    )
+    safe_request_payload = request.model_dump(exclude={"custom_api_key"})
+    job = Job(
+        id=new_id(),
+        organization_id=organization_id,
+        kind="chat_generation",
+        status="queued",
+        payload={
+            "thread_id": thread.id,
+            "message_id": assistant_message.id,
+            "request": safe_request_payload,
+        },
+        message="Queued chat generation",
+    )
+    session.add(job)
+    session.commit()
+    if request.provider in {"custom", "openai", "anthropic", "gemini", "nvidia"} and request.custom_api_key:
+        Redis.from_url(get_runtime_settings().redis_url, decode_responses=True).setex(
+            f"vivadeo:chat-key:{job.id}",
+            900,
+            request.custom_api_key,
+        )
+    generate_chat_task.delay(
+        job.id,
+        thread.id,
+        assistant_message.id,
+        organization_id,
+        safe_request_payload,
+    )
+    return _job_response(job)
+
+
+@app.get(
+    "/v1/chat/threads/{thread_id}/messages/{message_id}/attachments",
+    response_model=list[ChatMessageVideoResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def list_chat_message_attachments(
+    thread_id: str,
+    message_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    message = session.scalar(select(ChatThreadMessage).where(ChatThreadMessage.id == message_id, ChatThreadMessage.thread_id == thread.id))
+    if message is None:
+        raise HTTPException(status_code=404, detail="Chat message not found")
+    return [
+        {
+            "video_id": attachment.video.id,
+            "filename": attachment.video.filename,
+            "status": attachment.video.status,
+            "duration": attachment.video.duration,
+            "created_at": attachment.created_at,
+        }
+        for attachment in message.attachments
+        if attachment.video is not None
+    ]
+
+
+@app.post(
+    "/v1/chat/threads/{thread_id}/messages/{message_id}/attachments",
+    response_model=ChatThreadResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def add_chat_message_attachments(
+    thread_id: str,
+    message_id: str,
+    request: ChatMessageAttachmentRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    message = session.scalar(select(ChatThreadMessage).where(ChatThreadMessage.id == message_id, ChatThreadMessage.thread_id == thread.id))
+    if message is None:
+        raise HTTPException(status_code=404, detail="Chat message not found")
+    _attach_thread_sources(session, thread, request.video_ids, organization_id)
+    _attach_message_videos(session, message, request.video_ids, organization_id)
+    thread.updated_at = utcnow()
+    session.commit()
+    session.refresh(thread)
+    return _chat_thread_response(thread)
+
+
+@app.delete(
+    "/v1/chat/threads/{thread_id}/messages/{message_id}/attachments/{video_id}",
+    status_code=204,
+    dependencies=[Depends(require_api_key)],
+)
+def remove_chat_message_attachment(
+    thread_id: str,
+    message_id: str,
+    video_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    thread = _get_chat_thread(session, thread_id, organization_id)
+    message = session.scalar(select(ChatThreadMessage).where(ChatThreadMessage.id == message_id, ChatThreadMessage.thread_id == thread.id))
+    if message is None:
+        raise HTTPException(status_code=404, detail="Chat message not found")
+    attachment = next((item for item in message.attachments if item.video_id == video_id), None)
+    if attachment is None:
+        raise HTTPException(status_code=404, detail="Chat message attachment not found")
+    session.delete(attachment)
+    session.commit()
 
 
 @app.get(
@@ -1412,7 +1791,16 @@ def rename_chat_thread(
     thread = session.scalar(select(ChatThread).where(ChatThread.id == thread_id, ChatThread.organization_id == organization_id))
     if not thread:
         raise HTTPException(status_code=404, detail="Chat thread not found")
-    thread.title = request.title.strip()
+    if request.title is not None:
+        thread.title = request.title.strip()
+    if request.pinned is not None:
+        thread.pinned = request.pinned
+    if request.archived is not None:
+        thread.archived = request.archived
+    if request.read is not None:
+        thread.read_at = utcnow() if request.read else None
+    if request.title is None and request.pinned is None and request.archived is None and request.read is None:
+        raise HTTPException(status_code=400, detail="No thread changes supplied")
     session.commit()
     session.refresh(thread)
     return _chat_thread_response(thread)
@@ -1480,15 +1868,37 @@ def search_chat(
         if thread is not None and not any(source.video_id == request.focus_video_id for source in thread.sources):
             raise HTTPException(status_code=400, detail="Focused video is not attached to this thread")
 
+    runtime_settings = get_runtime_settings()
     try:
-        embedding = get_embedder().embed_query(question)
-        chunk_hits = PostgresVideoStore(session).search(
-            embedding,
-            n_results=max(request.results, 30) if request.focus_video_id and request.focus_start_time is not None else request.results,
-            organization_id=organization_id,
-            video_id=request.focus_video_id or request.video_id,
+        plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
+    except Exception:
+        plan = "starter"
+    use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
+    try:
+        if use_nvidia:
+            embedding_backend = get_embedder(
+                backend="nvidia",
+                api_key=runtime_settings.pro_embedding_api_key,
+                base_url=runtime_settings.pro_embedding_base_url,
+                model=runtime_settings.pro_embedding_model,
+                timeout=runtime_settings.pro_embedding_timeout,
+            )
+        else:
+            embedding_backend = get_embedder()
+        embedding = embedding_backend.embed_query(question)
+        store = PostgresVideoStore(session)
+        search_method = store.search_transcript_embeddings if use_nvidia else store.search
+        search_kwargs = {
+            "n_results": max(request.results, 30) if request.focus_video_id and request.focus_start_time is not None else request.results,
+            "organization_id": organization_id,
+            "video_id": request.focus_video_id or request.video_id,
             **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
-        )
+        }
+        chunk_hits = search_method(embedding, **search_kwargs)
+        if use_nvidia and not chunk_hits:
+            reset_embedder()
+            qwen = get_embedder()
+            chunk_hits = store.search(qwen.embed_query(question), **search_kwargs)
     finally:
         reset_embedder()
 
@@ -1559,17 +1969,59 @@ def search_chat(
 
     settings = get_runtime_settings()
     messages = [message.model_dump() for message in request.messages[-10:]]
-    gemma = ModalGemmaChat(
-        app_name=settings.modal_gemma_app,
-        function_name=settings.modal_gemma_function,
-        timeout=settings.modal_timeout,
-    )
+    try:
+        plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
+    except Exception:
+        plan = "starter"
+    custom_provider = request.provider in {"custom", "openai", "gemini", "nvidia"}
+    if request.provider == "ollama":
+        if not request.custom_base_url or not request.custom_model:
+            raise HTTPException(status_code=400, detail="Ollama endpoint and model are required")
+        generator = OllamaChat(
+            base_url=request.custom_base_url,
+            model=request.custom_model,
+            timeout=getattr(settings, "pro_llm_timeout", 120),
+        )
+    elif request.provider == "anthropic":
+        if not request.custom_base_url or not request.custom_api_key or not request.custom_model:
+            raise HTTPException(status_code=400, detail="Anthropic endpoint, API key, and model are required")
+        generator = AnthropicChat(
+            base_url=request.custom_base_url,
+            api_key=request.custom_api_key,
+            model=request.custom_model,
+            timeout=getattr(settings, "pro_llm_timeout", 120),
+        )
+    elif custom_provider:
+        if not request.custom_base_url or not request.custom_api_key or not request.custom_model:
+            raise HTTPException(status_code=400, detail="AI endpoint, API key, and model are required")
+        generator = OpenAICompatibleChat(
+            base_url=request.custom_base_url,
+            api_key=request.custom_api_key,
+            model=request.custom_model,
+            timeout=getattr(settings, "pro_llm_timeout", 120),
+        )
+    elif plan in {"pro", "enterprise"} and getattr(settings, "pro_llm_api_key", None) and getattr(settings, "pro_llm_base_url", None):
+        generator = OpenAICompatibleChat(
+            base_url=settings.pro_llm_base_url,
+            api_key=settings.pro_llm_api_key,
+            model=settings.pro_llm_model,
+            timeout=settings.pro_llm_timeout,
+        )
+    else:
+        generator = ModalGemmaChat(
+            app_name=settings.modal_gemma_app,
+            function_name=settings.modal_gemma_function,
+            timeout=settings.modal_timeout,
+        )
     assistant_message: ChatThreadMessage | None = None
     try:
         if thread is not None and thread.title == "New thread":
-            try:
-                thread.title = gemma.title(question)
-            except Exception:
+            if isinstance(generator, ModalGemmaChat):
+                try:
+                    thread.title = generator.title(question)
+                except Exception:
+                    thread.title = " ".join(question.split())[:255] or "New thread"
+            else:
                 thread.title = " ".join(question.split())[:255] or "New thread"
         if thread is not None:
             assistant_message = _append_chat_message(
@@ -1580,7 +2032,7 @@ def search_chat(
                 status="pending",
             )
             session.flush()
-        answer = gemma.answer(messages, citations)
+        answer = generator.answer(messages, citations)
     except Exception as exc:
         if thread is not None:
             if assistant_message is None:

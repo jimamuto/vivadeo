@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
 from .config import get_settings
-from .db import Clip, DeadLetterEntry, EvidenceFrame, Job, Video, VideoTranscriptSegment, new_id, session_scope, utcnow
+from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Organization, Video, VideoTranscriptSegment, new_id, session_scope, utcnow
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
 from .frame_extractor import extract_frame
@@ -154,17 +154,32 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
                 VideoTranscriptSegment.organization_id == organization_id,
             )
         )
-        for segment in segments:
-            session.add(
-                VideoTranscriptSegment(
-                    id=new_id(),
-                    organization_id=organization_id,
-                    video_id=video_id,
-                    start_time=float(segment["start_time"]),
-                    end_time=float(segment["end_time"]),
-                    text=str(segment["text"]),
-                )
+        transcript_rows = [
+            VideoTranscriptSegment(
+                id=new_id(),
+                organization_id=organization_id,
+                video_id=video_id,
+                start_time=float(segment["start_time"]),
+                end_time=float(segment["end_time"]),
+                text=str(segment["text"]),
             )
+            for segment in segments
+        ]
+        session.add_all(transcript_rows)
+        session.flush()
+        organization = session.get(Organization, organization_id)
+        if organization and organization.plan in {"pro", "enterprise"} and settings.pro_embedding_api_key and transcript_rows:
+            nvidia = get_embedder(
+                backend="nvidia",
+                api_key=settings.pro_embedding_api_key,
+                base_url=settings.pro_embedding_base_url,
+                model=settings.pro_embedding_model,
+                timeout=settings.pro_embedding_timeout,
+            )
+            embeddings = nvidia.embed_texts([row.text for row in transcript_rows], input_type="passage")
+            for row, embedding in zip(transcript_rows, embeddings):
+                row.nvidia_embedding = embedding
+            reset_embedder()
 
 
 def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
@@ -401,6 +416,55 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
         raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@celery_app.task(name="vivadeo.generate_chat")
+def generate_chat_task(
+    job_id: str,
+    thread_id: str,
+    message_id: str,
+    organization_id: str,
+    request_payload: dict,
+) -> None:
+    try:
+        _raise_if_canceled(job_id)
+        _update_job(job_id, status="running", progress=0.1, message="Retrieving transcript evidence")
+        from .api import _complete_chat_message
+        from .schemas import ChatMessageRequest
+
+        _raise_if_canceled(job_id)
+        _update_job(job_id, status="running", progress=0.35, message="Preparing Vivadeo Auto answer")
+        request_payload = dict(request_payload)
+        if request_payload.get("provider") in {"custom", "openai", "anthropic", "gemini", "nvidia"}:
+            request_payload["custom_api_key"] = progress_bus.get(f"vivadeo:chat-key:{job_id}")
+            progress_bus.delete(f"vivadeo:chat-key:{job_id}")
+        with session_scope() as session:
+            _complete_chat_message(
+                session=session,
+                organization_id=organization_id,
+                thread_id=thread_id,
+                message_id=message_id,
+                request=ChatMessageRequest.model_validate(request_payload),
+            )
+        if _job_canceled(job_id):
+            with session_scope() as session:
+                message = session.get(ChatThreadMessage, message_id)
+                if message:
+                    message.status = "canceled"
+                    message.error = "Canceled by user"
+            _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
+            return
+        _update_job(job_id, status="succeeded", progress=1.0, message="Answer ready")
+    except JobCanceled:
+        with session_scope() as session:
+            message = session.get(ChatThreadMessage, message_id)
+            if message:
+                message.status = "canceled"
+                message.error = "Canceled by user"
+        _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
+    except Exception as exc:
+        _update_job(job_id, status="failed", error=str(exc), message="Chat generation failed")
+        raise
 
 
 @celery_app.task(name="vivadeo.extract_evidence_frame")

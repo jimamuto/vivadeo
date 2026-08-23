@@ -8,6 +8,7 @@ from typing import Iterator
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -146,6 +147,7 @@ class VideoTranscriptSegment(Base):
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    nvidia_embedding: Mapped[list[float] | None] = mapped_column(Vector(2048))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -156,6 +158,9 @@ class ChatThread(Base):
     organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="New thread")
     current_message_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_thread_messages.id", ondelete="SET NULL"))
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -216,6 +221,21 @@ class ChatThreadMessage(Base):
     thread: Mapped[ChatThread] = relationship(back_populates="messages", foreign_keys=[thread_id])
     parent: Mapped["ChatThreadMessage | None"] = relationship(remote_side=[id], back_populates="children", foreign_keys=[parent_id])
     children: Mapped[list["ChatThreadMessage"]] = relationship(back_populates="parent", foreign_keys=[parent_id])
+    attachments: Mapped[list["ChatMessageVideo"]] = relationship(back_populates="message", cascade="all, delete-orphan", order_by="ChatMessageVideo.created_at")
+
+
+class ChatMessageVideo(Base):
+    __tablename__ = "chat_message_videos"
+    __table_args__ = (UniqueConstraint("message_id", "video_id", name="uq_chat_message_video"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    message_id: Mapped[str] = mapped_column(String(36), ForeignKey("chat_thread_messages.id", ondelete="CASCADE"), nullable=False)
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    message: Mapped[ChatThreadMessage] = relationship(back_populates="attachments")
+    video: Mapped[Video] = relationship()
 
 
 class Job(Base):

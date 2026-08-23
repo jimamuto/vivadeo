@@ -25,6 +25,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Forgot/reset password flows are real via `/api/auth/forgot-password` to Better Auth `/request-password-reset`, and `/api/auth/reset-password` to Better Auth `/reset-password`.
 - Email verification is real through Azure Communication Services Email; sign-up sends a six-digit code and redirects to `/verify-email` when Azure email credentials are configured. Codes expire after 10 minutes and can be resent.
 - Account deletion is enabled through Better Auth `/api/auth/delete-user`; settings only starts the email-verified deletion request, and actual deletion completes through the callback link.
+- The administrator entitlement migration provisions `jim.amuto@strathmore.edu` as an admin with Pro workspace access; subscription enforcement for other users is deferred.
 
 ## Search
 
@@ -33,6 +34,9 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Search chat retrieves relevant video chunks, attaches overlapping transcript segments, and asks Modal-hosted Gemma E4B through Modal remote functions, not HTTP model endpoints.
 - Search answers return transcript citations with video filename, source URI, and timestamp ranges.
 - Chat messages persist as a selected conversation branch; assistant answers can be regenerated or retried without overwriting earlier answers.
+- Chat generation supports Vivadeo Auto (Modal Gemma fallback), Pro workspaces using the server-side OpenAI-compatible gateway, and user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints.
+- BYOK provider keys are encrypted in PostgreSQL when configured in Settings; transient chat keys are held only in Redis while a generation job runs.
+- Free workspaces retain the Modal Qwen video embedding path. Pro workspaces use NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions, with Qwen fallback for legacy rows until reindexing populates NVIDIA vectors.
 - Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
 - Recent searches are client-only in `localStorage` under `vivadeo.recent-searches`; there is no server sync or workspace scoping yet.
 - Workspace value in search is derived from the `vivadeo_workspace` cookie on the client.

@@ -4,6 +4,7 @@ import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { auth } from "@/lib/auth";
 import { AccountSettingsPanel } from "./account-settings-panel";
 import { DeleteAccountPanel } from "./delete-account-panel";
+import { LlmSettingsPanel } from "./llm-settings-panel";
 
 export default async function SettingsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -29,6 +30,7 @@ export default async function SettingsPage() {
         <a className="is-active" href="#account">Account</a>
         <a href="#security">Security</a>
         <a href="#privacy">Data &amp; privacy</a>
+        <a href="#ai">AI providers</a>
         <span className="is-disabled" aria-disabled="true">Notifications</span>
         <span className="is-disabled" aria-disabled="true">Billing</span>
       </nav>
@@ -40,6 +42,7 @@ export default async function SettingsPage() {
           emailVerified={emailVerified}
           profileImage={profileImage}
         />
+        <LlmSettingsPanel />
         <DeleteAccountPanel />
       </div>
     </DashboardShell>

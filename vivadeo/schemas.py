@@ -27,6 +27,21 @@ class WorkspaceSettingsRequest(BaseModel):
     settings: dict
 
 
+class LlmSettingsRequest(BaseModel):
+    provider: str = "vivadeo-auto"
+    base_url: str = ""
+    model: str = ""
+    api_key: str | None = None
+
+
+class LlmSettingsResponse(BaseModel):
+    organization_id: str
+    provider: str = "vivadeo-auto"
+    base_url: str = ""
+    model: str = ""
+    api_key_configured: bool = False
+
+
 class JobResponse(BaseModel):
     id: str
     organization_id: str
@@ -135,7 +150,10 @@ class ChatMessage(BaseModel):
 
 
 class ChatThreadUpdate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=120)
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    pinned: bool | None = None
+    archived: bool | None = None
+    read: bool | None = None
 
 
 class ChatThreadSourceRequest(BaseModel):
@@ -159,6 +177,10 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     results: int = Field(8, ge=1, le=30)
     video_id: str | None = None
+    provider: str = "vivadeo-auto"
+    custom_base_url: str | None = None
+    custom_api_key: str | None = None
+    custom_model: str | None = None
     video_ids: list[str] = Field(default_factory=list)
     thread_id: str | None = None
     focus_video_id: str | None = None
@@ -175,6 +197,20 @@ class ChatCitation(BaseModel):
     end_time: float
     text: str
     similarity_score: float | None = None
+
+
+class ChatMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=3000)
+    results: int = Field(8, ge=1, le=30)
+    provider: str = "vivadeo-auto"
+    custom_base_url: str | None = None
+    custom_api_key: str | None = None
+    custom_model: str | None = None
+    video_id: str | None = None
+    video_ids: list[str] = Field(default_factory=list)
+    focus_video_id: str | None = None
+    focus_start_time: float | None = Field(default=None, ge=0)
+    focus_end_time: float | None = Field(default=None, ge=0)
 
 
 class ChatResponse(BaseModel):
@@ -198,12 +234,25 @@ class EvidenceFrameResponse(BaseModel):
     error: str | None = None
 
 
+class ChatMessageAttachmentRequest(BaseModel):
+    video_ids: list[str] = Field(default_factory=list, min_length=1)
+
+
+class ChatMessageVideoResponse(BaseModel):
+    video_id: str
+    filename: str
+    status: str
+    duration: float | None = None
+    created_at: datetime
+
+
 class ChatThreadMessageResponse(BaseModel):
     id: str
     parent_id: str | None = None
     role: str
     content: str
     citations: list[ChatCitation] = Field(default_factory=list)
+    attachments: list[ChatMessageVideoResponse] = Field(default_factory=list)
     status: str = "completed"
     error: str | None = None
     created_at: datetime
@@ -216,6 +265,9 @@ class ChatThreadResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     current_message_id: str | None = None
+    pinned: bool = False
+    archived: bool = False
+    read: bool = True
     messages: list[ChatThreadMessageResponse] = Field(default_factory=list)
     sources: list[ChatThreadSourceResponse] = Field(default_factory=list)
 

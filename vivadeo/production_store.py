@@ -3,7 +3,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .db import Clip, Video, VideoChunk, new_id
+from .db import Clip, Video, VideoChunk, VideoTranscriptSegment, new_id
 from .object_store import ObjectStore
 
 
@@ -83,6 +83,45 @@ class PostgresVideoStore:
                 "distance": float(dist),
             }
             for chunk, video, dist in rows
+        ]
+
+    def search_transcript_embeddings(
+        self,
+        query_embedding: list[float],
+        n_results: int = 5,
+        organization_id: str | None = None,
+        video_id: str | None = None,
+        video_ids: list[str] | None = None,
+    ) -> list[dict]:
+        distance = VideoTranscriptSegment.nvidia_embedding.cosine_distance(query_embedding).label("distance")
+        stmt = (
+            select(VideoTranscriptSegment, Video, distance)
+            .join(Video, Video.id == VideoTranscriptSegment.video_id)
+            .where(VideoTranscriptSegment.nvidia_embedding.is_not(None))
+            .order_by(distance)
+            .limit(n_results)
+        )
+        if organization_id:
+            stmt = stmt.where(Video.organization_id == organization_id, VideoTranscriptSegment.organization_id == organization_id)
+        if video_ids:
+            stmt = stmt.where(VideoTranscriptSegment.video_id.in_(video_ids))
+        elif video_id:
+            stmt = stmt.where(VideoTranscriptSegment.video_id == video_id)
+        rows = self.session.execute(stmt).all()
+        return [
+            {
+                "chunk_id": segment.id,
+                "organization_id": segment.organization_id,
+                "video_id": video.id,
+                "filename": video.filename,
+                "source_uri": video.source_uri,
+                "object_key": video.object_key,
+                "start_time": segment.start_time,
+                "end_time": segment.end_time,
+                "similarity_score": 1.0 - float(dist),
+                "distance": float(dist),
+            }
+            for segment, video, dist in rows
         ]
 
     def stats(self, organization_id: str | None = None, object_store: ObjectStore | None = None) -> dict:
