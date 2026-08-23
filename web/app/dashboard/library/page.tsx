@@ -26,6 +26,7 @@ export default async function LibraryPage({
         <section className="dashboard-section-head library-page-head">
           <div>
             <h1>Video library</h1>
+            <p className="muted">Browse and manage your workspace footage.</p>
           </div>
         </section>
         <LibraryPanel videos={videos} jobs={jobs} initialVideoId={selectedVideoId} initialStartTime={selectedStartTime} />

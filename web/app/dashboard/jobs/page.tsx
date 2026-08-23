@@ -20,6 +20,7 @@ export default async function JobsPage() {
         <section className="dashboard-section-head jobs-page-head">
           <div>
             <h1>Workspace jobs</h1>
+            <p className="muted">Track ingestion and processing jobs.</p>
           </div>
         </section>
         <JobsPanel jobs={jobs} />

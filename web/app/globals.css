@@ -1017,6 +1017,10 @@ main { width: 100%; }
 .jobs-page-head {
   text-align: center;
 }
+.library-page-head,
+.jobs-page-head {
+  text-align: left;
+}
 
 .dashboard-section-head h1 {
   margin: 0;
