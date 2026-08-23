@@ -2048,7 +2048,7 @@ def search_chat(
                 assistant_message.status = "failed"
                 assistant_message.error = "Vivadeo could not prepare an answer."
             session.commit()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="Answer generation failed. Please try again.") from exc
     if thread is not None and assistant_message is not None:
         assistant_message.content = answer
         assistant_message.citations = citations
@@ -2160,7 +2160,7 @@ def regenerate_chat_message(
         thread.current_message_id = replacement.id
         thread.updated_at = utcnow()
         session.commit()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="Answer generation failed. Please try again.") from exc
 
     replacement.content = result.answer
     replacement.citations = [citation.model_dump() for citation in result.citations]
@@ -2273,4 +2273,4 @@ def stats(
             object_store=ObjectStore(),
         )
     except SQLAlchemyError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="The requested operation failed. Please try again.") from exc

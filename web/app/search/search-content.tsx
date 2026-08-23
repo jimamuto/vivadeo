@@ -822,7 +822,7 @@ export function SearchContent({
                           <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
                           <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
                           <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
-                          <small>Key is sent only when you ask a question and is not saved in browser storage.</small>
+                          <small>Your key is used only for your requests and is never displayed again.</small>
                         </div> : null}
                       </div>
                     ) : null}

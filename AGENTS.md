@@ -12,6 +12,10 @@ Use these notes when working in this repository. Keep product behavior in `PRODU
 
 For chat behavior, message branching, attachment lifecycle, streaming states, and conversation-management patterns, agents may consult the upstream Open WebUI repository at <https://github.com/open-webui/open-webui>. Treat it as a behavioral and architectural reference only: preserve Vivadeo's Next.js/FastAPI stack, video-first retrieval, workspace authorization, B2 storage, Modal inference, and licensing/provenance guardrails documented in `docs/OPEN-WEBUI-CHAT-IMPLEMENTATION-PLAN.md`.
 
+### Client-Facing Secrecy
+
+Do not expose implementation vendors, model names, hosting platforms, databases, queues, storage providers, deployment details, or internal architecture in client-facing copy, labels, status messages, errors, or settings descriptions. Use product language such as `Vivadeo Auto`, `video evidence`, and `answer service`. Provider names and endpoint fields are allowed only inside explicit BYOK controls where the user is configuring their own provider. Keep implementation details in internal documentation, logs, and code only.
+
 ## Runtime Findings
 
 - The web auth flow sends verification, reset, and deletion emails through Azure Communication Services Email using the Azure-managed sender configured in `AZURE_COMMUNICATION_CONNECTION_STRING` and `EMAIL_FROM`.

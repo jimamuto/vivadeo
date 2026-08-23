@@ -463,7 +463,7 @@ def generate_chat_task(
                 message.error = "Canceled by user"
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
-        _update_job(job_id, status="failed", error=str(exc), message="Chat generation failed")
+        _update_job(job_id, status="failed", error="Answer generation failed.", message="Answer generation failed")
         raise
 
 

@@ -62,7 +62,7 @@ export function LlmSettingsPanel() {
         <div>
           <span className="eyebrow">AI providers</span>
           <h2>Video answer engine</h2>
-          <p className="muted">Choose Vivadeo Auto or connect an OpenAI-compatible, Anthropic, Ollama, Gemini, or NVIDIA endpoint.</p>
+          <p className="muted">Choose Vivadeo Auto or connect an AI provider you manage.</p>
         </div>
       </div>
       <form className="settings-form" onSubmit={save}>
@@ -72,10 +72,10 @@ export function LlmSettingsPanel() {
             <label className="field"><span>Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={provider === "ollama" ? "http://localhost:11434" : "https://api.example.com/v1"} /></label>
             <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model name" /></label>
             <label className="field"><span>API key {apiKeyConfigured ? "(configured)" : ""}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={apiKeyConfigured ? "Leave blank to keep current key" : "Paste API key"} autoComplete="off" /></label>
-          </> : <p className="muted settings-inline-note">Free workspaces use the Modal-hosted Gemma fallback. Pro workspaces use the server-side Vivadeo Pro gateway configuration.</p>}
+          </> : <p className="muted settings-inline-note">Vivadeo Auto is included with your workspace. Premium workspaces use the configured premium answer service.</p>}
         </div>
         <div className="settings-actions"><button className="button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save AI settings"}</button>{status ? <span className="muted" role="status">{status}</span> : null}</div>
-        <p className="muted settings-inline-note">Keys are encrypted before PostgreSQL storage and are never returned to the browser. Pro gateway credentials stay server-side in environment configuration.</p>
+        <p className="muted settings-inline-note">Keys are protected and never displayed again after saving.</p>
       </form>
     </section>
   );
