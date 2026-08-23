@@ -29,6 +29,8 @@ export default async function SettingsPage() {
         <a className="is-active" href="#account">Account</a>
         <a href="#security">Security</a>
         <a href="#privacy">Data &amp; privacy</a>
+        <span className="is-disabled" aria-disabled="true">Notifications</span>
+        <span className="is-disabled" aria-disabled="true">Billing</span>
       </nav>
 
       <div className="settings-surface settings-content fade-in">

@@ -931,7 +931,9 @@ main { width: 100%; }
 .sidebar-expander { position: relative; display: block; width: 22px; height: 20px; border: 1.6px solid currentColor; border-radius: 4px; }
 .sidebar-expander::after { content: ""; position: absolute; top: 2px; bottom: 2px; left: 7px; border-left: 1.6px solid currentColor; }
 .sidebar-workspace { margin: 14px 8px 2px; overflow: hidden; color: var(--muted); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-nav { display: grid; gap: 4px; margin-top: 18px; }
+.dashboard-nav { display: grid; gap: 4px; margin-top: 12px; }
+.dashboard-sidebar-divider { height: 1px; margin: 18px 8px 0; background: rgba(86, 86, 86, .14); }
+.dashboard-nav-divider { height: 1px; margin: 12px 8px 8px; background: rgba(86, 86, 86, .14); }
 .dashboard-nav-secondary { margin-top: auto; }
 .dashboard-account { position: relative; margin-top: auto; }
 .dashboard-account-trigger { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 8px; border: 0; border-radius: 12px; background: var(--color-surface); color: var(--color-content); text-align: left; cursor: pointer; }
@@ -966,7 +968,9 @@ main { width: 100%; }
 .sidebar-collapsed .dashboard-brand-logo { width: 34px; height: 34px; object-position: center; }
 .sidebar-collapsed .dashboard-sidebar { padding-inline: 8px; }
 .sidebar-collapsed .dashboard-sidebar-brand { padding: 0; justify-content: center; }
+.sidebar-collapsed .dashboard-sidebar-divider { width: 40px; margin: 8px auto 0; }
 .sidebar-collapsed .dashboard-nav { gap: 8px; margin-top: 0; }
+.sidebar-collapsed .dashboard-nav-divider { width: 40px; margin: 4px auto; }
 .sidebar-collapsed .dash-nav-item { display: grid; place-items: center; width: 40px; height: 40px; margin-inline: auto; padding: 0; border-radius: 10px; line-height: 0; }
 .sidebar-collapsed .dash-nav-item.is-active { background: transparent; }
 .sidebar-collapsed .dash-nav-item:hover, .sidebar-collapsed .dash-nav-item.is-active:hover { background: rgba(118, 50, 63, .1); }
@@ -2228,8 +2232,9 @@ main { width: 100%; }
 .settings-header-actions form { margin: 0; }
 .settings-content { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
 .settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; max-width: none; margin: 0 0 18px; padding: 0 8px 14px; border-bottom: 1px solid rgba(86, 86, 86, .14); }
-.settings-tabs a { padding: 9px 17px; border-radius: 999px; color: var(--color-content); font-size: .84rem; text-decoration: none; }
+.settings-tabs a, .settings-tabs .is-disabled { padding: 9px 17px; border-radius: 999px; color: var(--color-content); font-size: .84rem; text-decoration: none; }
 .settings-tabs a:hover { background: rgba(86, 86, 86, .08); }
+.settings-tabs .is-disabled { color: var(--muted); cursor: not-allowed; opacity: .65; }
 .settings-tabs a.is-active { background: var(--color-content); color: var(--color-surface-solid); }
 .settings-section { padding: 34px 8px; }
 .settings-section + .settings-section { border-top: 1px solid rgba(86, 86, 86, .14); }
@@ -2246,7 +2251,10 @@ main { width: 100%; }
 .profile-fields .dashboard-panel-links { align-items: center; min-height: 48px; }
 .profile-fields .pill { display: inline-flex; align-items: center; min-height: 48px; box-sizing: border-box; }
 .profile-avatar-field { display: grid; justify-items: center; gap: 10px; min-width: 132px; }
+.profile-avatar-frame { position: relative; width: 118px; height: 118px; }
 .profile-avatar { width: 118px; height: 118px; border-radius: 50%; object-fit: cover; background: var(--color-tan); }
+.profile-avatar-remove { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); color: var(--color-content); cursor: pointer; box-shadow: 0 3px 10px rgba(86, 86, 86, .12); }
+.profile-avatar-remove:hover { border-color: var(--color-oxblood); color: var(--color-oxblood); }
 .profile-avatar-fallback { display: grid; place-items: center; background: var(--color-oxblood); color: var(--color-content-inverse); font-family: var(--font-display); font-size: 3rem; }
 .profile-avatar-actions { display: flex; align-items: center; gap: 8px; }
 .profile-avatar-actions .muted { max-width: 150px; margin: 0; font-size: .7rem; text-align: center; }

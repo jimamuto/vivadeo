@@ -204,12 +204,10 @@ export function AccountSettingsPanel({
             {renderStatus(verifyStatus)}
           </div>
           <div className="profile-avatar-field">
-            {avatarUrl ? <img className="profile-avatar" src={avatarUrl} alt="Profile" /> : <span className="profile-avatar profile-avatar-fallback">{firstName.trim().slice(0, 1).toUpperCase() || "V"}</span>}
-            <div className="profile-avatar-actions">
-              <input ref={avatarInputRef} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); event.target.value = ""; }} />
-              <button className="button-secondary" type="button" onClick={() => avatarInputRef.current?.click()}>Edit photo</button>
+            <div className="profile-avatar-frame">
+              {avatarUrl ? <img className="profile-avatar" src={avatarUrl} alt="Profile" /> : <span className="profile-avatar profile-avatar-fallback">{firstName.trim().slice(0, 1).toUpperCase() || "V"}</span>}
               {avatarUrl ? (
-                <button className="icon-button" type="button" onClick={() => void removeAvatar()} aria-label="Remove profile photo">
+                <button className="profile-avatar-remove" type="button" onClick={() => void removeAvatar()} aria-label="Remove profile photo">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M4 7h16" />
                     <path d="M10 11v6M14 11v6" />
@@ -218,6 +216,10 @@ export function AccountSettingsPanel({
                   </svg>
                 </button>
               ) : null}
+            </div>
+            <div className="profile-avatar-actions">
+              <input ref={avatarInputRef} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); event.target.value = ""; }} />
+              <button className="button-secondary" type="button" onClick={() => avatarInputRef.current?.click()}>Edit photo</button>
             </div>
             {avatarStatus.state !== "idle" ? <p className="muted">{avatarStatus.state === "loading" ? "Uploading..." : avatarStatus.message}</p> : null}
           </div>
