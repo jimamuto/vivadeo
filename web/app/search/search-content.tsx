@@ -113,6 +113,19 @@ function fmt(s: number) {
   return `${m}:${sec}`;
 }
 
+function threadDateGroup(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Earlier";
+  const now = new Date();
+  const startOfDay = (input: Date) => new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime();
+  const days = Math.floor((startOfDay(now) - startOfDay(date)) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return "Previous 7 days";
+  if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString(undefined, { month: "long" });
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
 function activeBranch(messages: ChatTurn[], currentMessageId?: string | null) {
   if (!messages.length || !currentMessageId) return messages;
   const byId = new Map(messages.filter((message) => message.id).map((message) => [message.id, message]));
@@ -753,6 +766,13 @@ export function SearchContent({
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const visibleThreads = threads.filter((thread) => !thread.archived);
   const filteredThreads = visibleThreads.filter((thread) => !threadSearch.trim() || `${thread.title} ${thread.turns.map((turn) => turn.content).join(" ")}`.toLowerCase().includes(threadSearch.trim().toLowerCase()));
+  const groupedThreads = filteredThreads.reduce<Array<{ label: string; threads: ChatThread[] }>>((groups, thread) => {
+    const label = threadDateGroup(thread.updatedAt);
+    const group = groups.find((item) => item.label === label);
+    if (group) group.threads.push(thread);
+    else groups.push({ label, threads: [thread] });
+    return groups;
+  }, []);
   const threadSources = activeThread?.sources || [];
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
@@ -818,15 +838,23 @@ export function SearchContent({
             <form className="chat-composer" onSubmit={submit}>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
-                {threadSources.length ? (
+                {threadSources.length || uploadItems.length ? (
                   <div className="chat-source-rail" aria-label="Thread video sources">
                     {threadSources.map((source) => (
-                      <span key={source.video_id} className={`chat-source-chip chat-source-${source.status}`}>
-                        <span className="chat-source-dot" aria-hidden="true" />
-                        {source.filename}
+                      <div key={source.video_id} className={`chat-source-chip chat-source-${source.status}`}>
+                        <span className="chat-source-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-11Zm12 3 4-2v9l-4-2" /></svg></span>
+                        <span className="chat-source-details"><strong title={source.filename}>{source.filename}</strong><small>Video</small></span>
                         <button type="button" onClick={() => void fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/sources/${source.video_id}`, { method: "DELETE" }).then(() => refreshThreadSources(activeThreadId))} aria-label={`Remove ${source.filename}`}>×</button>
-                      </span>
+                      </div>
                     ))}
+                    {uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status)).map((item) => {
+                      const percent = Math.max(0, Math.min(100, Math.round(item.progress * 100)));
+                      return <div key={item.id} className={`chat-source-chip chat-upload-${item.status}`}>
+                        <span className="chat-source-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-11Zm12 3 4-2v9l-4-2" /></svg></span>
+                        <span className="chat-source-details"><strong title={item.filename}>{item.filename}</strong><small>{item.error || item.message || (item.status === "uploading" ? "Uploading" : "Processing")} · {percent}%</small></span>
+                        <span className="chat-source-progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></span>
+                      </div>;
+                    })}
                   </div>
                 ) : null}
                 {momentContext ? <button type="button" className="chat-moment-context" onClick={() => setMomentContext(null)}>Focused on {momentContext.filename} · {fmt(momentContext.startTime)} ×</button> : null}
@@ -838,17 +866,6 @@ export function SearchContent({
                   placeholder="What did the speaker say about the launch timeline?"
                   disabled={loading}
                 />
-                {uploadItems.length ? (
-                  <div className="chat-inline-attachments" aria-live="polite" aria-label="Video attachments">
-                    {uploadItems.map((item) => {
-                      const percent = Math.max(0, Math.min(100, Math.round(item.progress * 100)));
-                      return <div key={item.id} className={`chat-inline-attachment chat-upload-${item.status}`}>
-                        <div className="chat-inline-attachment-meta"><strong title={item.filename}>{item.filename}</strong><span>{item.error || item.message || (item.status === "succeeded" ? "Ready" : item.status)} · {percent}%</span></div>
-                        <div className="chat-inline-attachment-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></div>
-                      </div>;
-                    })}
-                  </div>
-                ) : null}
               </div>
               <button className="chat-send" type="submit" disabled={loading || !question.trim()} aria-label={loading ? "Asking" : "Ask"}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>
@@ -1079,8 +1096,12 @@ export function SearchContent({
               <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New thread</button>
               <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search threads" aria-label="Search threads" />
               <div className="chat-history-list">
-                {filteredThreads.length ? filteredThreads.map((thread) => (
-                  <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""}`}>
+                {groupedThreads.length ? groupedThreads.map((group) => (
+                  <section key={group.label} className="chat-history-group">
+                    <h3>{group.label}</h3>
+                    <div className="chat-history-group-list">
+                    {group.threads.map((thread) => (
+                      <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""}`}>
                     <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
                       <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
                     </button>
@@ -1096,7 +1117,10 @@ export function SearchContent({
                         <button type="button" onClick={() => void deleteThread(thread)}>Delete thread</button>
                       </div>
                     ) : null}
-                  </div>
+                      </div>
+                    ))}
+                    </div>
+                  </section>
                 )) : <p className="muted chat-history-empty">Start a new thread to begin.</p>}
               </div>
             </aside>
