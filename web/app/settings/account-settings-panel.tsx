@@ -257,7 +257,7 @@ export function AccountSettingsPanel({
 
       <div id="security" className="form settings-subsection">
         <h3>Password</h3>
-        <p className="muted">Change your password without leaving settings.</p>
+        <p className="muted">Update your password.</p>
         <div className="field">
           <label htmlFor="currentPassword">Current password</label>
           <input
