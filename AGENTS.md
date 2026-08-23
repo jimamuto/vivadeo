@@ -26,6 +26,10 @@ Use these notes when working in this repository. Keep product behavior in `PRODU
 - API image build: `docker build -f Dockerfile -t vivadeo-api-ci-check .`.
 - Web image build: `docker build -f web/Dockerfile -t vivadeo-web-ci-check ./web`.
 
+## Persistence Rules
+
+- User-facing profile, settings, onboarding, and workflow state must persist in PostgreSQL-backed storage. Do not use browser `localStorage` as the source of truth for these values; use local storage only for explicitly client-only conveniences such as recent-search history.
+
 ## Change Discipline
 
 - Do not add backward-compatibility layers, fallback providers, aliases, or legacy paths unless the user explicitly requests them. Prefer removing obsolete integrations cleanly and updating all callers and documentation.

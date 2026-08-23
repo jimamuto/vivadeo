@@ -1,6 +1,7 @@
 """S3-compatible object storage helpers."""
 
 import mimetypes
+import uuid
 from pathlib import Path
 
 import boto3
@@ -98,3 +99,10 @@ def clip_object_key(clip_id: str) -> str:
 
 def evidence_frame_object_key(frame_id: str) -> str:
     return f"evidence-frames/{frame_id}.jpg"
+
+
+def profile_image_object_key(user_id: str, filename: str) -> str:
+    suffix = Path(filename).suffix.lower() or ".jpg"
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        suffix = ".jpg"
+    return f"profile-images/{user_id}/{uuid.uuid4().hex}{suffix}"

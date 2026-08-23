@@ -35,7 +35,7 @@ from .db import (
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
 from .modal_gemma import ModalGemmaChat
-from .object_store import ObjectStore, video_object_key
+from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .schemas import (
     ChatMessage,
@@ -863,6 +863,77 @@ def delete_video(
     session.execute(delete(Job).where(Job.video_id == video_id, Job.organization_id == organization_id))
     session.delete(video)
     session.commit()
+
+
+@app.post("/v1/profile/avatar", dependencies=[Depends(require_api_key)])
+def upload_profile_avatar(
+    file: UploadFile = File(...),
+    x_user_id: str | None = Header(default=None, alias="X-User-ID"),
+    session: Session = Depends(db_dep),
+):
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="User identity is required")
+    content_type = (file.content_type or "").lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+        raise HTTPException(status_code=415, detail="Use a JPG, PNG, WEBP, or GIF image")
+    file.file.seek(0, 2)
+    if file.file.tell() > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Profile images must be 5 MB or smaller")
+    file.file.seek(0)
+
+    old_image = session.execute(text('SELECT image FROM "user" WHERE id = :user_id'), {"user_id": x_user_id}).scalar_one_or_none()
+    if old_image is None and session.execute(text('SELECT 1 FROM "user" WHERE id = :user_id'), {"user_id": x_user_id}).first() is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    object_key = profile_image_object_key(x_user_id, file.filename or "profile.jpg")
+    store = ObjectStore()
+    store.upload_fileobj(file.file, object_key, content_type=content_type, filename=file.filename)
+    image_url = store.presigned_url(object_key)
+    updated = session.execute(
+        text('UPDATE "user" SET image = :image, updated_at = NOW() WHERE id = :user_id'),
+        {"image": image_url, "user_id": x_user_id},
+    )
+    if updated.rowcount != 1:
+        store.delete_object(object_key)
+        raise HTTPException(status_code=404, detail="User not found")
+    session.commit()
+    if old_image and "profile-images/" in old_image:
+        try:
+            store.delete_object("profile-images/" + old_image.split("profile-images/", 1)[1])
+        except Exception:
+            pass
+    return {"image": image_url, "object_key": object_key}
+
+
+@app.get("/v1/profile/avatar", dependencies=[Depends(require_api_key)])
+def get_profile_avatar(
+    x_user_id: str | None = Header(default=None, alias="X-User-ID"),
+    session: Session = Depends(db_dep),
+):
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="User identity is required")
+    image = session.execute(text('SELECT image FROM "user" WHERE id = :user_id'), {"user_id": x_user_id}).scalar_one_or_none()
+    if not image or "profile-images/" not in image:
+        raise HTTPException(status_code=404, detail="Profile image not found")
+    return stream_object("profile-images/" + image.split("profile-images/", 1)[1])
+
+
+@app.delete("/v1/profile/avatar", status_code=204, dependencies=[Depends(require_api_key)])
+def delete_profile_avatar(
+    x_user_id: str | None = Header(default=None, alias="X-User-ID"),
+    session: Session = Depends(db_dep),
+):
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="User identity is required")
+    old_image = session.execute(text('SELECT image FROM "user" WHERE id = :user_id'), {"user_id": x_user_id}).scalar_one_or_none()
+    if old_image is None and session.execute(text('SELECT 1 FROM "user" WHERE id = :user_id'), {"user_id": x_user_id}).first() is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    session.execute(text('UPDATE "user" SET image = NULL, updated_at = NOW() WHERE id = :user_id'), {"user_id": x_user_id})
+    session.commit()
+    if old_image and "profile-images/" in old_image:
+        try:
+            ObjectStore().delete_object("profile-images/" + old_image.split("profile-images/", 1)[1])
+        except Exception:
+            pass
 
 
 @app.get("/v1/media/{object_key:path}", dependencies=[Depends(require_api_key)])

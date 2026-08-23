@@ -32,11 +32,13 @@ export function DashboardShell({
   workspace,
   profileInitial,
   profileName,
+  profileImage,
   children,
 }: Readonly<{
   workspace: string;
   profileInitial: string;
   profileName?: string;
+  profileImage?: string | null;
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
@@ -91,7 +93,7 @@ export function DashboardShell({
             </div>
           ) : null}
           <button className="dashboard-account-trigger" type="button" onClick={() => setAccountMenuOpen((open) => !open)} aria-expanded={accountMenuOpen}>
-            <span className="dashboard-account-avatar">{profileInitial}</span>
+            <span className="dashboard-account-avatar">{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
             <span className="dashboard-account-name">{profileName || profileInitial}</span>
             <strong aria-hidden="true">•••</strong>
           </button>

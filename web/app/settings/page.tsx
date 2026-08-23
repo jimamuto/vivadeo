@@ -12,10 +12,11 @@ export default async function SettingsPage() {
   const email = user?.email || "your@email.example";
   const emailVerified = Boolean(user && "emailVerified" in user ? user.emailVerified : false);
   const initial = (displayName || "V").trim().slice(0, 1).toUpperCase();
+  const profileImage = user && "image" in user && user.image ? "/api/profile/avatar" : null;
   const workspace = (await cookies()).get("vivadeo_workspace")?.value || "default-workspace";
 
   return (
-    <DashboardShell workspace={workspace} profileInitial={initial} profileName={displayName}>
+    <DashboardShell workspace={workspace} profileInitial={initial} profileName={displayName} profileImage={profileImage}>
 
       <header className="settings-header fade-in">
         <div>
@@ -35,6 +36,7 @@ export default async function SettingsPage() {
           email={email}
           displayName={displayName}
           emailVerified={emailVerified}
+          profileImage={profileImage}
         />
         <DeleteAccountPanel />
       </div>
