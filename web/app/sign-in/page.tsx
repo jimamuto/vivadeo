@@ -16,19 +16,6 @@ function errorMessage(code: string): string {
   return ERROR_MESSAGES[code] ?? `Sign-in failed (${code}). Please try again.`;
 }
 
-function AuthArt() {
-  return (
-    <div className="auth-art">
-      <div className="auth-art-sheen" />
-      <div className="auth-art-card">
-        <span>Workspace access</span>
-        <strong>Welcome back</strong>
-        <p>Sign in to manage uploads, search, and clips in a clean workspace boundary.</p>
-      </div>
-    </div>
-  );
-}
-
 export default async function SignInPage({
   searchParams,
 }: {
@@ -39,38 +26,27 @@ export default async function SignInPage({
   const params = await searchParams;
 
   return (
-    <div className="shell page">
-      <div className="topbar">
-        <div className="topbar-shell">
-          <div className="brand">
-            <span className="brand-mark" />
-            Vivadeo
-          </div>
-          <div className="nav-center">
-            <Link href="/" className="nav-link">Home</Link>
-            <Link href="/dashboard" className="nav-link">Dashboard</Link>
-          </div>
-          <div className="nav-spacer" />
-          <div className="nav-actions">
-            <Link href="/sign-up" className="button">Sign Up</Link>
-          </div>
-        </div>
-      </div>
-
-      <section className="auth-shell fade-in">
-        <AuthArt />
-        <div className="card auth-panel">
+    <div className="auth-minimal-page">
+      <header className="auth-minimal-header">
+        <Link href="/" className="auth-minimal-brand">Vivadeo</Link>
+      </header>
+      <main className="auth-minimal-main">
+        <section className="auth-minimal-card fade-in">
+          <div className="auth-minimal-logo">Vivadeo</div>
           <h1>Sign in</h1>
-          <p className="muted">Use your workspace account to manage uploads, search, and clips.</p>
+          <p className="muted">Use your workspace account to continue.</p>
 
           {params.verify === "done" && <p className="notice notice-good">Email verified. You can now sign in.</p>}
           {params.reset === "sent" && <p className="notice notice-good">Password reset email sent - check your inbox.</p>}
           {params.error && <p className="notice notice-bad">{errorMessage(params.error)}</p>}
 
           <SigninForm />
-          <p className="muted" style={{ marginTop: 16 }}><Link href="/forgot-password">Forgot password?</Link></p>
-        </div>
-      </section>
+          <div className="auth-minimal-links">
+            <Link href="/forgot-password">Forgot password?</Link>
+            <Link href="/sign-up">Create an account</Link>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

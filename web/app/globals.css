@@ -2772,6 +2772,136 @@ main { width: 100%; }
 }
 .dashboard-wrap .chat-starter:hover { background-color: var(--color-action-subtle); }
 .dashboard-wrap .chat-history-item:hover { background-color: var(--color-surface-solid); }
+
+.auth-minimal-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--color-surface-solid);
+}
+
+.auth-minimal-header {
+  padding: 28px clamp(22px, 5vw, 72px);
+}
+
+.auth-minimal-brand {
+  color: var(--color-content);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.auth-minimal-main {
+  display: grid;
+  place-items: start center;
+  padding: 54px 24px 80px;
+}
+
+.auth-minimal-card {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 18px;
+}
+
+.auth-minimal-card-signup {
+  width: min(100%, 520px);
+}
+
+.auth-minimal-logo {
+  margin: 0 auto 8px;
+  color: var(--color-content);
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.auth-minimal-card h1 {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+}
+
+.auth-minimal-card > .muted {
+  margin: -8px 0 8px;
+  text-align: center;
+}
+
+.auth-minimal-card .form {
+  gap: 16px;
+}
+
+.auth-minimal-card .field {
+  gap: 7px;
+}
+
+.auth-minimal-card .field label {
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.auth-minimal-card .field input {
+  min-height: 52px;
+  border-radius: 12px;
+  background: var(--color-surface-solid);
+}
+
+.auth-minimal-card .button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 6px;
+}
+
+.auth-minimal-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 2px;
+  font-size: 0.88rem;
+}
+
+.auth-minimal-links-centered {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.auth-verification-inline {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.auth-code-row .button-secondary {
+  min-width: 112px;
+}
+
+.auth-code-timer {
+  display: inline-grid;
+  place-items: center;
+  min-width: 112px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.auth-verification-inline .verify-resend-form {
+  margin-top: 0;
+}
+
+.auth-minimal-links a {
+  color: var(--color-oxblood);
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .auth-minimal-header { padding: 22px 20px; }
+  .auth-minimal-main { padding: 36px 20px 56px; }
+  .auth-minimal-links { align-items: center; flex-direction: column; }
+}
 .chat-composer .chat-composer-input textarea,
 .chat-composer .chat-composer-input textarea:focus { min-height: 58px; height: 58px; resize: none; padding-top: 14px; padding-bottom: 10px; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; }
 .chat-composer .chat-composer-footer { border-top: 1px solid var(--color-border); }

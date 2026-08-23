@@ -5,6 +5,7 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const email = String(form.get("email") || "").trim().toLowerCase();
   const intent = String(form.get("intent") || "verify");
+  const returnToSignup = String(form.get("returnTo") || "") === "signup";
 
   if (!email) {
     return NextResponse.redirect(new URL("/sign-in?error=UNKNOWN", request.url));
@@ -13,14 +14,14 @@ export async function POST(request: NextRequest) {
   if (intent === "resend") {
     await sendVerificationCode(email);
     return NextResponse.redirect(
-      new URL(`/verify-email?email=${encodeURIComponent(email)}&sent=1`, request.url),
+      new URL(`${returnToSignup ? "/sign-up" : "/verify-email"}?email=${encodeURIComponent(email)}&${returnToSignup ? "verify=sent" : "sent=1"}`, request.url),
     );
   }
 
   const verified = await verifyEmailCode(email, String(form.get("code") || ""));
   if (!verified) {
     return NextResponse.redirect(
-      new URL(`/verify-email?email=${encodeURIComponent(email)}&error=invalid`, request.url),
+      new URL(`${returnToSignup ? "/sign-up" : "/verify-email"}?email=${encodeURIComponent(email)}&${returnToSignup ? "verify=sent&error=invalid" : "error=invalid"}`, request.url),
     );
   }
 
