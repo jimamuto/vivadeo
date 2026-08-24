@@ -177,6 +177,7 @@ export function SearchContent({
   initialVideoIds?: string[];
 }) {
   const [activeWorkspace, setActiveWorkspace] = useState("default-workspace");
+  const [workspacePlan, setWorkspacePlan] = useState("starter");
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
   const [videoIds, setVideoIds] = useState(initialVideoIds);
@@ -232,16 +233,27 @@ export function SearchContent({
   }, []);
 
   useEffect(() => {
+    void fetch("/api/proxy/v1/workspaces", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = await response.json() as Array<{ slug: string; plan: string }>;
+        const workspace = payload.find((item) => item.slug === activeWorkspace);
+        setWorkspacePlan(workspace?.plan || "starter");
+      })
+      .catch(() => setWorkspacePlan("starter"));
+  }, [activeWorkspace]);
+
+  useEffect(() => {
     void fetch("/api/proxy/v1/settings/llm", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return;
         const payload = await response.json() as { provider?: string; base_url?: string; model?: string };
-        if (payload.provider) setChatModel(payload.provider);
+        if (payload.provider) setChatModel(payload.provider === "vivadeo-auto" && ["pro", "enterprise"].includes(workspacePlan) ? "vivadeo-pro" : payload.provider);
         if (payload.base_url) setCustomBaseUrl(payload.base_url);
         if (payload.model) setCustomModel(payload.model);
       })
       .catch(() => undefined);
-  }, []);
+  }, [workspacePlan]);
 
   useEffect(() => {
     void fetch("/api/proxy/v1/videos", { cache: "no-store" })
@@ -617,7 +629,7 @@ export function SearchContent({
         body: JSON.stringify({
           content: nextQuestion,
           results: 6,
-          provider: chatModel,
+          provider: chatModel === "vivadeo-pro" ? "vivadeo-auto" : chatModel,
           custom_base_url: chatModel === "custom" ? customBaseUrl || null : null,
           custom_api_key: chatModel === "custom" ? customApiKey || null : null,
           custom_model: chatModel === "custom" ? customModel || null : null,
@@ -896,7 +908,7 @@ export function SearchContent({
                   <div className="chat-model-control">
                     <span>Model</span>
                     <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => setModelOpen((open) => !open)}>
-                      <strong>{chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
+                      <strong>{chatModel === "vivadeo-pro" ? "Vivadeo Pro" : chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
                     {modelOpen ? (
@@ -904,6 +916,9 @@ export function SearchContent({
                         <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-auto"); setModelOpen(false); }}>
                           <span>Vivadeo Auto</span>
                         </button>
+                        {["pro", "enterprise"].includes(workspacePlan) ? <button type="button" className={chatModel === "vivadeo-pro" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-pro"); setModelOpen(false); }}>
+                          <span>Vivadeo Pro</span>
+                        </button> : null}
                         <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setChatModel("custom")}>
                           <span>Custom endpoint (BYOK)</span>
                         </button>
@@ -922,7 +937,7 @@ export function SearchContent({
                         <button type="button" className={chatModel === "nvidia" ? "is-selected" : ""} onClick={() => setChatModel("nvidia")}>
                           <span>NVIDIA-compatible</span>
                         </button>
-                        {chatModel !== "vivadeo-auto" ? <div className="chat-model-custom">
+                        {chatModel !== "vivadeo-auto" && chatModel !== "vivadeo-pro" ? <div className="chat-model-custom">
                           <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
                           <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
                           <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
