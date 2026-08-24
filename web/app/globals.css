@@ -2020,6 +2020,9 @@ main { width: 100%; }
 .chat-history-row { position: relative; display: flex; align-items: stretch; gap: 0; overflow: visible; border: 0; background: transparent; }
 .chat-history-row .chat-history-item { flex: 1; border: 0; background: transparent; }
 .chat-thread-more, .chat-thread-delete { width: 32px; flex: 0 0 32px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.chat-thread-rename { display: flex; align-items: center; flex: 1; gap: 6px; min-width: 0; padding: 8px 10px; border: 1px solid var(--color-oxblood); border-radius: 10px; background: var(--color-surface-solid); }
+.chat-thread-rename input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--color-content); font: inherit; font-size: .78rem; }
+.chat-thread-rename button { width: 24px; height: 24px; flex: 0 0 24px; border: 0; border-radius: 6px; background: var(--color-action-subtle); color: var(--color-oxblood); cursor: pointer; }
 .chat-thread-more:hover, .chat-thread-delete:hover { color: var(--color-oxblood); }
 .chat-thread-menu { position: absolute; top: calc(100% + 6px); right: 34px; z-index: 4; display: grid; min-width: 140px; padding: 5px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); box-shadow: 0 10px 22px rgba(86, 86, 86, .12); }
 .chat-thread-menu button { padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--color-content); text-align: left; cursor: pointer; font: inherit; font-size: .76rem; }

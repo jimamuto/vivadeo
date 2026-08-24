@@ -201,6 +201,8 @@ export function SearchContent({
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
   const [historyOpen, setHistoryOpen] = useState(true);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [renamingTitle, setRenamingTitle] = useState("");
   const [threadSearch, setThreadSearch] = useState("");
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
   const [activeEvidence, setActiveEvidence] = useState<Citation | null>(null);
@@ -717,17 +719,27 @@ export function SearchContent({
     setThreadMenuId(null);
   }
 
-  async function renameThread(thread: ChatThread) {
-    const title = window.prompt("Rename thread", thread.title)?.trim();
-    if (!title || title === thread.title) return;
+  function beginRenameThread(thread: ChatThread) {
+    setRenamingThreadId(thread.id);
+    setRenamingTitle(thread.title);
+    setThreadMenuId(null);
+  }
+
+  async function saveThreadRename(thread: ChatThread) {
+    const title = renamingTitle.trim();
+    if (!title) return;
     const response = await fetch(`/api/proxy/v1/chat/threads/${thread.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setStatus("Could not rename this thread.");
+      return;
+    }
     setThreads((current) => current.map((item) => item.id === thread.id ? { ...item, title } : item));
-    setThreadMenuId(null);
+    setRenamingThreadId(null);
+    setRenamingTitle("");
   }
 
   async function updateThreadMetadata(thread: ChatThread, patch: { pinned?: boolean; archived?: boolean; read?: boolean }) {
@@ -863,6 +875,12 @@ export function SearchContent({
                   rows={1}
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                   placeholder="What did the speaker say about the launch timeline?"
                   disabled={loading}
                 />
@@ -1102,15 +1120,22 @@ export function SearchContent({
                     <div className="chat-history-group-list">
                     {group.threads.map((thread) => (
                       <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""}`}>
-                    <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
-                      <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
-                    </button>
+                    {renamingThreadId === thread.id ? (
+                      <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
+                        <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Thread name" />
+                        <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save thread name">✓</button>
+                      </div>
+                    ) : (
+                      <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
+                        <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
+                      </button>
+                    )}
                     <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage thread">•••</button>
                     <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete thread">×</button>
                     {threadMenuId === thread.id ? (
                       <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => openThread(thread)}>Open thread</button>
-                        <button type="button" onClick={() => void renameThread(thread)}>Rename thread</button>
+                        <button type="button" onClick={() => beginRenameThread(thread)}>Rename thread</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin thread" : "Pin thread"}</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { read: thread.read === false })}>{thread.read === false ? "Mark read" : "Mark unread"}</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive thread</button>
