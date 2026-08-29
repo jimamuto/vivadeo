@@ -1317,6 +1317,7 @@ def _chat_message_path(thread: ChatThread, message_id: str | None) -> list[ChatT
 def _append_chat_message(
     thread: ChatThread,
     *,
+    session: Session | None = None,
     role: str,
     content: str,
     parent_id: str | None = None,
@@ -1335,6 +1336,9 @@ def _append_chat_message(
         error=error,
     )
     thread.messages.append(message)
+    if session is not None:
+        # Flush the new row before updating the thread's foreign-key pointer.
+        session.flush()
     thread.current_message_id = message.id
     thread.updated_at = utcnow()
     return message
@@ -1605,6 +1609,7 @@ def create_chat_message(
     current = _current_chat_message(thread)
     user_message = _append_chat_message(
         thread,
+        session=session,
         role="user",
         content=question,
         parent_id=current.id if current is not None else None,
@@ -1613,6 +1618,7 @@ def create_chat_message(
     _attach_message_videos(session, user_message, message_video_ids, organization_id)
     assistant_message = _append_chat_message(
         thread,
+        session=session,
         role="assistant",
         content="",
         parent_id=user_message.id,
@@ -1853,6 +1859,7 @@ def search_chat(
         else:
             user_message = _append_chat_message(
                 thread,
+                session=session,
                 role="user",
                 content=question,
                 parent_id=current.id if current is not None else None,
@@ -1960,6 +1967,7 @@ def search_chat(
                     thread.title = " ".join(question.split())[:255] or "New thread"
             _append_chat_message(
                 thread,
+                session=session,
                 role="assistant",
                 content=answer,
                 parent_id=user_message.id if user_message is not None else None,
@@ -2026,6 +2034,7 @@ def search_chat(
         if thread is not None:
             assistant_message = _append_chat_message(
                 thread,
+                session=session,
                 role="assistant",
                 content="",
                 parent_id=user_message.id if user_message is not None else None,
@@ -2038,6 +2047,7 @@ def search_chat(
             if assistant_message is None:
                 assistant_message = _append_chat_message(
                     thread,
+                    session=session,
                     role="assistant",
                     content="",
                     parent_id=user_message.id if user_message is not None else None,
@@ -2129,6 +2139,7 @@ def regenerate_chat_message(
     ]
     replacement = _append_chat_message(
         thread,
+        session=session,
         role="assistant",
         content="",
         parent_id=parent.id,
