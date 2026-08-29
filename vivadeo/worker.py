@@ -8,12 +8,13 @@ import tempfile
 from pathlib import Path
 
 from celery import Celery
+from celery.signals import worker_process_init, worker_process_shutdown
 from redis import Redis
 from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
 from .config import get_settings
-from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Organization, Video, VideoTranscriptSegment, new_id, session_scope, utcnow
+from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Organization, Video, VideoTranscriptSegment, dispose_engine, new_id, session_scope, utcnow
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
 from .frame_extractor import extract_frame
@@ -31,7 +32,18 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
 )
-celery_app.conf.update(task_track_started=True, worker_prefetch_multiplier=1)
+celery_app.conf.update(task_track_started=True, worker_prefetch_multiplier=1, worker_max_tasks_per_child=100, broker_connection_retry_on_startup=True)
+
+
+@worker_process_init.connect
+def _reset_database_pool_after_fork(**_kwargs) -> None:
+    dispose_engine(close=False)
+
+
+@worker_process_shutdown.connect
+def _dispose_worker_database_pool(**_kwargs) -> None:
+    dispose_engine()
+
 
 class JobCanceled(Exception):
     pass

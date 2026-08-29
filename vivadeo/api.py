@@ -1008,7 +1008,9 @@ def get_profile_avatar(
     image = session.execute(text('SELECT image FROM "user" WHERE id = :user_id'), {"user_id": x_user_id}).scalar_one_or_none()
     if not image or "profile-images/" not in image:
         raise HTTPException(status_code=404, detail="Profile image not found")
-    return stream_object("profile-images/" + image.split("profile-images/", 1)[1])
+    object_key = "profile-images/" + image.split("profile-images/", 1)[1]
+    session.close()
+    return stream_object(object_key)
 
 
 @app.delete("/v1/profile/avatar", status_code=204, dependencies=[Depends(require_api_key)])
@@ -1049,11 +1051,9 @@ def get_media(
     ).first()
     if video is None and clip is None:
         raise HTTPException(status_code=404, detail="Media not found")
-    return stream_object(
-        object_key,
-        content_type=(video.content_type if video else "video/mp4"),
-        range_header=range_header,
-    )
+    content_type = video.content_type if video else "video/mp4"
+    session.close()
+    return stream_object(object_key, content_type=content_type, range_header=range_header)
 
 
 @app.get(
@@ -1120,14 +1120,17 @@ def stream_job_events(
     job = session.get(Job, job_id)
     if not job or job.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Job not found")
+    initial_event = _job_response(job).model_dump_json()
+    initial_status = job.status
+    session.close()
 
     def event_stream():
         client = Redis.from_url(get_runtime_settings().redis_url, decode_responses=True)
         pubsub = client.pubsub()
         pubsub.subscribe(f"vivadeo:job:{job_id}")
         try:
-            yield f"event: job\\ndata: {_job_response(job).model_dump_json()}\\n\\n"
-            if job.status in {"succeeded", "failed", "canceled"}:
+            yield f"event: job\\ndata: {initial_event}\\n\\n"
+            if initial_status in {"succeeded", "failed", "canceled"}:
                 return
             while True:
                 message = pubsub.get_message(ignore_subscribe_messages=True, timeout=15)
@@ -1882,30 +1885,31 @@ def search_chat(
         plan = "starter"
     use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
     try:
-        if use_nvidia:
-            embedding_backend = get_embedder(
-                backend="nvidia",
-                api_key=runtime_settings.pro_embedding_api_key,
-                base_url=runtime_settings.pro_embedding_base_url,
-                model=runtime_settings.pro_embedding_model,
-                timeout=runtime_settings.pro_embedding_timeout,
-            )
-        else:
-            embedding_backend = get_embedder()
+        # Video embeddings choose the relevant moments first. Transcript embeddings only
+        # supplement sparse visual retrieval, while overlapping transcript rows provide
+        # the text context sent to the answer model.
+        embedding_backend = get_embedder()
         embedding = embedding_backend.embed_query(question)
         store = PostgresVideoStore(session)
-        search_method = store.search_transcript_embeddings if use_nvidia else store.search
         search_kwargs = {
             "n_results": max(request.results, 30) if request.focus_video_id and request.focus_start_time is not None else request.results,
             "organization_id": organization_id,
             "video_id": request.focus_video_id or request.video_id,
             **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
         }
-        chunk_hits = search_method(embedding, **search_kwargs)
-        if use_nvidia and not chunk_hits:
+        chunk_hits = store.search(embedding, **search_kwargs)
+        if use_nvidia and len(chunk_hits) < request.results:
             reset_embedder()
-            qwen = get_embedder()
-            chunk_hits = store.search(qwen.embed_query(question), **search_kwargs)
+            transcript_embedder = get_embedder(
+                backend="nvidia",
+                api_key=runtime_settings.pro_embedding_api_key,
+                base_url=runtime_settings.pro_embedding_base_url,
+                model=runtime_settings.pro_embedding_model,
+                timeout=runtime_settings.pro_embedding_timeout,
+            )
+            transcript_hits = store.search_transcript_embeddings(transcript_embedder.embed_query(question), **search_kwargs)
+            seen_hits = {(hit["video_id"], hit["start_time"], hit["end_time"]) for hit in chunk_hits}
+            chunk_hits.extend(hit for hit in transcript_hits if (hit["video_id"], hit["start_time"], hit["end_time"]) not in seen_hits)
     finally:
         reset_embedder()
 
@@ -2041,6 +2045,8 @@ def search_chat(
                 status="pending",
             )
             session.flush()
+            # Do not hold a database connection while waiting on an external model.
+            session.commit()
         answer = generator.answer(messages, citations)
     except Exception as exc:
         if thread is not None:

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
@@ -69,6 +68,7 @@ type VideoOption = {
   id: string;
   filename: string;
   status: string;
+  duration?: number | null;
   url?: string | null;
 };
 
@@ -88,16 +88,6 @@ type MomentContext = {
   filename: string;
   startTime: number;
   endTime: number;
-};
-
-type EvidenceFrame = {
-  id: string;
-  video_id: string;
-  timestamp: number;
-  status: string;
-  url?: string | null;
-  job_id?: string | null;
-  error?: string | null;
 };
 
 const starterPaths = {
@@ -208,8 +198,6 @@ export function SearchContent({
   const [renamingTitle, setRenamingTitle] = useState("");
   const [threadSearch, setThreadSearch] = useState("");
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
-  const [activeEvidence, setActiveEvidence] = useState<Citation | null>(null);
-  const [evidenceFrame, setEvidenceFrame] = useState<EvidenceFrame | null>(null);
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -287,37 +275,6 @@ export function SearchContent({
   useEffect(() => {
     window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches));
   }, [recentSearches]);
-
-  useEffect(() => {
-    if (!activeEvidence) {
-      setEvidenceFrame(null);
-      return;
-    }
-    let cancelled = false;
-    setEvidenceFrame({ id: "", video_id: activeEvidence.video_id, timestamp: activeEvidence.start_time, status: "queued" });
-    void (async () => {
-      try {
-        const response = await fetch(`/api/proxy/v1/videos/${activeEvidence.video_id}/frames`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ timestamp: activeEvidence.start_time }),
-        });
-        if (!response.ok) throw new Error("Frame unavailable");
-        let frame = (await response.json()) as EvidenceFrame;
-        if (frame.status !== "ready" && frame.job_id) {
-          const job = await waitForJob(frame.job_id);
-          if (job.status !== "succeeded") throw new Error("Frame extraction failed");
-          const refreshed = await fetch(`/api/proxy/v1/videos/${activeEvidence.video_id}/frames/${frame.id}`, { cache: "no-store" });
-          if (!refreshed.ok) throw new Error("Frame unavailable");
-          frame = (await refreshed.json()) as EvidenceFrame;
-        }
-        if (!cancelled) setEvidenceFrame(frame);
-      } catch (cause) {
-        if (!cancelled) setEvidenceFrame({ id: "", video_id: activeEvidence.video_id, timestamp: activeEvidence.start_time, status: "failed", error: cause instanceof Error ? cause.message : "Frame unavailable" });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeEvidence?.video_id, activeEvidence?.start_time]);
 
   useEffect(() => {
     if (!initialQuery.trim() || !activeThreadId || initialQuerySubmitted.current) return;
@@ -706,7 +663,6 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setExpandedCitations({});
-    setActiveEvidence(null);
     setMomentContext(null);
   }
 
@@ -720,7 +676,6 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setExpandedCitations({});
-    setActiveEvidence(null);
     setMomentContext(null);
     setThreadMenuId(null);
   }
@@ -795,14 +750,13 @@ export function SearchContent({
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
-  const activeEvidenceSource = activeEvidence ? videos.find((video) => video.id === activeEvidence.video_id) || threadSources.find((source) => source.video_id === activeEvidence.video_id) : null;
 
   return (
     <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={profileName}>
       <section className={`search-shell chat-shell ${historyOpen ? "history-open" : "history-closed"} fade-in`}>
         <aside className="search-filters surface-section">
           <h1>Ask Vivadeo</h1>
-          <p className="muted">Transcript-grounded answers from workspace videos. Clip evidence arrives later.</p>
+          <p className="muted">Search across your video moments, then ask follow-up questions.</p>
           <div className="field">
             <label htmlFor="workspace-filter">Workspace</label>
             <input id="workspace-filter" value={activeWorkspace} readOnly />
@@ -1019,19 +973,17 @@ export function SearchContent({
                     <article key={citationKey} className={`search-result chat-message ${turn.role === "assistant" ? "search-result-answer chat-message-assistant" : "chat-message-user"}`}>
                       <div className="search-top">
                         <div className="search-meta">
-                          <p className="pill">{turn.role === "user" ? "You" : "Vivadeo"}</p>
                           {turn.role === "assistant" ? (
                             <>
-                              <p className="search-answer-text">{turn.content || (isFailed ? "Vivadeo could not prepare this answer." : "Generating answer…")}</p>
+                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : null}
                               {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
-                              <div className="chat-message-actions">
-                                {turn.id ? <button className="button-secondary" type="button" disabled={loading} onClick={() => void regenerateMessage(turn)}>{isFailed ? "Retry" : "Regenerate"}</button> : null}
-                                {branchMessages.length > 1 ? <span className="chat-branch-control" aria-label="Answer branches">
+                              {branchMessages.length > 1 ? <div className="chat-message-actions">
+                                <span className="chat-branch-control" aria-label="Answer branches">
                                   <button type="button" className="button-secondary" disabled={branchIndex <= 0} onClick={() => void selectMessageBranch(branchMessages[branchIndex - 1].id!)} aria-label="Previous answer branch">←</button>
                                   <span>{branchIndex + 1} / {branchMessages.length}</span>
                                   <button type="button" className="button-secondary" disabled={branchIndex === branchMessages.length - 1} onClick={() => void selectMessageBranch(branchMessages[branchIndex + 1].id!)} aria-label="Next answer branch">→</button>
-                                </span> : null}
-                              </div>
+                                </span>
+                              </div> : null}
                             </>
                           ) : (
                             <>
@@ -1046,27 +998,29 @@ export function SearchContent({
                       {citations.length ? (
                         <div className="search-citations">
                           <div className="search-citation-head">
-                            <span>Evidence ranges</span>
-                            <strong>{citations.length} cited</strong>
+                            <span>Relevant moments</span>
+                            <strong>{citations.length} found</strong>
                           </div>
-                          {visibleCitations.map((citation) => (
-                            <article key={citation.segment_id} className="detail-card search-citation-card">
-                              <span>{citation.filename} • {fmt(citation.start_time)} - {fmt(citation.end_time)}</span>
-                              <strong className="detail-wrap">{citation.text}</strong>
-                              <p className="muted">{citation.source_uri}</p>
-                              <div className="search-citation-actions">
-                                <button className="button-secondary" type="button" onClick={() => setActiveEvidence(citation)}>
-                                  Watch moment
-                                </button>
-                                <button className="button-secondary" type="button" onClick={() => { setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time }); document.getElementById("query")?.focus(); }}>
-                                  Ask about this moment
-                                </button>
-                                <Link className="button-secondary" href={`/dashboard/library?video_id=${encodeURIComponent(citation.video_id)}&t=${Math.floor(citation.start_time)}`}>
-                                  Open full video
-                                </Link>
-                              </div>
-                            </article>
-                          ))}
+                          <div className="search-citation-scroller" aria-label="Relevant video moments">
+                            {visibleCitations.map((citation) => {
+                              const citationSource = videos.find((video) => video.id === citation.video_id) || threadSources.find((source) => source.video_id === citation.video_id);
+                              const previewStart = Math.max(0, citation.start_time - 1);
+                              const previewEnd = citationSource?.duration ? Math.min(citationSource.duration, citation.end_time + 1) : citation.end_time + 1;
+                              return (
+                                <article key={citation.segment_id} className="detail-card search-citation-card">
+                                  <div className="search-citation-preview">
+                                    {citationSource?.url ? <video playsInline preload="metadata" tabIndex={0} aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`} src={`${citationSource.url}#t=${previewStart},${previewEnd}`} onLoadedMetadata={(event) => { event.currentTarget.currentTime = citation.start_time; }} onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })} onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); } }} onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }} /> : <span className="search-citation-preview-empty">Video preview unavailable</span>}
+                                    {citationSource?.url ? <span className="search-citation-play" aria-hidden="true">▶</span> : null}
+                                    <span className="search-citation-time">{fmt(citation.start_time)}–{fmt(citation.end_time)}</span>
+                                  </div>
+                                  <div className="search-citation-body">
+                                    <div className="search-citation-kicker"><span>{citation.filename}</span><span>Video moment</span></div>
+                                    <strong className="detail-wrap">{citation.text}</strong>
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
                           {citations.length > 3 ? (
                             <button
                               className="button-secondary search-citation-toggle"
@@ -1085,39 +1039,12 @@ export function SearchContent({
               {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label="Vivadeo is preparing an answer">
                 <div className="search-top">
                   <div className="search-meta">
-                    <p className="pill">Vivadeo</p>
                     <div className="chat-typing" aria-hidden="true"><span /><span /><span /></div>
                   </div>
                 </div>
               </article> : null}
             </section>
           </section>
-          {activeEvidence ? (
-            <section className="chat-evidence-player" aria-label="Video evidence">
-              <div className="chat-evidence-player-head">
-                <div>
-                  <span className="muted">Evidence moment</span>
-                  <strong>{activeEvidence.filename} · {fmt(activeEvidence.start_time)}–{fmt(activeEvidence.end_time)}</strong>
-                </div>
-                <button type="button" className="history-toggle" onClick={() => setActiveEvidence(null)} aria-label="Close video evidence">×</button>
-              </div>
-              {evidenceFrame?.url ? <img className="chat-evidence-frame" src={evidenceFrame.url} alt={`Frame from ${activeEvidence.filename} at ${fmt(activeEvidence.start_time)}`} /> : null}
-              {activeEvidenceSource?.url ? (
-                <video
-                  key={`${activeEvidence.video_id}-${activeEvidence.start_time}`}
-                  className="chat-evidence-video"
-                  controls
-                  preload="metadata"
-                  src={activeEvidenceSource.url}
-                  onLoadedMetadata={(event) => { event.currentTarget.currentTime = activeEvidence.start_time; }}
-                />
-              ) : (
-                <p className="muted">This source is still processing or its playback URL is unavailable.</p>
-              )}
-              {evidenceFrame?.status === "failed" ? <p className="muted">Exact frame unavailable; the timestamped video is still available.</p> : null}
-              <p className="chat-evidence-transcript">{activeEvidence.text}</p>
-            </section>
-          ) : null}
         </div>
 
         <aside className="surface-section search-preview chat-history">

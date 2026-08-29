@@ -55,7 +55,7 @@ services:
 
   worker:
     image: ${VIVADEO_API_IMAGE:-ghcr.io/jimamuto/vivadeo-api:latest}
-    command: celery -A vivadeo.worker.celery_app worker --loglevel=INFO
+    command: sh -c "celery -A vivadeo.worker.celery_app worker --loglevel=INFO --concurrency $${VIVADEO_WORKER_CONCURRENCY:-4} --max-tasks-per-child=100"
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}

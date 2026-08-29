@@ -111,7 +111,7 @@ class OpenAICompatibleChat:
         grounded_messages = [
             {
                 "role": "system",
-                "content": "Answer using only the supplied video transcript evidence. If the evidence is insufficient, say so. Cite relevant timestamps in your answer.\n\nEvidence:\n" + evidence,
+                "content": "Answer using only the supplied video evidence. Give the direct answer in 1-2 short sentences. Do not include evidence lists, repeat transcript excerpts, raw links, or chain-of-thought; the interface presents the relevant moments separately. If the evidence is insufficient, say so plainly.\n\nEvidence:\n" + evidence,
             },
             *messages,
         ]

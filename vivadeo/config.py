@@ -22,6 +22,10 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
+    db_pool_size: int = Field(3, ge=1, alias="VIVADEO_DB_POOL_SIZE")
+    db_max_overflow: int = Field(2, ge=0, alias="VIVADEO_DB_MAX_OVERFLOW")
+    db_pool_timeout: int = Field(30, ge=1, alias="VIVADEO_DB_POOL_TIMEOUT")
+    db_pool_recycle: int = Field(1800, ge=0, alias="VIVADEO_DB_POOL_RECYCLE")
 
     s3_endpoint_url: str = Field("https://s3.eu-central-003.backblazeb2.com", alias="S3_ENDPOINT_URL")
     s3_public_endpoint_url: str | None = Field(None, alias="S3_PUBLIC_ENDPOINT_URL")

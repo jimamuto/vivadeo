@@ -288,10 +288,24 @@ class DeadLetterEntry(Base):
 
 
 def make_engine(database_url: str | None = None):
-    return create_engine(database_url or get_settings().database_url, pool_pre_ping=True)
+    settings = get_settings()
+    return create_engine(
+        database_url or settings.database_url,
+        pool_pre_ping=True,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_timeout=settings.db_pool_timeout,
+        pool_recycle=settings.db_pool_recycle,
+    )
 
 
-SessionLocal = sessionmaker(bind=make_engine(), expire_on_commit=False)
+_engine = make_engine()
+SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
+
+
+def dispose_engine(close: bool = True) -> None:
+    """Drop inherited or stale connections, especially across worker forks."""
+    _engine.dispose(close=close)
 
 
 @contextmanager
