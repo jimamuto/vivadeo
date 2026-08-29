@@ -605,7 +605,7 @@ export function SearchContent({
     const userTurn: ChatTurn = { role: "user", content: nextQuestion, status: "completed" };
     const nextTurns: ChatTurn[] = [...turns, userTurn];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New thread" ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
@@ -839,7 +839,7 @@ export function SearchContent({
           ) : null}
         </aside>
 
-        <div className="search-main">
+        <div className={`search-main ${turns.length ? "chat-main-active" : "chat-main-empty"}`}>
           <section className="surface-section search-query">
             <input
               ref={uploadInputRef}
@@ -976,15 +976,15 @@ export function SearchContent({
             ) : null}
             <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts.</p>
             {status ? (
-              <div className="search-status" aria-live="polite">
-                <span>{status}</span>
+              <div className={`search-status ${loading ? "is-loading" : ""}`} aria-live="polite" aria-busy={loading}>
+                <span className="chat-status-copy">{loading ? <span className="chat-status-dot" aria-hidden="true" /> : null}<span>{status}</span></span>
                 {loading ? <span className="chat-status-actions"><strong>{elapsedSeconds}s elapsed</strong>{activeChatJobId ? <button type="button" className="button-secondary" onClick={() => void cancelChatGeneration()}>Cancel</button> : null}</span> : null}
               </div>
             ) : null}
           </section>
 
           <section className="search-layout">
-            <section className="search-feed">
+            <section className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
               {turns.length === 0 ? (
                 <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
                   <h3 className="chat-greeting">{showGreeting ? `${greeting}, ${firstName}` : "New thread"}</h3>
@@ -1016,7 +1016,7 @@ export function SearchContent({
                   const visibleCitations = showAll ? citations : citations.slice(0, 3);
 
                   return (
-                    <article key={citationKey} className={`search-result ${turn.role === "assistant" ? "search-result-answer" : ""}`}>
+                    <article key={citationKey} className={`search-result chat-message ${turn.role === "assistant" ? "search-result-answer chat-message-assistant" : "chat-message-user"}`}>
                       <div className="search-top">
                         <div className="search-meta">
                           <p className="pill">{turn.role === "user" ? "You" : "Vivadeo"}</p>
@@ -1082,6 +1082,14 @@ export function SearchContent({
                   );
                 })
               )}
+              {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label="Vivadeo is preparing an answer">
+                <div className="search-top">
+                  <div className="search-meta">
+                    <p className="pill">Vivadeo</p>
+                    <div className="chat-typing" aria-hidden="true"><span /><span /><span /></div>
+                  </div>
+                </div>
+              </article> : null}
             </section>
           </section>
           {activeEvidence ? (
