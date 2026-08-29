@@ -48,6 +48,7 @@ export default async function ChatPage({
         initialQuery={params.q || ""}
         initialVideoId={params.video_id || ""}
         initialVideoIds={params.video_ids ? params.video_ids.split(",").filter(Boolean) : []}
+        initialWorkspace={workspace}
         initialThreads={initialThreads}
         initialOnboardingCompleted={onboardingCompleted}
       />

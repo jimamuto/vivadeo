@@ -165,6 +165,7 @@ export function SearchContent({
   initialQuery = "",
   initialVideoId = "",
   initialVideoIds = [],
+  initialWorkspace = "default-workspace",
   initialThreads = [],
   initialOnboardingCompleted = false,
 }: {
@@ -175,8 +176,9 @@ export function SearchContent({
   initialQuery?: string;
   initialVideoId?: string;
   initialVideoIds?: string[];
+  initialWorkspace?: string;
 }) {
-  const [activeWorkspace, setActiveWorkspace] = useState("default-workspace");
+  const [activeWorkspace, setActiveWorkspace] = useState(initialWorkspace);
   const [workspacePlan, setWorkspacePlan] = useState("starter");
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
@@ -225,19 +227,11 @@ export function SearchContent({
   }, [threadMenuId]);
 
   useEffect(() => {
-    const workspace = document.cookie
-      .split("; ")
-      .find((item) => item.startsWith("vivadeo_workspace="))
-      ?.split("=")[1];
-    if (workspace) setActiveWorkspace(decodeURIComponent(workspace));
-  }, []);
-
-  useEffect(() => {
     void fetch("/api/proxy/v1/workspaces", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return;
-        const payload = await response.json() as Array<{ slug: string; plan: string }>;
-        const workspace = payload.find((item) => item.slug === activeWorkspace);
+        const payload = await response.json() as Array<{ id: string; slug: string; plan: string }>;
+        const workspace = payload.find((item) => item.id === activeWorkspace || item.slug === activeWorkspace);
         setWorkspacePlan(workspace?.plan || "starter");
       })
       .catch(() => setWorkspacePlan("starter"));
