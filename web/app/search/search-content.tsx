@@ -885,6 +885,7 @@ export function SearchContent({
     return groups;
   }, []);
   const threadSources = activeThread?.sources || [];
+  const sourceCount = threadSources.length + uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status)).length;
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
@@ -948,25 +949,6 @@ export function SearchContent({
             <form className="chat-composer" onSubmit={submit}>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
-                {threadSources.length || uploadItems.length ? (
-                  <div className="chat-source-rail" aria-label="Thread video sources">
-                    {threadSources.map((source) => (
-                      <div key={source.video_id} className={`chat-source-chip chat-source-${source.status}`}>
-                        <span className="chat-source-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-11Zm12 3 4-2v9l-4-2" /></svg></span>
-                        <span className="chat-source-details"><strong title={source.filename}>{source.filename}</strong><small>Video</small></span>
-                        <button type="button" onClick={() => void fetch(`/api/proxy/v1/chat/threads/${activeThreadId}/sources/${source.video_id}`, { method: "DELETE" }).then(() => refreshThreadSources(activeThreadId))} aria-label={`Remove ${source.filename}`}>×</button>
-                      </div>
-                    ))}
-                    {uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status)).map((item) => {
-                      const percent = Math.max(0, Math.min(100, Math.round(item.progress * 100)));
-                      return <div key={item.id} className={`chat-source-chip chat-upload-${item.status}`}>
-                        <span className="chat-source-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-11Zm12 3 4-2v9l-4-2" /></svg></span>
-                        <span className="chat-source-details"><strong title={item.filename}>{item.filename}</strong><small>{item.error || item.message || (item.status === "uploading" ? "Uploading" : "Processing")} · {percent}%</small></span>
-                        <span className="chat-source-progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${percent}%` }} /></span>
-                      </div>;
-                    })}
-                  </div>
-                ) : null}
                 {momentContext ? <button type="button" className="chat-moment-context" onClick={() => setMomentContext(null)}>Focused on {momentContext.filename} · {fmt(momentContext.startTime)} ×</button> : null}
                 <textarea
                   id="query"
@@ -979,7 +961,7 @@ export function SearchContent({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  placeholder="What did the speaker say about the launch timeline?"
+                  placeholder={turns.length ? "" : "What did the speaker say about the launch timeline?"}
                   disabled={loading}
                 />
               </div>
@@ -1033,7 +1015,10 @@ export function SearchContent({
                     ) : null}
                   </div>
                 </div>
-                <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
+                <div className="chat-composer-meta">
+                  {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "source" : "sources"}</span> : null}
+                  <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
+                </div>
               </div>
             </form>
             {urlDialogOpen ? (

@@ -1,6 +1,7 @@
 """FastAPI production API."""
 
 from pathlib import Path
+import logging
 import re
 import tempfile
 
@@ -40,6 +41,8 @@ from .modal_gemma import ModalGemmaChat
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
+from .frame_extractor import extract_frame
+from .visual_retrieval import is_visual_query, rank_frame_candidates, sample_timestamps
 from .schemas import (
     ChatMessage,
     ChatMessageAttachmentRequest,
@@ -82,6 +85,113 @@ from .worker import (
 )
 
 app = FastAPI(title="Vivadeo", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+def _visual_rerank_hits(
+    query_embedding: list[float],
+    chunk_hits: list[dict],
+    embedder,
+    results: int,
+    question: str,
+    verifier=None,
+) -> list[dict]:
+    """Rerank top chunk candidates and optionally verify frames with Pro vision."""
+    candidates: list[dict] = []
+    try:
+        with tempfile.TemporaryDirectory(prefix="vivadeo_visual_search_") as tmp_dir:
+            local_videos: dict[str, str] = {}
+            store = ObjectStore()
+            for hit in chunk_hits[:3]:
+                video_id = hit.get("video_id")
+                object_key = hit.get("object_key")
+                if not video_id or not object_key:
+                    continue
+                local_video = local_videos.get(video_id)
+                if local_video is None:
+                    local_video = str(Path(tmp_dir) / f"{video_id}.mp4")
+                    store.download_file(object_key, local_video)
+                    local_videos[video_id] = local_video
+                for timestamp in sample_timestamps(hit["start_time"], hit["end_time"]):
+                    frame_path = str(Path(tmp_dir) / f"{video_id}-{timestamp:.3f}.jpg")
+                    extract_frame(local_video, timestamp, frame_path)
+                    candidates.append({
+                        "video_id": video_id,
+                        "filename": hit.get("filename", "video"),
+                        "source_uri": hit.get("source_uri", ""),
+                        "timestamp": timestamp,
+                        "chunk_start": hit["start_time"],
+                        "path": frame_path,
+                        "embedding": embedder.embed_image(frame_path),
+                    })
+            ranked = rank_frame_candidates(query_embedding, candidates)
+            if verifier is not None and ranked:
+                verification_candidates: list[dict] = []
+                seen_chunks: set[tuple[str, float]] = set()
+                for candidate in ranked:
+                    chunk_key = (candidate["video_id"], candidate["chunk_start"])
+                    if chunk_key in seen_chunks:
+                        continue
+                    seen_chunks.add(chunk_key)
+                    verification_candidates.append(candidate)
+                    if len(verification_candidates) >= 8:
+                        break
+                for candidate in ranked:
+                    if candidate in verification_candidates:
+                        continue
+                    verification_candidates.append(candidate)
+                    if len(verification_candidates) >= 5:
+                        break
+                decisions = []
+                for index, candidate in enumerate(verification_candidates, 1):
+                    result = verifier.verify_visual_candidates(question, [candidate])
+                    if result and result[0].get("relevant") and float(result[0].get("confidence", 0.0)) >= 0.55:
+                        decisions.append({"index": index})
+                verified_indexes = {decision["index"] for decision in decisions}
+                verified_keys = {
+                    (candidate["video_id"], candidate["timestamp"])
+                    for index, candidate in enumerate(verification_candidates, 1)
+                    if index in verified_indexes
+                }
+                ranked = [
+                    {**candidate, "visual_verified": True}
+                    for candidate in ranked
+                    if (candidate["video_id"], candidate["timestamp"]) in verified_keys
+                ]
+    except Exception:
+        logger.exception("visual_frame_rerank_failed")
+        return chunk_hits
+
+    selected: list[dict] = []
+    for candidate in ranked:
+        timestamp = candidate["timestamp"]
+        start_time = max(0.0, timestamp - 2.0)
+        end_time = timestamp + 2.0
+        merged = False
+        for item in selected:
+            if item["video_id"] != candidate["video_id"]:
+                continue
+            if abs(((item["start_time"] + item["end_time"]) / 2) - timestamp) >= 4.0:
+                continue
+            item["start_time"] = min(item["start_time"], start_time)
+            item["end_time"] = max(item["end_time"], end_time)
+            item["similarity_score"] = max(item["similarity_score"], candidate["similarity_score"])
+            merged = True
+            break
+        if merged:
+            continue
+        selected.append({
+            "video_id": candidate["video_id"],
+            "filename": candidate["filename"],
+            "source_uri": candidate["source_uri"],
+            "start_time": start_time,
+            "end_time": end_time,
+            "similarity_score": candidate["similarity_score"],
+            "visual_verified": candidate.get("visual_verified", False),
+        })
+        if len(selected) >= results:
+            break
+    return selected or chunk_hits
 
 
 @app.on_event("startup")
@@ -1895,6 +2005,19 @@ def search_chat(
     except Exception:
         plan = "starter"
     use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
+    visual_verifier = None
+    if (
+        is_visual_query(question)
+        and request.provider == "vivadeo-pro"
+        and getattr(runtime_settings, "pro_llm_api_key", None)
+        and getattr(runtime_settings, "pro_llm_base_url", None)
+    ):
+        visual_verifier = OpenAICompatibleChat(
+            base_url=runtime_settings.pro_llm_base_url,
+            api_key=runtime_settings.pro_llm_api_key,
+            model=runtime_settings.pro_llm_model,
+            timeout=runtime_settings.pro_llm_timeout,
+        )
     try:
         # Video embeddings choose the relevant moments first. Transcript embeddings only
         # supplement sparse visual retrieval, while overlapping transcript rows provide
@@ -1909,7 +2032,16 @@ def search_chat(
             **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
         }
         chunk_hits = store.search(embedding, **search_kwargs)
-        if use_nvidia and len(chunk_hits) < request.results:
+        if is_visual_query(question):
+            chunk_hits = _visual_rerank_hits(
+                embedding,
+                chunk_hits,
+                embedding_backend,
+                request.results,
+                question,
+                visual_verifier,
+            )
+        if use_nvidia and len(chunk_hits) < request.results and not is_visual_query(question):
             reset_embedder()
             transcript_embedder = get_embedder(
                 backend="nvidia",
@@ -1944,7 +2076,7 @@ def search_chat(
                 VideoTranscriptSegment.start_time <= hit["end_time"],
             )
             .order_by(VideoTranscriptSegment.start_time.asc())
-            .limit(6)
+            .limit(1 if hit.get("visual_verified") else 6)
         )
         for segment, video in session.execute(stmt).all():
             if segment.id in seen_segment_ids:
@@ -1956,10 +2088,11 @@ def search_chat(
                     "video_id": video.id,
                     "filename": video.filename,
                     "source_uri": video.source_uri,
-                    "start_time": segment.start_time,
-                    "end_time": segment.end_time,
+                    "start_time": hit["start_time"] if hit.get("visual_verified") else segment.start_time,
+                    "end_time": hit["end_time"] if hit.get("visual_verified") else segment.end_time,
                     "text": segment.text,
                     "similarity_score": hit.get("similarity_score"),
+                    "visual_verified": hit.get("visual_verified", False),
                 }
             )
             if len(citations) >= request.results:

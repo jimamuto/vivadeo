@@ -197,6 +197,7 @@ class ChatCitation(BaseModel):
     end_time: float
     text: str
     similarity_score: float | None = None
+    visual_verified: bool = False
 
 
 class ChatMessageRequest(BaseModel):
