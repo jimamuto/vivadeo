@@ -2,13 +2,13 @@
 
 ## Goal
 
-Improve Vivadeo's chat workflow using the proven interaction patterns in [Open WebUI](https://github.com/open-webui/open-webui), while keeping Vivadeo's video-first product model, branding, workspace authorization, Backblaze B2 storage, PostgreSQL persistence, and Modal-hosted Vivadeo Auto inference.
+Improve Vivadeo's chat workflow using the proven interaction patterns in [Open WebUI](https://github.com/open-webui/open-webui), while keeping Vivadeo's video-first product model, branding, workspace authorization, private object storage, PostgreSQL persistence, and Modal-hosted Vivadeo Auto inference.
 
 This is a **behavior and architecture reference plan**, not a plan to fork Open WebUI into Vivadeo.
 
 ## Guardrails
 
-- Keep the Vivadeo brand, Next.js frontend, FastAPI backend, PostgreSQL database, B2 object storage, Redis/Celery jobs, and Modal inference.
+- Keep the Vivadeo brand, Next.js frontend, FastAPI backend, PostgreSQL database, private object storage, Redis/Celery jobs, and Modal inference.
 - Do not import generic model-provider, Ollama, web-search, voice, plugin, knowledge-base, or admin subsystems that do not serve video chat.
 - Keep model implementation details hidden from users; the visible assistant remains **Vivadeo Auto**.
 - Preserve workspace-level authorization on every thread, message, source, attachment, citation, and media request.
@@ -37,7 +37,7 @@ Reference: <https://github.com/open-webui/open-webui/blob/main/LICENSE>
 | Persistence | `ChatThread`, `ChatThreadMessage`, `ChatThreadVideo` in `vivadeo/db.py` | Add message-tree, status, and attachment metadata with additive migrations. |
 | Retrieval | PostgreSQL vector search over transcript chunks | Keep retrieval video-scoped and citation-first. |
 | Inference | Modal-hosted Gemma through `ModalGemmaChat` | Keep the provider private behind Vivadeo Auto. |
-| Storage | Backblaze B2 | Store uploaded media and derived evidence objects in B2; never expose credentials. |
+| Storage | Private object store | Store uploaded media and derived evidence objects behind workspace-authorized routes; never expose credentials. |
 | Jobs | Redis/Celery with durable status and SSE | Reuse the same cancellation and progress conventions for chat generation. |
 | Authorization | Workspace-scoped backend dependencies and Next wrappers | Every new operation must verify thread ownership through workspace membership. |
 
@@ -281,7 +281,7 @@ Retries must create a new assistant attempt or branch and must not silently repl
 
 - Verify Postgres query plans for thread/message hydration.
 - Verify Redis/SSE behavior with multiple browser tabs.
-- Verify B2 object access remains short-lived and workspace-scoped.
+- Verify private object access remains workspace-scoped and storage credentials never reach clients.
 - Verify no provider or credential details appear in user-facing responses.
 
 ## Recommended first implementation slice

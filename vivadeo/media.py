@@ -7,7 +7,7 @@ import re
 from fastapi import HTTPException, status
 from starlette.responses import StreamingResponse
 
-from .object_store import ObjectStore
+from .object_store import ObjectStore, UnsatisfiableRange
 
 
 def stream_object(
@@ -17,14 +17,34 @@ def stream_object(
 ) -> StreamingResponse:
     store = ObjectStore()
     try:
-        request_args = {"Bucket": store.bucket, "Key": object_key}
+        normalized_range = None
         if range_header:
             match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
-            if match and (match.group(1) or match.group(2)):
-                start, end = match.groups()
-                request_args["Range"] = f"bytes={start}-{end}"
-        response = store.client.get_object(**request_args)
+            if not match or not (match.group(1) or match.group(2)):
+                raise UnsatisfiableRange(store.object_size(object_key))
+            start, end = match.groups()
+            normalized_range = f"bytes={start}-{end}"
+        response = store.get_object(object_key, normalized_range)
+    except UnsatisfiableRange as exc:
+        raise HTTPException(
+            status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+            detail="Requested range is outside the media object",
+            headers={"Accept-Ranges": "bytes", "Content-Range": f"bytes */{exc.total}"},
+        ) from exc
     except Exception as exc:  # pragma: no cover - thin transport wrapper
+        error_response = getattr(exc, "response", None)
+        error_code = (
+            error_response.get("Error", {}).get("Code")
+            if isinstance(error_response, dict)
+            else getattr(exc, "error_code", None)
+        )
+        if error_code in {"InvalidRange", "RequestedRangeNotSatisfiable"}:
+            total = store.object_size(object_key)
+            raise HTTPException(
+                status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
+                detail="Requested range is outside the media object",
+                headers={"Accept-Ranges": "bytes", "Content-Range": f"bytes */{total}"},
+            ) from exc
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found") from exc
 
     headers = {"Accept-Ranges": "bytes"}

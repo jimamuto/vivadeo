@@ -12,7 +12,7 @@ The first implementation slice is now active on the `chat` branch:
 - `Ask about this moment` context sent with the next chat request
 - Library deep links that seek to the cited timestamp
 
-Server-side exact timestamp frame extraction is now implemented with cached B2 JPEGs and worker/SSE progress. Short derived video clips and visual-model frame questioning remain a follow-up slice after frame playback is validated.
+Server-side exact timestamp frame extraction is now implemented with cached private JPEG objects and worker/SSE progress. Short derived video clips and visual-model frame questioning remain a follow-up slice after frame playback is validated.
 
 ## 1. Goal
 
@@ -51,7 +51,7 @@ The repository already provides most of the backend primitives:
 - Redis-backed progress events and `/api/job-events/:jobId` provide the progress transport.
 - Chat threads and messages are persisted in PostgreSQL.
 - `/v1/search/chat` returns citations with `video_id`, filename, source URI, text, and timestamp ranges.
-- B2 object storage and presigned video URLs are already used by video responses.
+- Private object storage and workspace-authorized media URLs are already used by video responses.
 - The current Chat UI already has a source selector and renders timestamped evidence cards.
 
 The main gap is connecting these pieces into a single source-aware conversation and providing a player/clip evidence presentation.
@@ -125,7 +125,7 @@ Reuse the existing upload and URL-ingest routes. Add a thread context where need
 - created video/job is attached to the thread in the same transaction as the source record
 - response includes `{video_id, job_id, source, status}`
 
-Do not create a second ingestion pipeline. Chat must call the same worker tasks, retry paths, cancellation rules, and B2 object handling as the existing Ingest page.
+Do not create a second ingestion pipeline. Chat must call the same worker tasks, retry paths, cancellation rules, and provider-neutral object handling as the existing Ingest page.
 
 ### Progress
 
@@ -148,7 +148,7 @@ The backend must reject cross-workspace video IDs and must not trust source IDs 
 
 ### Evidence playback
 
-- `GET /v1/videos/{video_id}/playback` returns a short-lived presigned B2 URL and metadata.
+- `GET /v1/videos/{video_id}/playback` returns workspace-authorized media metadata without exposing storage credentials.
 - The endpoint validates workspace ownership and archived/deleted state.
 - The response can include the requested citation range for the player UI.
 
@@ -160,7 +160,7 @@ For precise frame extraction later:
 ## 6. Ingest and processing flow
 
 1. Client selects multiple files in Chat.
-2. Client uploads each file through the existing streamed B2 upload route.
+2. Client uploads each file through the existing streamed private-object upload route.
 3. API creates `Video`, `Job`, and `ChatThreadVideo` records transactionally.
 4. Worker performs the existing stages:
    - source validation
@@ -260,7 +260,7 @@ Keep it as the canonical full-source viewer and metadata surface. It should acce
 ## 10. Authorization and reliability
 
 - Every thread source and playback request is scoped to the current organization.
-- Never expose permanent B2 URLs.
+- Never expose permanent provider URLs or storage credentials.
 - Do not allow a user to attach an archived, deleted, or foreign video.
 - Treat canceled/failed jobs as non-queryable.
 - Keep ingestion idempotent for retries and browser reconnects.
@@ -305,7 +305,7 @@ Keep it as the canonical full-source viewer and metadata surface. It should acce
 ### Phase 4 — exact frames and clips
 
 - Add worker-backed frame/preview extraction.
-- Cache derived B2 objects.
+- Cache derived private objects.
 - Add visual evidence cards.
 - Evaluate visual model support separately from transcript search.
 

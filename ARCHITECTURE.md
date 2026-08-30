@@ -14,15 +14,15 @@ browser
         -> api: FastAPI on the private Compose network
            -> postgres: relational data and pgvector embeddings
            -> redis: Celery broker/result backend
-           -> Backblaze B2: original videos and generated clips via its S3-compatible API
+           -> private object storage: original videos and generated media
            -> Azure Communication Services Email: transactional auth email
            -> worker: Celery ingestion, embedding, and clipping jobs
               -> Modal Qwen3-VL embedder
 ```
 
 Only `web` is intended to be publicly exposed. Postgres, Redis, FastAPI, and the
-worker are internal services on the Compose network. Backblaze B2 is an external
-object-storage service accessed by the API and worker.
+worker are internal services on the Compose network. The configured private
+object-storage service is accessed only by the API and worker.
 
 ## Services
 
@@ -36,8 +36,8 @@ object-storage service accessed by the API and worker.
 - `postgres`: Primary database for product records, auth records, memberships,
   jobs, clips, and vectors.
 - `redis`: Celery broker and result backend.
-- `Backblaze B2`: external S3-compatible object store for uploaded source videos,
-  generated clips, and transcript artifacts.
+- `object store`: private Azure Blob or S3-compatible storage for uploaded source
+  videos, generated clips, keyframes, evidence frames, and transcript artifacts.
 - `modal`: External GPU runtime hosting `Qwen/Qwen3-VL-Embedding-2B`.
 
 ## Request Boundaries
@@ -92,7 +92,7 @@ upload or URL
   -> Next.js proxy
   -> FastAPI creates Video and Job records for the workspace
   -> Celery receives the job through Redis
-  -> worker stores source media in Backblaze B2 through the S3-compatible API
+  -> worker stores source media through the provider-neutral object adapter
   -> worker chunks and preprocesses the video
   -> worker sends chunk bytes to Modal
   -> Modal returns normalized embeddings
@@ -116,9 +116,9 @@ Clip creation:
 clip request
   -> Next.js proxy
   -> FastAPI creates Clip and Job records
-  -> worker downloads source video from Backblaze B2
+  -> worker downloads source video from private object storage
   -> ffmpeg trims the requested range
-  -> worker uploads the clip to Backblaze B2
+  -> worker uploads the clip to private object storage
   -> API returns a web-proxied media URL
 ```
 
@@ -148,10 +148,13 @@ Root `.env` is shared by Compose services. Important production variables:
 - `BETTER_AUTH_URL`: public origin for auth callbacks and redirects.
 - `BETTER_AUTH_SECRET`: secret used by Better Auth. Replace the development
   placeholder before exposing the app.
-- `S3_PUBLIC_ENDPOINT_URL`: should point at `/api/proxy/v1/media` so browsers
-  fetch media through the web app rather than accessing Backblaze B2 directly.
+- `STORAGE_BACKEND`: selects `azure` or `s3` for API and worker storage.
+- `STORAGE_PUBLIC_ENDPOINT_URL`: points at `/api/proxy/v1/media` so browsers
+  fetch workspace-authorized media without provider credentials.
+- `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER`, and
+  `AZURE_STORAGE_TIMEOUT`: private Azure Blob connection settings.
 - `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and
-  `S3_REGION`: Backblaze B2 S3-compatible connection settings in production.
+  `S3_REGION`: connection settings used only when `STORAGE_BACKEND=s3`.
 - `EMAIL_FROM`: verified Azure MailFrom address, currently the `vivadeo` sender
   on the Azure-managed `azurecomm.net` domain.
 - `AZURE_COMMUNICATION_CONNECTION_STRING`: secret credential for the Azure
@@ -167,8 +170,8 @@ Root `.env` is shared by Compose services. Important production variables:
 - Modal must be configured on the host and the embedder deployed separately with
   `uv run modal deploy vivadeo/modal_app.py`.
 - Database migrations run through Alembic from the Python services.
-- Postgres state is persisted in a Docker volume. Media is persisted in
-  Backblaze B2.
+- Postgres state is persisted in a Docker volume. Media is persisted in the
+  configured private object store.
 
 ## Current Limitations
 

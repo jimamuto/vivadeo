@@ -29,12 +29,11 @@ AUTH_DATABASE_URL=postgres://vivadeo:vivadeo@postgres:5432/vivadeo
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=<secret auth signing key>
 REDIS_URL=redis://redis:6379/0
-S3_ENDPOINT_URL=https://s3.eu-central-003.backblazeb2.com
-S3_PUBLIC_ENDPOINT_URL=http://localhost:3000/api/proxy/v1/media
-S3_BUCKET=vivadeo
-S3_ACCESS_KEY_ID=<backblaze application key ID>
-S3_SECRET_ACCESS_KEY=<backblaze application key>
-S3_REGION=eu-central-003
+STORAGE_BACKEND=azure
+STORAGE_PUBLIC_ENDPOINT_URL=http://localhost:3000/api/proxy/v1/media
+AZURE_STORAGE_CONNECTION_STRING=<secret connection string>
+AZURE_STORAGE_CONTAINER=vivadeo
+AZURE_STORAGE_TIMEOUT=300
 VIVADEO_MODAL_APP=vivadeo-qwen3-vl-embedding-2b
 VIVADEO_MODAL_CLASS=QwenEmbedder
 VIVADEO_CHUNK_DURATION=30
@@ -46,7 +45,8 @@ VIVADEO_TARGET_FPS=5
 VIVADEO_SKIP_STILL=false
 ```
 
-Do not commit real API keys or Modal credentials.
+Do not commit real API keys, storage credentials, or Modal credentials. See
+`docs/AZURE-BLOB-STORAGE.md` for provisioning and backend-switching details.
 
 ## Services
 
@@ -58,7 +58,7 @@ The Docker stack runs these services:
   videos.
 - `postgres`: Postgres with pgvector for video, job, clip, and embedding data.
 - `redis`: Celery broker and result backend.
-- `Backblaze B2`: S3-compatible object storage for original videos and clips.
+- `object store`: private Azure Blob or S3-compatible storage for original videos and derived media.
 
 Modal runs the GPU embedder outside Docker:
 
@@ -313,7 +313,7 @@ URL or upload
   -> FastAPI creates Video and Job records
   -> Celery worker receives the job through Redis
   -> worker downloads the source video into temporary storage
-  -> worker uploads the original to Backblaze B2
+  -> worker uploads the original to private object storage
   -> ffmpeg splits the video into overlapping chunks
   -> optional preprocessing lowers resolution and frame rate
   -> worker sends chunk bytes to Modal in batches
@@ -338,10 +338,10 @@ Clip creation follows this path:
 ```text
 clip request
   -> FastAPI creates Clip and Job records
-  -> Celery worker downloads the source video from Backblaze B2
+  -> Celery worker downloads the source video from private object storage
   -> ffmpeg trims the requested timestamp range
-  -> worker uploads the clip to Backblaze B2
-  -> Clip becomes ready with a presigned URL
+  -> worker uploads the clip to private object storage
+  -> Clip becomes ready with a workspace-authorized media URL
 ```
 
 ## Operational Checks
@@ -386,8 +386,8 @@ docker compose down -v
 ```
 
 Only use `down -v` when you intentionally want to delete indexed data. Media
-objects are stored in Backblaze B2 and require separate retention/deletion
-operations.
+objects are stored in the configured private object store and require separate
+retention/deletion operations.
 
 ## Troubleshooting
 

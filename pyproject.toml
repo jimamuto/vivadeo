@@ -20,6 +20,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "yt-dlp>=2025.1.0",
     "cryptography>=42",
+    "azure-storage-blob>=12.24",
 ]
 
 [project.scripts]

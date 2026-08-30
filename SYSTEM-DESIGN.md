@@ -16,10 +16,10 @@ Browser
         -> FastAPI API
            -> PostgreSQL + pgvector
            -> Redis/Celery jobs
-           -> Backblaze B2 object storage
+           -> private object storage
         -> Azure Communication Services Email
         -> Celery worker
-           -> Backblaze B2 object storage
+           -> private object storage
            -> Modal inference functions
 ```
 
@@ -29,23 +29,23 @@ GPU-backed embedding, transcription, and answer-generation functions.
 
 ## Object storage
 
-Production object storage is **Backblaze B2** accessed through its S3-compatible
-API using `boto3` and Signature Version 4. The API and worker use the same
-bucket and credentials through environment variables:
+Production object storage is private Azure Blob or an S3-compatible service.
+The API and worker share the provider-neutral `ObjectStore` contract and the
+same backend configuration:
 
-- `S3_ENDPOINT_URL`: regional Backblaze endpoint, for example
-  `https://s3.eu-central-003.backblazeb2.com`
-- `S3_BUCKET`: the Vivadeo bucket name
-- `S3_ACCESS_KEY_ID`: Backblaze application key ID
-- `S3_SECRET_ACCESS_KEY`: Backblaze application key
-- `S3_REGION`: the B2 bucket region
-- `S3_PRESIGN_SECONDS`: media URL lifetime configuration
+- `STORAGE_BACKEND`: `azure` or `s3`
+- `STORAGE_PUBLIC_ENDPOINT_URL`: workspace-authorized Vivadeo media proxy
+- `AZURE_STORAGE_CONNECTION_STRING`: private Azure credential
+- `AZURE_STORAGE_CONTAINER`: Azure container name
+- `AZURE_STORAGE_TIMEOUT`: Azure transfer timeout calibration
+- `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
+  and `S3_REGION`: settings used only by the S3 backend
 
 The application stores source videos under `videos/<video-id>/` and generated
 clips under `clips/<clip-id>.mp4`. Transcript artifacts use a worker-managed
 object-key prefix. The API serves browser media through its authenticated
-`/v1/media/{object_key}` proxy rather than exposing B2 credentials or requiring
-the bucket to be public.
+`/v1/media/{object_key}` proxy rather than exposing provider credentials or
+requiring public objects.
 
 ## Transactional email
 
@@ -74,21 +74,21 @@ provider. Azure send operations are polled to completion and failures are
 surfaced; there is no alternate email provider or console fallback. See
 [`docs/email.md`](docs/email.md) for provisioning and operational details.
 
-Compose S3 settings are environment-overridable, with Backblaze B2 as the
-only supported object-storage provider. The API and worker use the same
-regional endpoint and credentials without changing application code.
+Compose storage settings are environment-overridable. Azure Blob and
+S3-compatible services use the same object keys and application workflows. The
+API and worker must select the same backend and credentials.
 
 ## Media lifecycle
 
 1. The browser submits an upload or URL-ingest request through Next.js.
 2. FastAPI creates workspace-scoped video and job records.
-3. Celery downloads or receives the source and writes it to Backblaze B2.
+3. Celery downloads or receives the source and writes it to private object storage.
 4. The worker chunks the media, sends eligible work to Modal, and stores vectors
    and transcript metadata in PostgreSQL.
 5. Search returns citations and web-proxied media URLs.
-6. Clip jobs download the source from B2, trim with ffmpeg, upload the clip to
-   B2, and persist the clip object key.
-7. Deletion removes the database records and associated B2 objects.
+6. Clip jobs download the source, trim with ffmpeg, upload the clip to private
+   object storage, and persist the clip object key.
+7. Deletion removes the database records and associated private objects.
 
 ## Deployment and CI
 
@@ -98,8 +98,8 @@ must copy every source directory consumed by Next.js, including
 `web/styles/`, before running `npm run build`.
 
 Production deployment pulls the published GHCR images and starts Docker Compose.
-The deployment host supplies Backblaze and Azure Communication Services
-credentials through its secret-managed `.env`; credentials must never be
+The deployment host supplies object-storage and Azure Communication Services
+credentials through secret-managed environment configuration; credentials must never be
 committed to Git or embedded in images.
 
 ## Design-system foundation

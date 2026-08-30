@@ -3,17 +3,17 @@
 ## Goal
 
 Verify the product workflows from the backend outward before spending time on
-browser end-to-end testing. Use one known MP4 fixture in Backblaze B2, the
+browser end-to-end testing. Use one known MP4 fixture in the configured private object store, the
 running Compose services, and deterministic cleanup so failures are isolated,
 repeatable, and cheap to diagnose.
 
 Test fixture:
 
 ```text
-s3://vivadeo/test-fixtures/patel-video-english-bad.mp4
+videos/1dc589c5-ffd4-4975-ab3e-020b73b00d44/patel video english bad.mp4
 ```
 
-The fixture is already uploaded to Backblaze B2 and has been verified with a
+The fixture is already uploaded to the configured private object store and has been verified with a
 read-after-write check.
 
 ## Scope
@@ -36,7 +36,7 @@ Out of scope for the first pass:
 
 - Image-query UI, which is intentionally removed from the current phase
 - Clip Studio as a primary workflow, which is currently removed from navigation
-- Native Backblaze API behavior, because the application uses the S3-compatible API
+- Provider console behavior, because the application verifies storage through its provider-neutral adapter
 - Full production account deletion against a real user account
 
 ## Test principles
@@ -71,17 +71,17 @@ Out of scope for the first pass:
    curl -I http://localhost:3000
    ```
 
-5. Confirm API and worker use the same database, Redis, Backblaze endpoint,
+5. Confirm API and worker use the same database, Redis, storage backend,
    bucket, and region.
 6. Confirm the running containers include the current source/image revision.
 7. Confirm Modal is reachable with the configured app/class.
-8. Confirm the fixture exists in B2 and record its byte size and content type.
+8. Confirm the fixture exists in private storage and record its byte size and content type.
 
 ### Pass criteria
 
 - All required services are available.
 - API health returns success.
-- B2 `head_object` succeeds for the fixture.
+- `ObjectStore().object_size` succeeds for the fixture.
 - API and worker have compatible configuration.
 - No stale container revision is used for the test run.
 
@@ -115,13 +115,13 @@ uv run pytest tests/test_cli_api_mode.py tests/test_downloader.py tests/test_dlq
 ### Known limitation
 
 These tests mock or isolate external systems. Passing this phase does not prove
-that the live B2, Redis, Postgres, Celery, or Modal wiring works together.
+that the live object store, Redis, Postgres, Celery, or Modal wiring works together.
 
 ## Phase 2: Live infrastructure smoke tests
 
 Run cheap checks against the running services before ingesting the video.
 
-### Backblaze B2
+### Private object storage
 
 - `head_bucket` on `vivadeo`
 - `head_object` on the fixture
@@ -175,7 +175,7 @@ that workflow is later enabled for verification.
 
 ## Phase 4: Real fixture ingest
 
-Use the already-uploaded B2 fixture as the source of truth.
+Use the already-uploaded private fixture as the source of truth.
 
 ### Preferred path
 
@@ -191,8 +191,8 @@ POST /v1/videos/url or upload path
   -> video becomes ready
 ```
 
-If the product does not expose a B2 URL ingest path, use the multipart upload
-endpoint and keep the B2 fixture for storage validation and later media tests.
+Use the multipart upload endpoint and keep the private fixture for storage
+validation and later media tests.
 
 ### Assertions
 
@@ -202,7 +202,7 @@ endpoint and keep the B2 fixture for storage validation and later media tests.
 - Worker consumes the task.
 - Job progresses through expected stages.
 - Video reaches `ready`.
-- Source object key exists in B2.
+- Source object key exists in the configured private store.
 - Chunk rows exist in PostgreSQL.
 - Transcript data exists where Modal transcription is enabled.
 - Embedding/vector data exists.
@@ -273,7 +273,7 @@ Using the created video ID:
 7. Confirm an unauthorized workspace cannot retrieve the object.
 8. Confirm missing object behavior returns a controlled 404.
 
-This phase proves the database, B2, API proxy, and workspace boundary together.
+This phase proves the database, private object store, API proxy, and workspace boundary together.
 
 ## Phase 8: Reindex, clip, and deletion verification
 
@@ -290,7 +290,7 @@ This phase proves the database, B2, API proxy, and workspace boundary together.
 - Create a clip from a valid timestamp range.
 - Confirm the clip job is queued and processed.
 - Confirm ffmpeg produces a playable MP4.
-- Confirm the clip object exists in B2.
+- Confirm the clip object exists in the configured private store.
 - Fetch clip metadata.
 - Fetch the clip media URL through the API.
 - Verify invalid ranges fail cleanly.
@@ -299,7 +299,7 @@ This phase proves the database, B2, API proxy, and workspace boundary together.
 
 - Delete the test video only after all assertions pass.
 - Confirm database records are removed or archived as specified.
-- Confirm source and generated clip objects are removed from B2.
+- Confirm source and generated clip objects are removed from the configured private store.
 - Confirm related jobs/metadata no longer appear in normal workspace views.
 - Remove any disposable workspace/user data created by the run.
 
@@ -356,7 +356,7 @@ When a workflow fails, classify it in this order:
 
 1. Container health/configuration
 2. Database/migration/connectivity
-3. Backblaze B2 access/object state
+3. Private object-store access/object state
 4. Redis/Celery queue consumption
 5. Modal remote function availability
 6. API route/state transition
@@ -438,7 +438,7 @@ At minimum, time:
 - Record `workflow`, `action`, `route`, `job_id`, `video_id`, and `clip_id` where
   applicable.
 - Record success/failure and failure classification with each timing.
-- Never log credentials, session tokens, private B2 URLs, or raw media.
+- Never log credentials, session tokens, provider URLs, or raw media.
 - Use the same fixture, resolution, and Modal configuration when comparing runs.
 - Repeat performance-sensitive actions at least three times before drawing a
   conclusion; report median, minimum, maximum, and failures.
@@ -474,7 +474,7 @@ After each run, summarize:
 - Median and p95 processing time by job type.
 - Time spent in each ingest stage.
 - Search response and answer-generation latency.
-- B2 upload/download latency.
+- Private object-store upload/download latency.
 - Modal cold versus warm latency.
 - Frontend time-to-interactive and time-to-visible-result.
 - Error rate and retry rate per action.
@@ -502,7 +502,7 @@ failure classification
 cleanup result
 ```
 
-Never include B2 application keys, auth secrets, session tokens, or raw private
+Never include storage credentials, auth secrets, session tokens, or raw private
 media URLs in the report.
 
 ## Verification execution record
@@ -513,7 +513,7 @@ stack, excluding browser E2E by request.
 ### Passed
 
 - Compose API, worker, web, PostgreSQL, and Redis services were running.
-- Backblaze B2 fixture read and metadata checks passed.
+- Private fixture read, range, and metadata checks passed.
 - All 99 existing backend tests passed in 38.75 seconds.
 - Multipart upload reached `ready` through Celery, transcription, and Modal
   embedding.
@@ -525,7 +525,7 @@ stack, excluding browser E2E by request.
 - Clip creation and media retrieval passed.
 - Reindexing replaced chunks and reached `succeeded`.
 - Workspace isolation returned `404` for a foreign video.
-- Archive and video deletion passed; generated B2 objects were removed.
+- Archive and video deletion passed; generated private objects were removed.
 - Failed URL job, retry, and cancellation paths passed.
 - Owner invitation creation passed.
 - Viewer invitation and content mutation attempts returned `403`.
@@ -554,7 +554,7 @@ The product is ready for frontend E2E testing when:
 
 - All existing backend tests pass.
 - All containers are healthy and on the intended revision.
-- B2 read/write/delete checks pass.
+- Private object-store read/write/range/delete checks pass.
 - A real fixture reaches `ready` through the actual ingest path.
 - Chunks, transcripts, embeddings, and source metadata are persisted.
 - Search and search chat return workspace-scoped citations.

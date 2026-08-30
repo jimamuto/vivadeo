@@ -68,7 +68,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Source attribution currently means displaying `source_uri` on search results, video detail, clip preview/export surfaces, and clip lists.
 - No richer provenance model exists yet.
 - Workspace usage UI reads `/v1/stats` for `total_videos`, `total_chunks`, and `total_storage_bytes`.
-- `/v1/stats` computes `total_storage_bytes` by summing S3 object sizes for workspace video and clip object keys.
+- `/v1/stats` computes `total_storage_bytes` by summing private object-store sizes for workspace video and clip object keys.
 - Missing objects are skipped instead of failing the whole stats call.
 - Throughput, failure rate, and search volume still rely on client-side activity/history signals.
 - Dashboard usage metrics blend `/v1/stats` with client-side activity counts from `web/lib/activity-log.ts`.

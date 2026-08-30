@@ -150,11 +150,12 @@ uv run pytest
 
 Vivadeo can also run as a single-node production stack with a browser-first
 Next.js web app in front of FastAPI, Celery, Redis, Postgres/pgvector, and
-Backblaze B2 object storage:
+private Azure Blob or S3-compatible object storage:
 
 ```bash
 cp .env.example .env
-# edit API keys and BETTER_AUTH_SECRET before exposing the service
+# edit API/auth secrets and configure either Azure Blob or S3 storage before startup
+# see docs/AZURE-BLOB-STORAGE.md for the Azure variables
 docker compose pull
 docker compose up -d
 ```
@@ -163,6 +164,9 @@ The default `docker-compose.yml` uses prebuilt GHCR images:
 
 - `ghcr.io/jimamuto/vivadeo-api:latest`
 - `ghcr.io/jimamuto/vivadeo-web:latest`
+
+Azure Blob setup and workflow verification are documented in
+[docs/AZURE-BLOB-STORAGE.md](docs/AZURE-BLOB-STORAGE.md).
 
 The API and worker mount Modal credentials from `VIVADEO_MODAL_CONFIG_PATH`.
 See [docs/modal-credentials-mount.md](docs/modal-credentials-mount.md) for
@@ -221,6 +225,6 @@ vivadeo index /path/to/video.mp4
 vivadeo search "red truck"
 ```
 
-In API mode, indexing a single file uploads it to Backblaze B2 and queues an
+In API mode, indexing a single file uploads it to the configured private object store and queues an
 indexing job. Directory indexing uses the container's mounted `./media:/media:ro` path,
 so directory paths must be visible inside the API container.

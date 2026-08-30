@@ -1,6 +1,7 @@
 """Runtime configuration for local and production deployments."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,13 +28,19 @@ class Settings(BaseSettings):
     db_pool_timeout: int = Field(30, ge=1, alias="VIVADEO_DB_POOL_TIMEOUT")
     db_pool_recycle: int = Field(1800, ge=0, alias="VIVADEO_DB_POOL_RECYCLE")
 
+    storage_backend: Literal["s3", "azure"] = Field("azure", alias="STORAGE_BACKEND")
+    storage_public_endpoint_url: str = Field(
+        "http://localhost:3000/api/proxy/v1/media",
+        alias="STORAGE_PUBLIC_ENDPOINT_URL",
+    )
+    azure_storage_connection_string: str | None = Field(None, alias="AZURE_STORAGE_CONNECTION_STRING")
+    azure_storage_container: str = Field("vivadeo", alias="AZURE_STORAGE_CONTAINER")
+    azure_storage_timeout: int = Field(300, ge=30, alias="AZURE_STORAGE_TIMEOUT")
     s3_endpoint_url: str = Field("https://s3.eu-central-003.backblazeb2.com", alias="S3_ENDPOINT_URL")
-    s3_public_endpoint_url: str | None = Field(None, alias="S3_PUBLIC_ENDPOINT_URL")
     s3_bucket: str = Field("vivadeo", alias="S3_BUCKET")
     s3_access_key_id: str = Field("change-me", alias="S3_ACCESS_KEY_ID")
     s3_secret_access_key: str = Field("change-me", alias="S3_SECRET_ACCESS_KEY")
     s3_region: str = Field("eu-central-003", alias="S3_REGION")
-    s3_presign_seconds: int = Field(3600, alias="S3_PRESIGN_SECONDS")
 
     modal_app: str = Field(
         "vivadeo-qwen3-vl-embedding-2b",

@@ -28,7 +28,7 @@ Use this loop before asking the user to retry a frontend workflow.
    Use `/v1/workspaces` and `/v1/videos` with `X-API-Key` plus `X-Workspace-ID`. Match the requested filename, then record only its `id`, `status`, `source_type`, `object_key`, and `error`.
 
 3. **Verify object storage**
-   In the API container, call `ObjectStore().object_size(video.object_key)`. A missing object is an ingest/storage failure, not a chat failure.
+   In both API and worker containers, confirm `ObjectStore().backend` matches. In the API container, call `object_size(video.object_key)`, then request `bytes=0-1023` through `get_object` and require a 1,024-byte body plus `ContentRange`. A missing object or incorrect range is an ingest/storage failure, not a chat failure. Azure-specific provisioning and security checks live in `docs/AZURE-BLOB-STORAGE.md`; never print connection strings or provider URLs.
 
 4. **Check Pro readiness**
    Query the database for transcript-segment count, Pro/NVIDIA embedding count, and legacy video-chunk count. A Pro video should have transcript segments and matching Pro embeddings. If embeddings are missing, call `POST /v1/videos/{id}/reindex`, then poll `GET /v1/jobs/{id}` until `succeeded`, `failed`, or `canceled`. Inspect worker logs on failure.
@@ -53,4 +53,4 @@ Use this loop before asking the user to retry a frontend workflow.
 
 ## Exit criteria
 
-Call the backend workflow ready only when object storage succeeds, the video is `ready`, Pro embeddings exist, the temporary chat job succeeds within an observed acceptable time, the assistant answer has citations, and cleanup succeeds. Report the exact API stages, timings, changed files, and remaining risks.
+Call the backend workflow ready only when provider agreement, object size, and byte-range storage checks succeed; the video is `ready`; Pro embeddings exist; the temporary chat job succeeds within an observed acceptable time; the assistant answer has citations; and cleanup succeeds. Report the exact API stages, timings, changed files, and remaining risks.
