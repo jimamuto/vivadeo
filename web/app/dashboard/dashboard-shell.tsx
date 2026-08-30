@@ -66,7 +66,7 @@ export function DashboardShell({
             </button>
           ) : (
             <>
-              <Link href="/dashboard/ingest" className="dashboard-brand-mark">
+              <Link href="/" className="dashboard-brand-mark">
                 <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />
               </Link>
               <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label="Close sidebar" data-tooltip="Close sidebar">

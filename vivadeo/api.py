@@ -1049,9 +1049,15 @@ def get_media(
             Clip.organization_id == organization_id, Clip.object_key == object_key
         )
     ).first()
-    if video is None and clip is None:
+    frame = session.scalars(
+        select(EvidenceFrame).where(
+            EvidenceFrame.organization_id == organization_id,
+            EvidenceFrame.object_key == object_key,
+        )
+    ).first()
+    if video is None and clip is None and frame is None:
         raise HTTPException(status_code=404, detail="Media not found")
-    content_type = video.content_type if video else "video/mp4"
+    content_type = video.content_type if video else "image/jpeg" if frame else "video/mp4"
     session.close()
     return stream_object(object_key, content_type=content_type, range_header=range_header)
 
@@ -1486,7 +1492,12 @@ def get_chat_onboarding(
 ):
     setting = session.get(OrganizationSetting, organization_id)
     settings = setting.settings if setting and isinstance(setting.settings, dict) else {}
-    has_activity = session.scalar(select(ChatThreadMessage.id).join(ChatThread).where(ChatThread.organization_id == organization_id).limit(1)) is not None
+    has_activity = session.scalar(
+        select(ChatThreadMessage.id)
+        .join(ChatThread, ChatThreadMessage.thread_id == ChatThread.id)
+        .where(ChatThread.organization_id == organization_id)
+        .limit(1)
+    ) is not None
     has_videos = session.scalar(select(Video.id).where(Video.organization_id == organization_id).limit(1)) is not None
     return ChatOnboardingState(completed=bool(settings.get("chat_onboarding_completed") or has_activity or has_videos))
 

@@ -1,12 +1,29 @@
 "use client";
 
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
 
 const RECENT_SEARCHES_KEY = "vivadeo.recent-searches";
 const CHAT_ONBOARDING_KEY = "vivadeo.chat-onboarding-seen";
 const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function readCachedPoster(key: string) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedPoster(key: string, url: string) {
+  try {
+    window.sessionStorage.setItem(key, url);
+  } catch {
+    // Storage may be unavailable in private browsing or locked-down embeds.
+  }
+}
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -103,9 +120,131 @@ function fmt(s: number) {
   return `${m}:${sec}`;
 }
 
-function threadDateGroup(value: string) {
+function CitationPreview({
+  citation,
+  sourceUrl,
+  previewStart,
+  previewEnd,
+  preload,
+  onPlay,
+}: {
+  citation: Citation;
+  sourceUrl: string | null | undefined;
+  previewStart: number;
+  previewEnd: number;
+  preload: boolean;
+  onPlay: () => void;
+}) {
+  const posterCacheKey = `vivadeo.citation-poster:${citation.video_id}:${citation.start_time.toFixed(3)}`;
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [posterStatus, setPosterStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  useClientLayoutEffect(() => {
+    const cached = readCachedPoster(posterCacheKey);
+    if (cached) {
+      setPosterUrl(cached);
+      setPosterStatus("ready");
+    }
+  }, [posterCacheKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let requested = false;
+
+    const loadPoster = async () => {
+      if (requested || cancelled) return;
+      requested = true;
+      const cached = readCachedPoster(posterCacheKey);
+      if (cached) {
+        setPosterUrl(cached);
+        setPosterStatus("ready");
+        return;
+      }
+      setPosterStatus("loading");
+      try {
+        const response = await fetch(`/api/proxy/v1/videos/${citation.video_id}/frames`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timestamp: citation.start_time }),
+        });
+        if (!response.ok) throw new Error("Poster request failed");
+        let frame = await response.json() as { id: string; status: string; url?: string | null };
+        for (let attempt = 0; attempt < 30 && frame.status === "queued" && !cancelled; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          const refreshed = await fetch(`/api/proxy/v1/videos/${citation.video_id}/frames/${frame.id}`, { cache: "no-store" });
+          if (!refreshed.ok) break;
+          frame = await refreshed.json() as { id: string; status: string; url?: string | null };
+        }
+        if (!cancelled && frame.status === "ready" && frame.url) {
+          writeCachedPoster(posterCacheKey, frame.url);
+          setPosterUrl(frame.url);
+          setPosterStatus("ready");
+        } else if (!cancelled) {
+          setPosterStatus("unavailable");
+        }
+      } catch {
+        if (!cancelled) setPosterStatus("unavailable");
+      }
+    };
+
+    if (preload || typeof IntersectionObserver === "undefined") {
+      void loadPoster();
+      return () => { cancelled = true; };
+    }
+
+    const node = previewRef.current;
+    if (!node) return () => { cancelled = true; };
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        void loadPoster();
+      }
+    }, { rootMargin: "200px" });
+    observer.observe(node);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [citation.video_id, citation.start_time, posterCacheKey, preload]);
+
+  const showSkeleton = !posterUrl && posterStatus !== "unavailable";
+
+  return (
+    <div ref={previewRef} className={`search-citation-preview${showSkeleton ? " is-loading" : ""}`}>
+      {sourceUrl && !showSkeleton ? (
+        <video
+          playsInline
+          preload="none"
+          poster={posterUrl || undefined}
+          tabIndex={0}
+          aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`}
+          src={`${sourceUrl}#t=${previewStart},${previewEnd}`}
+          onLoadedMetadata={(event) => { event.currentTarget.currentTime = citation.start_time; }}
+          onPlay={onPlay}
+          onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); }}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); } }}
+          onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }}
+        />
+      ) : posterUrl ? (
+        <img className="search-citation-poster" src={posterUrl} alt="" decoding="async" />
+      ) : showSkeleton ? (
+        <span className="search-citation-skeleton" aria-hidden="true" />
+      ) : (
+        <span className="search-citation-preview-empty">Preview unavailable</span>
+      )}
+      {sourceUrl && !showSkeleton ? <span className="search-citation-play" aria-hidden="true">▶</span> : null}
+      <span className="search-citation-time">{fmt(citation.start_time)}–{fmt(citation.end_time)}</span>
+    </div>
+  );
+}
+
+function threadDateGroup(value: string, hydrated: boolean) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Earlier";
+  if (!hydrated) {
+    return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(date);
+  }
   const now = new Date();
   const startOfDay = (input: Date) => new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime();
   const days = Math.floor((startOfDay(now) - startOfDay(date)) / 86400000);
@@ -181,6 +320,7 @@ export function SearchContent({
   const [videos, setVideos] = useState<VideoOption[]>([]);
   const [videosLoaded, setVideosLoaded] = useState(false);
   const [onboardingSeen, setOnboardingSeen] = useState(initialOnboardingCompleted);
+  const [hydrated, setHydrated] = useState(false);
   const [turns, setTurns] = useState<ChatTurn[]>(initialThreads[0]?.turns || []);
   const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
   const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
@@ -250,6 +390,7 @@ export function SearchContent({
 
   useEffect(() => {
     if (window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true") setOnboardingSeen(true);
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -740,7 +881,7 @@ export function SearchContent({
   const visibleThreads = threads.filter((thread) => !thread.archived);
   const filteredThreads = visibleThreads.filter((thread) => !threadSearch.trim() || `${thread.title} ${thread.turns.map((turn) => turn.content).join(" ")}`.toLowerCase().includes(threadSearch.trim().toLowerCase()));
   const groupedThreads = filteredThreads.reduce<Array<{ label: string; threads: ChatThread[] }>>((groups, thread) => {
-    const label = threadDateGroup(thread.updatedAt);
+    const label = threadDateGroup(thread.updatedAt, hydrated);
     const group = groups.find((item) => item.label === label);
     if (group) group.threads.push(thread);
     else groups.push({ label, threads: [thread] });
@@ -1002,17 +1143,20 @@ export function SearchContent({
                             <strong>{citations.length} found</strong>
                           </div>
                           <div className="search-citation-scroller" aria-label="Relevant video moments">
-                            {visibleCitations.map((citation) => {
+                            {visibleCitations.map((citation, citationIndex) => {
                               const citationSource = videos.find((video) => video.id === citation.video_id) || threadSources.find((source) => source.video_id === citation.video_id);
                               const previewStart = Math.max(0, citation.start_time - 1);
                               const previewEnd = citationSource?.duration ? Math.min(citationSource.duration, citation.end_time + 1) : citation.end_time + 1;
                               return (
                                 <article key={citation.segment_id} className="detail-card search-citation-card">
-                                  <div className="search-citation-preview">
-                                    {citationSource?.url ? <video playsInline preload="metadata" tabIndex={0} aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`} src={`${citationSource.url}#t=${previewStart},${previewEnd}`} onLoadedMetadata={(event) => { event.currentTarget.currentTime = citation.start_time; }} onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })} onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); } }} onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }} /> : <span className="search-citation-preview-empty">Video preview unavailable</span>}
-                                    {citationSource?.url ? <span className="search-citation-play" aria-hidden="true">▶</span> : null}
-                                    <span className="search-citation-time">{fmt(citation.start_time)}–{fmt(citation.end_time)}</span>
-                                  </div>
+                                  <CitationPreview
+                                    citation={citation}
+                                    sourceUrl={citationSource?.url}
+                                    previewStart={previewStart}
+                                    previewEnd={previewEnd}
+                                    preload={index === turns.length - 1 && citationIndex < 3}
+                                    onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })}
+                                  />
                                   <div className="search-citation-body">
                                     <div className="search-citation-kicker"><span>{citation.filename}</span><span>Video moment</span></div>
                                     <strong className="detail-wrap">{citation.text}</strong>
