@@ -39,7 +39,7 @@ type MessageAttachment = {
 };
 
 type Citation = {
-  segment_id: string;
+  segment_id?: string | null;
   video_id: string;
   filename: string;
   source_uri: string;
@@ -47,6 +47,11 @@ type Citation = {
   end_time: number;
   text: string;
   similarity_score: number | null;
+  visual_verified?: boolean;
+  verification_status?: "verified" | "possible" | "rejected";
+  modality?: "visual" | "transcript" | "hybrid";
+  confidence?: number;
+  match_reason?: string;
 };
 
 type ChatTurn = ChatMessage & {
@@ -54,6 +59,10 @@ type ChatTurn = ChatMessage & {
   parentId?: string | null;
   status?: string;
   error?: string | null;
+  search_run_id?: string | null;
+  intent?: { modality?: string; search_mode?: string; confidence?: number };
+  verification_summary?: { verified?: number; possible?: number; rejected?: number; modality?: string };
+  suggested_refinements?: string[];
   attachments?: MessageAttachment[];
   citations?: Citation[];
 };
@@ -313,6 +322,9 @@ export function SearchContent({
   const [videoId, setVideoId] = useState(initialVideoId);
   const [videoIds, setVideoIds] = useState(initialVideoIds);
   const [chatModel, setChatModel] = useState("vivadeo-auto");
+  const [modalityOverride, setModalityOverride] = useState<"auto" | "visual" | "transcript" | "hybrid">("auto");
+  const [searchMode, setSearchMode] = useState<"top" | "focused">("top");
+  const [parentSearchRunId, setParentSearchRunId] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
@@ -342,6 +354,7 @@ export function SearchContent({
   const [urlError, setUrlError] = useState<string | null>(null);
   const [browseOpen, setBrowseOpen] = useState(false);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
+  const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
@@ -692,6 +705,40 @@ export function SearchContent({
     }
   }
 
+  function evidenceKey(citation: Citation) {
+    return `${citation.video_id}:${citation.start_time.toFixed(3)}`;
+  }
+
+  async function sendCitationFeedback(turn: ChatTurn, citation: Citation, feedback: string) {
+    if (!turn.search_run_id) {
+      setStatus("This older answer cannot receive evidence feedback.");
+      return;
+    }
+    const response = await fetch(`/api/proxy/v1/search/runs/${turn.search_run_id}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        video_id: citation.video_id,
+        start_time: citation.start_time,
+        end_time: citation.end_time,
+        feedback,
+      }),
+    });
+    if (!response.ok) {
+      setStatus("Could not save that evidence feedback.");
+      return;
+    }
+    setCitationFeedback((current) => ({ ...current, [evidenceKey(citation)]: feedback }));
+    setStatus(feedback === "relevant" ? "Marked as relevant." : "Marked as not relevant. Refine the question to search again.");
+  }
+
+  function focusMoment(citation: Citation, prompt = "What is happening in this moment?", runId?: string | null) {
+    setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time });
+    setParentSearchRunId(runId || null);
+    setSearchMode("focused");
+    setQuestion(prompt);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextQuestion = question.trim();
@@ -720,7 +767,11 @@ export function SearchContent({
         body: JSON.stringify({
           content: nextQuestion,
           results: 6,
-          provider: chatModel === "vivadeo-pro" ? "vivadeo-auto" : chatModel,
+          provider: chatModel === "vivadeo-pro" ? "vivadeo-pro" : chatModel,
+          modality: modalityOverride,
+          search_mode: momentContext ? "focused" : searchMode,
+          parent_search_run_id: parentSearchRunId,
+          focus_window_seconds: momentContext ? Math.max(8, momentContext.endTime - momentContext.startTime) : null,
           custom_base_url: chatModel === "custom" ? customBaseUrl || null : null,
           custom_api_key: chatModel === "custom" ? customApiKey || null : null,
           custom_model: chatModel === "custom" ? customModel || null : null,
@@ -746,6 +797,8 @@ export function SearchContent({
       recordRecentSearch(nextQuestion);
       appendActivity(activeWorkspace, "search.performed", nextQuestion);
       setMomentContext(null);
+      setParentSearchRunId(null);
+      setSearchMode("top");
       setStatus(citations.length ? `Answer ready in ${seconds}s with ${citations.length} cited evidence range(s).` : `Answer ready in ${seconds}s. No cited evidence yet.`);
     } catch (cause) {
       setStatus(cause instanceof Error ? cause.message : "Chat failed");
@@ -1014,6 +1067,19 @@ export function SearchContent({
                       </div>
                     ) : null}
                   </div>
+                  <div className="chat-accuracy-controls" aria-label="Evidence search controls">
+                    <label htmlFor="evidence-mode">Evidence</label>
+                    <select id="evidence-mode" value={modalityOverride} onChange={(event) => setModalityOverride(event.target.value as typeof modalityOverride)}>
+                      <option value="auto">Auto</option>
+                      <option value="visual">Visual</option>
+                      <option value="transcript">Transcript</option>
+                      <option value="hybrid">Both</option>
+                    </select>
+                    <select aria-label="Search depth" value={momentContext ? "focused" : searchMode} onChange={(event) => setSearchMode(event.target.value as typeof searchMode)} disabled={Boolean(momentContext)}>
+                      <option value="top">Best matches</option>
+                      <option value="focused" disabled={!momentContext}>Focused moment</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="chat-composer-meta">
                   {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "source" : "sources"}</span> : null}
@@ -1091,7 +1157,8 @@ export function SearchContent({
                         <div className="search-meta">
                           {turn.role === "assistant" ? (
                             <>
-                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : null}
+                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <div className="search-answer-text">{turn.content}</div> : null}
+                              {turn.intent?.modality ? <div className="chat-evidence-summary">{turn.intent.modality === "visual" ? "Visual evidence" : turn.intent.modality === "hybrid" ? "Visual + spoken evidence" : "Transcript evidence"}{turn.verification_summary?.verified ? ` · ${turn.verification_summary.verified} verified` : ""}{turn.verification_summary?.possible ? ` · ${turn.verification_summary.possible} possible` : ""}</div> : null}
                               {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
                               {branchMessages.length > 1 ? <div className="chat-message-actions">
                                 <span className="chat-branch-control" aria-label="Answer branches">
@@ -1114,7 +1181,7 @@ export function SearchContent({
                       {citations.length ? (
                         <div className="search-citations">
                           <div className="search-citation-head">
-                            <span>Relevant moments</span>
+                            <span>Evidence moments</span>
                             <strong>{citations.length} found</strong>
                           </div>
                           <div className="search-citation-scroller" aria-label="Relevant video moments">
@@ -1125,8 +1192,10 @@ export function SearchContent({
                               const citationSource = videos.find((video) => video.id === citation.video_id) || threadSources.find((source) => source.video_id === citation.video_id);
                               const previewStart = Math.max(0, citation.start_time - 1);
                               const previewEnd = citationSource?.duration ? Math.min(citationSource.duration, citation.end_time + 1) : citation.end_time + 1;
+                              const feedback = citationFeedback[evidenceKey(citation)];
+                              const verification = citation.verification_status || (citation.visual_verified ? "verified" : "possible");
                               return (
-                                <article key={citation.segment_id} className="search-citation-card">
+                                <article key={`${citation.video_id}-${citation.start_time.toFixed(3)}`} className={`search-citation-card search-citation-${verification}`}>
                                   <CitationPreview
                                     citation={citation}
                                     sourceUrl={citationSource?.url}
@@ -1135,6 +1204,14 @@ export function SearchContent({
                                     preload={index === turns.length - 1 && citationIndex < 3}
                                     onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })}
                                   />
+                                  <div className="chat-evidence-actions">
+                                    <span className={`chat-evidence-status chat-evidence-status-${verification}`} aria-label={`Evidence status: ${verification}`}>{verification === "verified" ? "Verified" : verification === "possible" ? "Possible match" : "Not relevant"}</span>
+                                    {citation.match_reason ? <span className="chat-evidence-reason">{citation.match_reason}</span> : null}
+                                    <button type="button" className={feedback === "relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "relevant")}>Relevant</button>
+                                    <button type="button" className={feedback === "not_relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "not_relevant")}>Not relevant</button>
+                                    <button type="button" onClick={() => focusMoment(citation, "Show nearby context around this moment.", turn.search_run_id)}>Nearby</button>
+                                    <button type="button" onClick={() => focusMoment(citation, "What is happening in this moment?", turn.search_run_id)}>Ask about this</button>
+                                  </div>
                                 </article>
                               );
                             })}
@@ -1144,6 +1221,10 @@ export function SearchContent({
                           </div>
                         </div>
                       ) : null}
+                      {turn.role === "assistant" && turn.suggested_refinements?.length ? <div className="chat-refinement-row" aria-label="Suggested refinements">
+                        <span>Refine</span>
+                        {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => { setParentSearchRunId(turn.search_run_id || null); setQuestion(suggestion); }}>{suggestion}</button>)}
+                      </div> : null}
                     </article>
                   );
                 })

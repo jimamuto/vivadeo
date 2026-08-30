@@ -13,6 +13,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -204,6 +205,49 @@ class VisualKeyframe(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class ChatSearchRun(Base):
+    __tablename__ = "chat_search_runs"
+    __table_args__ = (
+        Index("ix_chat_search_runs_org_created", "organization_id", "created_at"),
+        Index("ix_chat_search_runs_thread", "thread_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    thread_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_threads.id", ondelete="SET NULL"))
+    message_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_thread_messages.id", ondelete="SET NULL"))
+    parent_run_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_search_runs.id", ondelete="SET NULL"))
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    modality: Mapped[str] = mapped_column(String(16), nullable=False)
+    search_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="top")
+    scope_video_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    focus_video_id: Mapped[str | None] = mapped_column(String(36))
+    focus_start_time: Mapped[float | None] = mapped_column(Float)
+    focus_end_time: Mapped[float | None] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="completed")
+    search_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    verification_summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ChatEvidenceFeedback(Base):
+    __tablename__ = "chat_evidence_feedback"
+    __table_args__ = (
+        Index("ix_chat_evidence_feedback_run", "search_run_id"),
+        Index("ix_chat_evidence_feedback_org", "organization_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    search_run_id: Mapped[str] = mapped_column(String(36), ForeignKey("chat_search_runs.id", ondelete="CASCADE"), nullable=False)
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    feedback: Mapped[str] = mapped_column(String(32), nullable=False)
+    correction: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class EvidenceFrame(Base):

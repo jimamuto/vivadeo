@@ -17,6 +17,10 @@ The product must distinguish between:
 
 Accuracy is more important than returning a full result count. Weak evidence must be omitted or clearly marked instead of being presented as fact.
 
+## Implementation status
+
+The first production slice is implemented: deterministic intent routing, verification-rich citations, persistent search runs and feedback, focused moment follow-ups, refinement suggestions, and evidence controls in the search chat screen. Exhaustive scans, comparisons, structured extraction, saved searches, and workspace learning remain staged work.
+
 ## 2. Current baseline
 
 Already available:
@@ -33,14 +37,14 @@ Already available:
 
 Current limitations:
 
-- Query intent is inferred only with lightweight visual-term matching.
+- Query intent routing currently covers visual, transcript, hybrid, top, and focused modes.
 - Frame embeddings are still calculated at query time.
 - Face orientation uses frontal/profile classification, not continuous yaw/pitch estimation.
 - Visual verification is strongest on Vivadeo Pro; Auto needs an equivalent visual verifier.
-- There is no user feedback loop for incorrect evidence.
-- “Top matches” and “find every occurrence” are not separate search modes.
-- There is no saved-search or verified-evidence object.
-- Structured extraction and comparison are not first-class workflows.
+- Feedback is persisted, but it currently informs the recorded refinement context rather than global ranking.
+- “Find every occurrence” is planned but not yet an exhaustive scan.
+- There is no saved-search or verified-evidence object yet.
+- Structured extraction and comparison are not first-class workflows yet.
 
 ## 3. Product principles
 

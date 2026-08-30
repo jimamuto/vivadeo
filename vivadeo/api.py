@@ -16,7 +16,9 @@ from .config import Settings
 from .config import get_settings as get_runtime_settings
 from .db import (
     Base,
+    ChatEvidenceFeedback,
     ChatMessageVideo,
+    ChatSearchRun,
     ChatThread,
     ChatThreadMessage,
     ChatThreadVideo,
@@ -43,13 +45,16 @@ from .object_store import ObjectStore, profile_image_object_key, video_object_ke
 from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
 from .frame_extractor import extract_frame
+from .chat_accuracy import route_chat_intent, suggested_refinements, verification_for_hit
 from .head_pose import is_face_orientation_query
-from .visual_retrieval import is_visual_query, rank_frame_candidates, sample_timestamps
+from .visual_retrieval import rank_frame_candidates, sample_timestamps
 from .schemas import (
     ChatMessage,
     ChatMessageAttachmentRequest,
     ChatMessageRequest,
     ChatMessageVideoResponse,
+    ChatEvidenceFeedbackRequest,
+    ChatSearchRunResponse,
     ChatRequest,
     ChatOnboardingState,
     ChatResponse,
@@ -178,25 +183,24 @@ def _visual_rerank_hits(
                     verification_candidates.append(candidate)
                     if len(verification_candidates) >= 5:
                         break
-                decisions = []
+                verified_keys: dict[tuple[str, float], dict] = {}
                 for index, candidate in enumerate(verification_candidates, 1):
                     result = verifier.verify_visual_candidates(question, [candidate])
-                    if result and result[0].get("relevant") and float(result[0].get("confidence", 0.0)) >= 0.55:
-                        decisions.append({"index": index})
-                verified_indexes = {decision["index"] for decision in decisions}
-                verified_keys = {
-                    (candidate["video_id"], candidate["timestamp"])
-                    for index, candidate in enumerate(verification_candidates, 1)
-                    if index in verified_indexes
-                }
+                    decision = result[0] if result else {}
+                    confidence = float(decision.get("confidence", 0.0)) if isinstance(decision, dict) else 0.0
+                    if isinstance(decision, dict) and decision.get("relevant") and confidence >= 0.55:
+                        verified_keys[(candidate["video_id"], candidate["timestamp"])] = {
+                            "verification_confidence": confidence,
+                            "match_reason": str(decision.get("reason") or "Visible evidence supports the question"),
+                        }
                 ranked = [
-                    {**candidate, "visual_verified": True}
+                    {**candidate, "visual_verified": True, **verified_keys[(candidate["video_id"], candidate["timestamp"])]}
                     for candidate in ranked
                     if (candidate["video_id"], candidate["timestamp"]) in verified_keys
                 ]
     except Exception:
         logger.exception("visual_frame_rerank_failed")
-        return chunk_hits
+        return []
 
     selected: list[dict] = []
     for candidate in ranked:
@@ -224,6 +228,9 @@ def _visual_rerank_hits(
             "end_time": end_time,
             "similarity_score": candidate["similarity_score"],
             "visual_verified": candidate.get("visual_verified", False),
+            "retrieval_modality": "visual",
+            "verification_confidence": candidate.get("verification_confidence"),
+            "match_reason": candidate.get("match_reason"),
         })
         if len(selected) >= results:
             break
@@ -1460,6 +1467,38 @@ def search(
     return SearchResponse(results=results)
 
 
+def _create_search_run(session: Session, *, organization_id: str, thread_id: str | None, message_id: str | None, question: str, intent: dict, scope_video_ids: list[str], request: ChatRequest) -> ChatSearchRun | None:
+    if not hasattr(session, "add"):
+        return None
+    run = ChatSearchRun(
+        id=new_id(),
+        organization_id=organization_id,
+        thread_id=thread_id,
+        message_id=message_id,
+        parent_run_id=request.parent_search_run_id,
+        query=question,
+        modality=intent["modality"],
+        search_mode=intent["search_mode"],
+        scope_video_ids=scope_video_ids,
+        focus_video_id=request.focus_video_id,
+        focus_start_time=request.focus_start_time,
+        focus_end_time=request.focus_end_time,
+        status="running",
+        search_complete=False,
+    )
+    session.add(run)
+    session.flush()
+    return run
+
+
+def _finish_search_run(run: ChatSearchRun | None, *, status: str, summary: dict) -> None:
+    if run is None:
+        return
+    run.status = status
+    run.search_complete = status == "completed"
+    run.verification_summary = summary
+
+
 def _current_chat_message(thread: ChatThread) -> ChatThreadMessage | None:
     if thread.current_message_id:
         return next((message for message in thread.messages if message.id == thread.current_message_id), None)
@@ -1555,15 +1594,19 @@ def _complete_chat_message(
             ChatRequest(
                 messages=[ChatMessage(role=item.role, content=item.content) for item in history],
                 results=request.results,
+                parent_search_run_id=request.parent_search_run_id,
                 video_id=request.video_id if request.video_id in source_ids else None,
                 video_ids=[video_id for video_id in request.video_ids if video_id in source_ids] or source_ids,
                 provider=request.provider,
                 custom_base_url=request.custom_base_url,
                 custom_api_key=request.custom_api_key,
                 custom_model=request.custom_model,
+                modality=request.modality,
+                search_mode=request.search_mode,
                 focus_video_id=request.focus_video_id,
                 focus_start_time=request.focus_start_time,
                 focus_end_time=request.focus_end_time,
+                focus_window_seconds=request.focus_window_seconds,
             ),
             session=session,
             organization_id=organization_id,
@@ -1580,6 +1623,17 @@ def _complete_chat_message(
 
     assistant.content = answer.answer
     assistant.citations = [citation.model_dump() for citation in answer.citations]
+    assistant.generation_metadata = {
+        "search_run_id": answer.search_run_id,
+        "intent": answer.intent,
+        "verification_summary": answer.verification_summary,
+        "suggested_refinements": answer.suggested_refinements,
+    }
+    if answer.search_run_id:
+        search_run = session.get(ChatSearchRun, answer.search_run_id)
+        if search_run is not None and search_run.organization_id == organization_id:
+            search_run.thread_id = thread_id
+            search_run.message_id = assistant.id
     assistant.status = "completed"
     assistant.error = None
     assistant.updated_at = utcnow()
@@ -1634,6 +1688,10 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
                 ],
                 "status": message.status,
                 "error": message.error,
+                "search_run_id": (getattr(message, "generation_metadata", None) or {}).get("search_run_id"),
+                "intent": (getattr(message, "generation_metadata", None) or {}).get("intent", {}),
+                "verification_summary": (getattr(message, "generation_metadata", None) or {}).get("verification_summary", {}),
+                "suggested_refinements": (getattr(message, "generation_metadata", None) or {}).get("suggested_refinements", []),
                 "created_at": message.created_at,
                 "updated_at": message.updated_at,
             }
@@ -1771,7 +1829,7 @@ def create_chat_message(
         raise HTTPException(status_code=400, detail="AI endpoint, API key, and model are required")
     if request.provider == "ollama" and (not request.custom_base_url or not request.custom_model):
         raise HTTPException(status_code=400, detail="Ollama endpoint and model are required")
-    if request.provider not in {"vivadeo-auto", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
+    if request.provider not in {"vivadeo-auto", "vivadeo-pro", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
         raise HTTPException(status_code=400, detail="Unsupported chat provider")
 
     requested_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
@@ -2041,7 +2099,7 @@ def search_chat(
                 parent_id=current.id if current is not None else None,
             )
 
-    scope_video_ids = list(dict.fromkeys(request.video_ids))
+    scope_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
     if not request.video_id and not scope_video_ids and thread is not None:
         scope_video_ids = [source.video_id for source in thread.sources if source.video and source.video.status not in {"archived", "failed", "canceled"}]
     if request.focus_video_id:
@@ -2051,6 +2109,27 @@ def search_chat(
         if thread is not None and not any(source.video_id == request.focus_video_id for source in thread.sources):
             raise HTTPException(status_code=400, detail="Focused video is not attached to this thread")
 
+    if request.parent_search_run_id:
+        parent_run = session.get(ChatSearchRun, request.parent_search_run_id) if hasattr(session, "get") else None
+        if parent_run is None or parent_run.organization_id != organization_id:
+            raise HTTPException(status_code=404, detail="Parent search run not found")
+
+    intent = route_chat_intent(
+        question,
+        modality_override=request.modality,
+        search_mode_override="focused" if request.focus_video_id else ("top" if request.search_mode == "focused" else request.search_mode),
+        focused=bool(request.focus_video_id),
+    )
+    search_run = _create_search_run(
+        session,
+        organization_id=organization_id,
+        thread_id=thread.id if thread else None,
+        message_id=None,
+        question=question,
+        intent=intent,
+        scope_video_ids=scope_video_ids,
+        request=request,
+    )
     runtime_settings = get_runtime_settings()
     if progress_callback:
         progress_callback(0.2, "Retrieving relevant video moments")
@@ -2060,8 +2139,9 @@ def search_chat(
         plan = "starter"
     use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
     visual_verifier = None
+    visual_question = intent["modality"] in {"visual", "hybrid"}
     if (
-        is_visual_query(question)
+        visual_question
         and request.provider == "vivadeo-pro"
         and getattr(runtime_settings, "pro_llm_api_key", None)
         and getattr(runtime_settings, "pro_llm_base_url", None)
@@ -2086,7 +2166,7 @@ def search_chat(
             **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
         }
         chunk_hits = store.search(embedding, **search_kwargs)
-        if is_visual_query(question):
+        if visual_question:
             if progress_callback:
                 progress_callback(0.45, "Checking visual evidence")
             chunk_hits = _visual_rerank_hits(
@@ -2098,7 +2178,7 @@ def search_chat(
                 visual_verifier,
                 session,
             )
-        if use_nvidia and len(chunk_hits) < request.results and not is_visual_query(question):
+        if use_nvidia and len(chunk_hits) < request.results and intent["modality"] in {"transcript", "hybrid"}:
             reset_embedder()
             transcript_embedder = get_embedder(
                 backend="nvidia",
@@ -2114,7 +2194,9 @@ def search_chat(
         reset_embedder()
 
     if request.focus_video_id and request.focus_start_time is not None:
-        focus_end = request.focus_end_time if request.focus_end_time is not None else request.focus_start_time + 15
+        focus_end = request.focus_end_time if request.focus_end_time is not None else request.focus_start_time + (request.focus_window_seconds or 15)
+        if focus_end < request.focus_start_time:
+            raise HTTPException(status_code=422, detail="Focused end time must be after the start time")
         chunk_hits = [
             hit for hit in chunk_hits
             if hit["video_id"] == request.focus_video_id and hit["end_time"] >= request.focus_start_time and hit["start_time"] <= focus_end
@@ -2122,7 +2204,13 @@ def search_chat(
 
     citations = []
     seen_segment_ids: set[str] = set()
+    seen_visual_keys: set[tuple[str, float]] = set()
     for hit in chunk_hits:
+        hit_modality = hit.get("retrieval_modality") or ("visual" if intent["modality"] == "visual" else "transcript")
+        evidence_modality = "visual" if hit_modality == "visual" else "transcript"
+        status_value, confidence, match_reason = verification_for_hit(hit, evidence_modality)
+        if visual_question and hit_modality == "visual" and status_value == "rejected":
+            continue
         stmt = (
             select(VideoTranscriptSegment, Video)
             .join(Video, Video.id == VideoTranscriptSegment.video_id)
@@ -2135,30 +2223,87 @@ def search_chat(
             .order_by(VideoTranscriptSegment.start_time.asc())
             .limit(1 if hit.get("visual_verified") else 6)
         )
-        for segment, video in session.execute(stmt).all():
-            if segment.id in seen_segment_ids:
-                continue
-            seen_segment_ids.add(segment.id)
-            citations.append(
-                {
-                    "segment_id": segment.id,
-                    "video_id": video.id,
-                    "filename": video.filename,
-                    "source_uri": video.source_uri,
-                    "start_time": hit["start_time"] if hit.get("visual_verified") else segment.start_time,
-                    "end_time": hit["end_time"] if hit.get("visual_verified") else segment.end_time,
-                    "text": segment.text,
-                    "similarity_score": hit.get("similarity_score"),
-                    "visual_verified": hit.get("visual_verified", False),
-                }
-            )
-            if len(citations) >= request.results:
-                break
+        rows = session.execute(stmt).all()
+        if hit_modality == "visual":
+            rows = rows[:1]
+        if rows:
+            for segment, video in rows:
+                if segment.id in seen_segment_ids:
+                    continue
+                seen_segment_ids.add(segment.id)
+                citations.append(
+                    {
+                        "segment_id": segment.id,
+                        "video_id": video.id,
+                        "filename": video.filename,
+                        "source_uri": video.source_uri,
+                        "start_time": hit["start_time"] if hit_modality == "visual" else segment.start_time,
+                        "end_time": hit["end_time"] if hit_modality == "visual" else segment.end_time,
+                        "text": segment.text,
+                        "similarity_score": hit.get("similarity_score"),
+                        "visual_verified": hit.get("visual_verified", False),
+                        "verification_status": status_value,
+                        "modality": hit_modality,
+                        "confidence": confidence,
+                        "match_reason": match_reason,
+                    }
+                )
+                if len(citations) >= request.results:
+                    break
+        elif hit_modality == "visual" and hasattr(session, "get"):
+            video = session.get(Video, hit["video_id"])
+            visual_key = (hit["video_id"], float(hit["start_time"]))
+            if video is not None and visual_key not in seen_visual_keys:
+                seen_visual_keys.add(visual_key)
+                citations.append(
+                    {
+                        "segment_id": None,
+                        "video_id": video.id,
+                        "filename": video.filename,
+                        "source_uri": video.source_uri,
+                        "start_time": hit["start_time"],
+                        "end_time": hit["end_time"],
+                        "text": "",
+                        "similarity_score": hit.get("similarity_score"),
+                        "visual_verified": hit.get("visual_verified", False),
+                        "verification_status": status_value,
+                        "modality": hit_modality,
+                        "confidence": confidence,
+                        "match_reason": match_reason,
+                    }
+                )
         if len(citations) >= request.results:
             break
 
+    verified_citations = [item for item in citations if item["verification_status"] == "verified"]
+    verification_summary = {
+        "verified": len(verified_citations),
+        "possible": sum(item["verification_status"] == "possible" for item in citations),
+        "rejected": 0,
+        "modality": intent["modality"],
+    }
+
+    if not verified_citations and visual_question:
+        answer = "I found possible visual matches, but I could not verify them confidently enough to answer. Try narrowing the question or asking about one of the moments."
+        _finish_search_run(search_run, status="completed", summary=verification_summary)
+        if thread is not None:
+            assistant = _append_chat_message(thread, session=session, role="assistant", content=answer, parent_id=user_message.id if user_message else None)
+            assistant.generation_metadata = {
+                "search_run_id": search_run.id if search_run else None,
+                "intent": intent,
+                "verification_summary": verification_summary,
+                "suggested_refinements": suggested_refinements(intent, has_results=bool(citations)),
+            }
+            if search_run is not None:
+                search_run.thread_id = thread.id
+                search_run.message_id = assistant.id
+        if search_run is not None or thread is not None:
+            session.commit()
+        return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=bool(citations)))
+
     if not citations:
-        answer = "No transcript evidence is available yet. Reindex or ingest videos with transcription enabled, then ask again."
+        answer = "No defensible evidence is available yet. Try a more specific question, attach a video, or ask about a shorter time range."
+        _finish_search_run(search_run, status="completed", summary=verification_summary)
         if thread is not None:
             if thread.title == "New thread":
                 try:
@@ -2170,15 +2315,25 @@ def search_chat(
                     ).title(question)
                 except Exception:
                     thread.title = " ".join(question.split())[:255] or "New thread"
-            _append_chat_message(
+            assistant = _append_chat_message(
                 thread,
                 session=session,
                 role="assistant",
                 content=answer,
                 parent_id=user_message.id if user_message is not None else None,
             )
+            assistant.generation_metadata = {
+                "search_run_id": search_run.id if search_run else None,
+                "intent": intent,
+                "verification_summary": verification_summary,
+                "suggested_refinements": suggested_refinements(intent, has_results=False),
+            }
+            if search_run is not None:
+                search_run.message_id = assistant.id
             session.commit()
-        return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None)
+        elif search_run is not None:
+            session.commit()
+        return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=False))
 
     if progress_callback:
         progress_callback(0.78, "Preparing answer")
@@ -2250,8 +2405,10 @@ def search_chat(
             session.flush()
             # Do not hold a database connection while waiting on an external model.
             session.commit()
-        answer = generator.answer(messages, citations)
+        answer_citations = verified_citations if visual_question else citations
+        answer = generator.answer(messages, answer_citations)
     except Exception as exc:
+        _finish_search_run(search_run, status="failed", summary=verification_summary)
         if thread is not None:
             if assistant_message is None:
                 assistant_message = _append_chat_message(
@@ -2268,14 +2425,103 @@ def search_chat(
                 assistant_message.error = "Vivadeo could not prepare an answer."
             session.commit()
         raise HTTPException(status_code=502, detail="Answer generation failed. Please try again.") from exc
+    _finish_search_run(search_run, status="completed", summary=verification_summary)
     if thread is not None and assistant_message is not None:
         assistant_message.content = answer
         assistant_message.citations = citations
+        assistant_message.generation_metadata = {
+            "search_run_id": search_run.id if search_run else None,
+            "intent": intent,
+            "verification_summary": verification_summary,
+            "suggested_refinements": suggested_refinements(intent, has_results=bool(citations)),
+        }
+        if search_run is not None:
+            search_run.message_id = assistant_message.id
         assistant_message.status = "completed"
         assistant_message.error = None
         assistant_message.updated_at = utcnow()
         session.commit()
-    return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None)
+    if search_run is not None:
+        session.commit()
+    return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=bool(citations)))
+
+
+def _search_run_response(run: ChatSearchRun, feedback: list[ChatEvidenceFeedback] | None = None) -> ChatSearchRunResponse:
+    return ChatSearchRunResponse(
+        id=run.id,
+        query=run.query,
+        modality=run.modality,
+        search_mode=run.search_mode,
+        status=run.status,
+        search_complete=run.search_complete,
+        verification_summary=run.verification_summary or {},
+        created_at=run.created_at,
+        feedback=[
+            {
+                "id": item.id,
+                "video_id": item.video_id,
+                "start_time": item.start_time,
+                "end_time": item.end_time,
+                "feedback": item.feedback,
+                "correction": item.correction,
+                "created_at": item.created_at,
+            }
+            for item in (feedback or [])
+        ],
+    )
+
+
+@app.get(
+    "/v1/search/runs/{run_id}",
+    response_model=ChatSearchRunResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def get_search_run(
+    run_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    run = session.scalar(select(ChatSearchRun).where(ChatSearchRun.id == run_id, ChatSearchRun.organization_id == organization_id))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Search run not found")
+    feedback = session.scalars(select(ChatEvidenceFeedback).where(ChatEvidenceFeedback.search_run_id == run.id).order_by(ChatEvidenceFeedback.created_at.asc())).all()
+    return _search_run_response(run, feedback)
+
+
+@app.post(
+    "/v1/search/runs/{run_id}/feedback",
+    response_model=ChatSearchRunResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def add_search_feedback(
+    run_id: str,
+    request: ChatEvidenceFeedbackRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    if request.end_time < request.start_time:
+        raise HTTPException(status_code=422, detail="Evidence end time must be after the start time")
+    run = session.scalar(select(ChatSearchRun).where(ChatSearchRun.id == run_id, ChatSearchRun.organization_id == organization_id))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Search run not found")
+    video = session.scalar(select(Video).where(Video.id == request.video_id, Video.organization_id == organization_id))
+    if video is None or (run.scope_video_ids and request.video_id not in run.scope_video_ids):
+        raise HTTPException(status_code=404, detail="Evidence video not found")
+    feedback = ChatEvidenceFeedback(
+        id=new_id(),
+        organization_id=organization_id,
+        search_run_id=run.id,
+        video_id=request.video_id,
+        start_time=request.start_time,
+        end_time=request.end_time,
+        feedback=request.feedback,
+        correction=request.correction.strip() if request.correction else None,
+    )
+    session.add(feedback)
+    session.commit()
+    session.refresh(run)
+    entries = session.scalars(select(ChatEvidenceFeedback).where(ChatEvidenceFeedback.search_run_id == run.id).order_by(ChatEvidenceFeedback.created_at.asc())).all()
+    return _search_run_response(run, entries)
 
 
 @app.post(

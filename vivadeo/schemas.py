@@ -1,6 +1,7 @@
 """Pydantic API schemas."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -183,21 +184,29 @@ class ChatRequest(BaseModel):
     custom_model: str | None = None
     video_ids: list[str] = Field(default_factory=list)
     thread_id: str | None = None
+    parent_search_run_id: str | None = None
+    modality: Literal["auto", "visual", "transcript", "hybrid"] = "auto"
+    search_mode: Literal["top", "focused"] = "top"
     focus_video_id: str | None = None
     focus_start_time: float | None = Field(default=None, ge=0)
     focus_end_time: float | None = Field(default=None, ge=0)
+    focus_window_seconds: float | None = Field(default=None, gt=0, le=120)
 
 
 class ChatCitation(BaseModel):
-    segment_id: str
+    segment_id: str | None = None
     video_id: str
     filename: str
     source_uri: str
     start_time: float
     end_time: float
-    text: str
+    text: str = ""
     similarity_score: float | None = None
     visual_verified: bool = False
+    verification_status: Literal["verified", "possible", "rejected"] = "verified"
+    modality: Literal["visual", "transcript", "hybrid"] = "transcript"
+    confidence: float = Field(0.0, ge=0, le=1)
+    match_reason: str = ""
 
 
 class ChatMessageRequest(BaseModel):
@@ -209,9 +218,13 @@ class ChatMessageRequest(BaseModel):
     custom_model: str | None = None
     video_id: str | None = None
     video_ids: list[str] = Field(default_factory=list)
+    parent_search_run_id: str | None = None
+    modality: Literal["auto", "visual", "transcript", "hybrid"] = "auto"
+    search_mode: Literal["top", "focused"] = "top"
     focus_video_id: str | None = None
     focus_start_time: float | None = Field(default=None, ge=0)
     focus_end_time: float | None = Field(default=None, ge=0)
+    focus_window_seconds: float | None = Field(default=None, gt=0, le=120)
 
 
 class ChatResponse(BaseModel):
@@ -219,6 +232,31 @@ class ChatResponse(BaseModel):
     citations: list[ChatCitation]
     thread_id: str | None = None
     title: str | None = None
+    search_run_id: str | None = None
+    intent: dict = Field(default_factory=dict)
+    search_complete: bool = True
+    verification_summary: dict = Field(default_factory=dict)
+    suggested_refinements: list[str] = Field(default_factory=list)
+
+
+class ChatEvidenceFeedbackRequest(BaseModel):
+    video_id: str
+    start_time: float = Field(..., ge=0)
+    end_time: float = Field(..., ge=0)
+    feedback: Literal["relevant", "not_relevant", "too_early", "too_late", "wrong_modality", "missing_context"]
+    correction: str | None = Field(default=None, max_length=500)
+
+
+class ChatSearchRunResponse(BaseModel):
+    id: str
+    query: str
+    modality: Literal["visual", "transcript", "hybrid"]
+    search_mode: Literal["top", "focused"]
+    status: str
+    search_complete: bool
+    verification_summary: dict = Field(default_factory=dict)
+    created_at: datetime
+    feedback: list[dict] = Field(default_factory=list)
 
 
 class EvidenceFrameRequest(BaseModel):
@@ -256,6 +294,10 @@ class ChatThreadMessageResponse(BaseModel):
     attachments: list[ChatMessageVideoResponse] = Field(default_factory=list)
     status: str = "completed"
     error: str | None = None
+    search_run_id: str | None = None
+    intent: dict = Field(default_factory=dict)
+    verification_summary: dict = Field(default_factory=dict)
+    suggested_refinements: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
