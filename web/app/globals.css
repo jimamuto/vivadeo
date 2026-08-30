@@ -1921,37 +1921,6 @@ main { width: 100%; }
   letter-spacing: 0.04em;
 }
 
-.search-citation-body {
-  display: grid;
-  gap: 8px;
-  min-height: 88px;
-  padding: 12px 14px 14px;
-}
-
-.search-citation-kicker {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.search-citation-kicker span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.search-citation-body strong {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-height: 1.4;
-}
-
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 .chat-source-rail {
@@ -2016,22 +1985,6 @@ main { width: 100%; }
   font: inherit;
   font-size: .75rem;
   cursor: pointer;
-}
-
-.search-citation-toggle {
-  justify-self: start;
-  padding: 5px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-oxblood);
-  transform: none;
-}
-
-.search-citation-toggle:hover {
-  background: transparent;
-  text-decoration: underline;
-  transform: none;
 }
 
 .search-preview {

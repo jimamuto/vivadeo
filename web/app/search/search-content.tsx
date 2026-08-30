@@ -331,7 +331,6 @@ export function SearchContent({
   const [activeChatJobId, setActiveChatJobId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
   const [historyOpen, setHistoryOpen] = useState(true);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
   const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
@@ -803,7 +802,6 @@ export function SearchContent({
     setTurns([]);
     setQuestion("");
     setStatus(null);
-    setExpandedCitations({});
     setMomentContext(null);
   }
 
@@ -816,7 +814,6 @@ export function SearchContent({
     setTurns(thread.turns);
     setQuestion("");
     setStatus(null);
-    setExpandedCitations({});
     setMomentContext(null);
     setThreadMenuId(null);
   }
@@ -1102,13 +1099,12 @@ export function SearchContent({
                 turns.map((turn, index) => {
                   const citations = turn.citations ?? [];
                   const citationKey = `${turn.id || turn.role}-${index}`;
-                  const showAll = expandedCitations[citationKey] ?? false;
                   const branchMessages = turn.id && turn.parentId
                     ? (activeThread?.messages || []).filter((candidate) => candidate.role === turn.role && candidate.parentId === turn.parentId)
                     : [];
                   const branchIndex = turn.id ? branchMessages.findIndex((candidate) => candidate.id === turn.id) : -1;
                   const isFailed = turn.status === "failed";
-                  const visibleCitations = showAll ? citations : citations.slice(0, 3);
+                  const visibleCitations = citations;
 
                   return (
                     <article key={citationKey} className={`search-result chat-message ${turn.role === "assistant" ? "search-result-answer chat-message-assistant" : "chat-message-user"}`}>
@@ -1157,23 +1153,10 @@ export function SearchContent({
                                     preload={index === turns.length - 1 && citationIndex < 3}
                                     onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })}
                                   />
-                                  <div className="search-citation-body">
-                                    <div className="search-citation-kicker"><span>{citation.filename}</span><span>Video moment</span></div>
-                                    <strong className="detail-wrap">{citation.text}</strong>
-                                  </div>
                                 </article>
                               );
                             })}
                           </div>
-                          {citations.length > 3 ? (
-                            <button
-                              className="button-secondary search-citation-toggle"
-                              type="button"
-                              onClick={() => setExpandedCitations((current) => ({ ...current, [citationKey]: !showAll }))}
-                            >
-                              {showAll ? "Show fewer ranges" : `Show ${citations.length - 3} more ranges`}
-                            </button>
-                          ) : null}
                         </div>
                       ) : null}
                     </article>
