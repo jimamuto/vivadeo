@@ -30,6 +30,7 @@ from .db import (
     Video,
     VideoChunk,
     VideoTranscriptSegment,
+    VisualKeyframe,
     make_engine,
     new_id,
     utcnow,
@@ -42,6 +43,7 @@ from .object_store import ObjectStore, profile_image_object_key, video_object_ke
 from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
 from .frame_extractor import extract_frame
+from .head_pose import is_face_orientation_query
 from .visual_retrieval import is_visual_query, rank_frame_candidates, sample_timestamps
 from .schemas import (
     ChatMessage,
@@ -95,6 +97,7 @@ def _visual_rerank_hits(
     results: int,
     question: str,
     verifier=None,
+    session: Session | None = None,
 ) -> list[dict]:
     """Rerank top chunk candidates and optionally verify frames with Pro vision."""
     candidates: list[dict] = []
@@ -105,22 +108,55 @@ def _visual_rerank_hits(
             for hit in chunk_hits[:3]:
                 video_id = hit.get("video_id")
                 object_key = hit.get("object_key")
-                if not video_id or not object_key:
+                if not video_id:
                     continue
-                local_video = local_videos.get(video_id)
-                if local_video is None:
-                    local_video = str(Path(tmp_dir) / f"{video_id}.mp4")
-                    store.download_file(object_key, local_video)
-                    local_videos[video_id] = local_video
-                for timestamp in sample_timestamps(hit["start_time"], hit["end_time"]):
+                keyframes = []
+                if session is not None:
+                    keyframes = list(session.scalars(
+                        select(VisualKeyframe).where(
+                            VisualKeyframe.video_id == video_id,
+                            VisualKeyframe.organization_id == hit.get("organization_id"),
+                            VisualKeyframe.status == "ready",
+                            VisualKeyframe.timestamp >= hit["start_time"],
+                            VisualKeyframe.timestamp <= hit["end_time"],
+                            VisualKeyframe.object_key.is_not(None),
+                        ).order_by(VisualKeyframe.timestamp)
+                    ).all())
+                    if is_face_orientation_query(question):
+                        front_keyframes = [frame for frame in keyframes if frame.pose == "front"]
+                        if front_keyframes:
+                            keyframes = front_keyframes
+                if keyframes:
+                    frame_items = [
+                        (frame.timestamp, frame.object_key, frame.pose, frame.pose_confidence)
+                        for frame in keyframes[:5]
+                    ]
+                elif object_key:
+                    local_video = local_videos.get(video_id)
+                    if local_video is None:
+                        local_video = str(Path(tmp_dir) / f"{video_id}.mp4")
+                        store.download_file(object_key, local_video)
+                        local_videos[video_id] = local_video
+                    frame_items = [
+                        (timestamp, None, "unknown", 0.0)
+                        for timestamp in sample_timestamps(hit["start_time"], hit["end_time"])
+                    ]
+                else:
+                    continue
+                for timestamp, cached_key, pose, pose_confidence in frame_items:
                     frame_path = str(Path(tmp_dir) / f"{video_id}-{timestamp:.3f}.jpg")
-                    extract_frame(local_video, timestamp, frame_path)
+                    if cached_key:
+                        store.download_file(cached_key, frame_path)
+                    else:
+                        extract_frame(local_video, timestamp, frame_path)
                     candidates.append({
                         "video_id": video_id,
                         "filename": hit.get("filename", "video"),
                         "source_uri": hit.get("source_uri", ""),
                         "timestamp": timestamp,
                         "chunk_start": hit["start_time"],
+                        "pose": pose,
+                        "pose_confidence": pose_confidence,
                         "path": frame_path,
                         "embedding": embedder.embed_image(frame_path),
                     })
@@ -1052,6 +1088,19 @@ def delete_video(
         except Exception:
             continue
     session.execute(delete(EvidenceFrame).where(EvidenceFrame.video_id == video_id, EvidenceFrame.organization_id == organization_id))
+    keyframe_keys = session.scalars(
+        select(VisualKeyframe.object_key).where(
+            VisualKeyframe.organization_id == organization_id,
+            VisualKeyframe.video_id == video_id,
+            VisualKeyframe.object_key.is_not(None),
+        )
+    ).all()
+    for key in keyframe_keys:
+        try:
+            store.delete_object(key)
+        except Exception:
+            continue
+    session.execute(delete(VisualKeyframe).where(VisualKeyframe.video_id == video_id, VisualKeyframe.organization_id == organization_id))
 
     clip_ids = session.scalars(
         select(Clip.id).where(
@@ -2047,6 +2096,7 @@ def search_chat(
                 request.results,
                 question,
                 visual_verifier,
+                session,
             )
         if use_nvidia and len(chunk_hits) < request.results and not is_visual_query(question):
             reset_embedder()

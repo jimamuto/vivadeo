@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     preprocess: bool = Field(True, alias="VIVADEO_PREPROCESS")
     target_resolution: int = Field(480, alias="VIVADEO_TARGET_RESOLUTION")
     target_fps: int = Field(5, alias="VIVADEO_TARGET_FPS")
+    keyframe_interval: int = Field(5, ge=1, alias="VIVADEO_KEYFRAME_INTERVAL")
     skip_still: bool = Field(False, alias="VIVADEO_SKIP_STILL")
 
 

@@ -101,6 +101,10 @@ def evidence_frame_object_key(frame_id: str) -> str:
     return f"evidence-frames/{frame_id}.jpg"
 
 
+def visual_keyframe_object_key(video_id: str, timestamp_key: str) -> str:
+    return f"visual-keyframes/{video_id}/{timestamp_key}.jpg"
+
+
 def profile_image_object_key(user_id: str, filename: str) -> str:
     suffix = Path(filename).suffix.lower() or ".jpg"
     if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:

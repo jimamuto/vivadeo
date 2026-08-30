@@ -187,6 +187,25 @@ class ChatThreadVideo(Base):
     video: Mapped[Video] = relationship()
 
 
+class VisualKeyframe(Base):
+    __tablename__ = "visual_keyframes"
+    __table_args__ = (UniqueConstraint("video_id", "timestamp_key", name="uq_visual_keyframe_timestamp"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id"), nullable=False)
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False)
+    timestamp_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_key: Mapped[str | None] = mapped_column(Text)
+    pose: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    pose_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    pose_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready")
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class EvidenceFrame(Base):
     __tablename__ = "evidence_frames"
     __table_args__ = (UniqueConstraint("video_id", "timestamp_key", name="uq_evidence_frame_timestamp"),)

@@ -84,13 +84,13 @@ Then add a small labeled evaluation set covering front-facing, profile, turned-a
 
 ## Current implementation slice
 
-The first loop now routes visual-looking questions through query-time frame reranking. It uses the existing chunk search to choose the top three candidates, downloads each source object once, samples five timestamps per chunk, embeds those extracted frames, and returns de-duplicated four-second evidence windows. When using Vivadeo Pro, the top diverse frame candidates are individually checked by the configured vision-capable answer service; only candidates marked relevant above the confidence threshold are returned. This is the first visual-verification slice, not the final architecture: the next step is persistent keyframes plus specialized head-pose scoring for face orientation.
+The visual loop routes visual-looking questions through frame-level retrieval. It uses chunk search to choose the top three candidates, then reads persistent five-second keyframes from object storage, embeds them, and returns de-duplicated four-second evidence windows. When using Vivadeo Pro, diverse frame candidates are individually checked by the configured vision-capable answer service; only candidates marked relevant above the confidence threshold are returned. Ingest now persists those keyframes and runs face orientation detection in the GPU-backed visual service.
 
 ## Patel object-storage validation
 
 The end-to-end loop was run against the ready Patel source in object storage using Vivadeo Pro and the visual question `When does the speaker face us in this video?`. The loop downloaded the stored source, extracted and embedded sampled frames, individually verified diverse candidates, and returned verified windows around the opening speaker shots and `1:37-1:43`; each result is a short four-second evidence window rather than a whole 30-second chunk. The Pro answer used those verified timestamps and did not add transcript-only candidates. The full backend suite passed with 107 tests.
 
-Residual limitation: the current frame extraction is query-time, so it is slower than the planned persistent keyframe index. Vivadeo Auto still uses visual reranking without the Pro multimodal verification step until a visual verifier is deployed for that path.
+Residual limitation: the face detector uses frontal/profile Haar classifiers inside the GPU-backed visual service; it is not yet a continuous yaw/pitch landmark estimator. Vivadeo Auto still uses persistent visual reranking without the Pro multimodal verification step until a visual verifier is deployed for that path.
 
 ## Performance and cost guardrails
 

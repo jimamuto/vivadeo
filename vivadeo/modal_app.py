@@ -35,6 +35,7 @@ image = (
         "qwen-vl-utils",
         "torch>=2.0",
         "torchvision>=0.15,<0.22",
+        "opencv-python-headless>=4.10,<5",
         "transformers>=5.3",
     )
 )
@@ -269,6 +270,37 @@ class QwenEmbedder:
             self._embed_video_bytes(video_bytes, filename)
             for video_bytes, filename in items
         ]
+
+    @modal.method()
+    def detect_head_poses(self, items: list[tuple[bytes, str]]) -> list[dict]:
+        """Detect frontal/profile faces on the GPU-backed visual worker."""
+        import cv2
+        import numpy as np
+
+        frontal = cv2.CascadeClassifier(
+            str(Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml")
+        )
+        profile = cv2.CascadeClassifier(
+            str(Path(cv2.data.haarcascades) / "haarcascade_profileface.xml")
+        )
+        results = []
+        for image_bytes, _filename in items:
+            image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if image is None:
+                results.append({"pose": "unknown", "facing_camera": None, "confidence": 0.0, "reason": "image-unreadable"})
+                continue
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            front_faces = frontal.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(32, 32))
+            profile_faces = profile.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(32, 32))
+            if len(front_faces):
+                largest = max(width * height for _x, _y, width, height in front_faces)
+                confidence = min(0.99, 0.65 + (largest / max(1, image.shape[0] * image.shape[1])))
+                results.append({"pose": "front", "facing_camera": True, "confidence": round(float(confidence), 3), "faces": len(front_faces)})
+            elif len(profile_faces):
+                results.append({"pose": "profile", "facing_camera": False, "confidence": 0.7, "faces": len(profile_faces)})
+            else:
+                results.append({"pose": "unknown", "facing_camera": None, "confidence": 0.0, "faces": 0})
+        return results
 
 
 whisper_image = (

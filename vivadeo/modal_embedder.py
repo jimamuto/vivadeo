@@ -133,5 +133,16 @@ class ModalEmbedder(BaseEmbedder):
             print(f"  [verbose] sending {len(data) / 1024:.0f}KB image to Modal")
         return self._call("embed_image", data, filename, verbose=verbose)
 
+    def detect_head_poses(self, image_paths: list[str]) -> list[dict]:
+        items = [self._read_file(path) for path in image_paths]
+        remote = self._get_remote()
+        try:
+            results = remote.detect_head_poses.remote(items)
+        except Exception as exc:
+            raise ModalEmbedderError(f"Modal remote method detect_head_poses failed: {exc}") from exc
+        if len(results) != len(items):
+            raise ModalEmbedderError(f"Expected {len(items)} head-pose results, got {len(results)}.")
+        return results
+
     def dimensions(self) -> int:
         return DIMENSIONS

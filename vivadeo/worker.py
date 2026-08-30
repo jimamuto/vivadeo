@@ -14,12 +14,12 @@ from sqlalchemy import delete, select
 
 from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
 from .config import get_settings
-from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Organization, Video, VideoTranscriptSegment, dispose_engine, new_id, session_scope, utcnow
+from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Organization, Video, VideoTranscriptSegment, VisualKeyframe, dispose_engine, new_id, session_scope, utcnow
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
 from .frame_extractor import extract_frame
 from .modal_whisper import ModalWhisperTranscriber
-from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key
+from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key, visual_keyframe_object_key
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
 
@@ -194,6 +194,82 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
             reset_embedder()
 
 
+def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id: str, embedder=None) -> None:
+    settings = get_settings()
+    duration = max(0.0, _get_video_duration(file_path))
+    timestamps = []
+    timestamp = 0.0
+    while timestamp < duration:
+        timestamps.append(round(timestamp, 3))
+        timestamp += settings.keyframe_interval
+    if not timestamps:
+        timestamps.append(0.0)
+
+    store = ObjectStore()
+    tmp_dir = tempfile.mkdtemp(prefix="vivadeo_keyframes_")
+    try:
+        with session_scope() as session:
+            old_keys = list(session.scalars(select(VisualKeyframe.object_key).where(VisualKeyframe.video_id == video_id, VisualKeyframe.organization_id == organization_id)).all())
+            session.execute(delete(VisualKeyframe).where(VisualKeyframe.video_id == video_id, VisualKeyframe.organization_id == organization_id))
+        for key in old_keys:
+            if key:
+                try:
+                    store.delete_object(key)
+                except Exception:
+                    logger.warning("visual_keyframe_delete_failed video_id=%s key=%s", video_id, key)
+
+        total = len(timestamps)
+        frame_paths = []
+        for index, timestamp in enumerate(timestamps, 1):
+            _raise_if_canceled(job_id)
+            timestamp_key = f"{timestamp:.3f}"
+            frame_path = os.path.join(tmp_dir, f"{timestamp_key}.jpg")
+            extract_frame(file_path, timestamp, frame_path)
+            frame_paths.append(frame_path)
+            _update_job(
+                job_id,
+                status="running",
+                progress=min(0.9, 0.82 + (0.06 * index / total)),
+                message=f"Extracting visual keyframe {index}/{total}",
+            )
+        poses = []
+        detect_head_poses = getattr(embedder, "detect_head_poses", None)
+        if detect_head_poses is not None:
+            _update_job(job_id, status="running", progress=0.9, message="Detecting face orientation")
+            try:
+                poses = detect_head_poses(frame_paths)
+            except Exception:
+                logger.exception("head_pose_detection_failed video_id=%s", video_id)
+        if len(poses) != len(frame_paths):
+            poses = [{"pose": "unknown", "facing_camera": None, "confidence": 0.0, "reason": "detection-unavailable"}] * len(frame_paths)
+        for index, (timestamp, frame_path, pose) in enumerate(zip(timestamps, frame_paths, poses), 1):
+            _raise_if_canceled(job_id)
+            timestamp_key = f"{timestamp:.3f}"
+            object_key = visual_keyframe_object_key(video_id, timestamp_key)
+            store.upload_file(frame_path, object_key, "image/jpeg")
+            with session_scope() as session:
+                session.add(VisualKeyframe(
+                    id=new_id(),
+                    organization_id=organization_id,
+                    video_id=video_id,
+                    timestamp=timestamp,
+                    timestamp_key=timestamp_key,
+                    object_key=object_key,
+                    pose=pose.get("pose", "unknown"),
+                    pose_confidence=float(pose.get("confidence", 0.0)),
+                    pose_metadata=pose,
+                    status="ready",
+                ))
+            _update_job(
+                job_id,
+                status="running",
+                progress=min(0.98, 0.9 + (0.08 * index / total)),
+                message=f"Caching visual keyframe {index}/{total}",
+            )
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
     settings = get_settings()
     embedder = get_embedder(
@@ -311,6 +387,8 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                 batch.clear()
         if stored_count == 0 and failed_count > 0:
             raise RuntimeError(f"All {failed_count} chunk embedding attempt(s) failed.")
+        _update_job(job_id, status="running", progress=0.82, message="Caching visual keyframes")
+        _index_keyframes(video_id, organization_id, file_path, job_id, embedder)
     finally:
         reset_embedder()
         for path in files_to_cleanup:

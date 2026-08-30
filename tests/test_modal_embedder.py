@@ -70,6 +70,21 @@ def test_embed_video_chunks_sends_batch(mock_from_name, tmp_path):
 
 
 @patch("vivadeo.modal_embedder.modal.Cls.from_name")
+def test_detect_head_poses_sends_image_batch(mock_from_name, tmp_path):
+    remote = _remote_with_methods([0.1] * 768)
+    remote.detect_head_poses.remote.return_value = [{"pose": "front", "confidence": 0.8}]
+    mock_from_name.return_value = MagicMock(return_value=remote)
+
+    frame = tmp_path / "frame.jpg"
+    frame.write_bytes(b"jpeg-bytes")
+
+    result = ModalEmbedder().detect_head_poses([str(frame)])
+
+    assert result == [{"pose": "front", "confidence": 0.8}]
+    remote.detect_head_poses.remote.assert_called_once_with([(b"jpeg-bytes", "frame.jpg")])
+
+
+@patch("vivadeo.modal_embedder.modal.Cls.from_name")
 def test_bad_dimension_raises(mock_from_name):
     remote = _remote_with_methods([0.1] * 12)
     mock_from_name.return_value = MagicMock(return_value=remote)
