@@ -176,7 +176,7 @@ class ChatOnboardingState(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
-    results: int = Field(8, ge=1, le=30)
+    results: int = Field(8, ge=1, le=100)
     video_id: str | None = None
     provider: str = "vivadeo-auto"
     custom_base_url: str | None = None
@@ -186,7 +186,10 @@ class ChatRequest(BaseModel):
     thread_id: str | None = None
     parent_search_run_id: str | None = None
     modality: Literal["auto", "visual", "transcript", "hybrid"] = "auto"
-    search_mode: Literal["top", "focused"] = "top"
+    search_mode: Literal["top", "all", "focused"] = "top"
+    output_format: Literal["answer", "rows", "comparison"] = "answer"
+    extraction_type: Literal["claims", "action_items", "people", "appearances", "objections", "chapters", "visual_events"] | None = None
+    comparison_video_ids: list[str] = Field(default_factory=list, max_length=10)
     focus_video_id: str | None = None
     focus_start_time: float | None = Field(default=None, ge=0)
     focus_end_time: float | None = Field(default=None, ge=0)
@@ -211,7 +214,7 @@ class ChatCitation(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=3000)
-    results: int = Field(8, ge=1, le=30)
+    results: int = Field(8, ge=1, le=100)
     provider: str = "vivadeo-auto"
     custom_base_url: str | None = None
     custom_api_key: str | None = None
@@ -220,11 +223,32 @@ class ChatMessageRequest(BaseModel):
     video_ids: list[str] = Field(default_factory=list)
     parent_search_run_id: str | None = None
     modality: Literal["auto", "visual", "transcript", "hybrid"] = "auto"
-    search_mode: Literal["top", "focused"] = "top"
+    search_mode: Literal["top", "all", "focused"] = "top"
+    output_format: Literal["answer", "rows", "comparison"] = "answer"
+    extraction_type: Literal["claims", "action_items", "people", "appearances", "objections", "chapters", "visual_events"] | None = None
+    comparison_video_ids: list[str] = Field(default_factory=list, max_length=10)
     focus_video_id: str | None = None
     focus_start_time: float | None = Field(default=None, ge=0)
     focus_end_time: float | None = Field(default=None, ge=0)
     focus_window_seconds: float | None = Field(default=None, gt=0, le=120)
+
+
+class ChatExtractionRow(BaseModel):
+    item: str
+    source: str
+    video_id: str
+    start_time: float = Field(..., ge=0)
+    end_time: float = Field(..., ge=0)
+    confidence: float = Field(0.0, ge=0, le=1)
+    verification_status: Literal["verified", "possible"] = "verified"
+    evidence_key: str
+
+
+class ChatComparisonClaim(BaseModel):
+    claim: str
+    confidence: float = Field(0.0, ge=0, le=1)
+    left_citations: list[ChatCitation] = Field(default_factory=list)
+    right_citations: list[ChatCitation] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -237,6 +261,9 @@ class ChatResponse(BaseModel):
     search_complete: bool = True
     verification_summary: dict = Field(default_factory=dict)
     suggested_refinements: list[str] = Field(default_factory=list)
+    output_format: Literal["answer", "rows", "comparison"] = "answer"
+    rows: list[ChatExtractionRow] = Field(default_factory=list)
+    comparison: list[ChatComparisonClaim] = Field(default_factory=list)
 
 
 class ChatEvidenceFeedbackRequest(BaseModel):
@@ -251,12 +278,48 @@ class ChatSearchRunResponse(BaseModel):
     id: str
     query: str
     modality: Literal["visual", "transcript", "hybrid"]
-    search_mode: Literal["top", "focused"]
+    search_mode: Literal["top", "all", "focused"]
+    output_format: Literal["answer", "rows", "comparison"] = "answer"
     status: str
+    stage: str = "complete"
+    progress: float = Field(1.0, ge=0, le=1)
     search_complete: bool
     verification_summary: dict = Field(default_factory=dict)
+    rows: list[ChatExtractionRow] = Field(default_factory=list)
+    comparison: list[ChatComparisonClaim] = Field(default_factory=list)
     created_at: datetime
+    updated_at: datetime
     feedback: list[dict] = Field(default_factory=list)
+
+
+class SavedSearchRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    query: str = Field(..., min_length=1, max_length=3000)
+    modality: Literal["auto", "visual", "transcript", "hybrid"] = "auto"
+    search_mode: Literal["top", "all", "focused"] = "top"
+    output_format: Literal["answer", "rows", "comparison"] = "answer"
+    extraction_type: Literal["claims", "action_items", "people", "appearances", "objections", "chapters", "visual_events"] | None = None
+    video_ids: list[str] = Field(default_factory=list, max_length=10)
+
+
+class SavedSearchUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    archived: bool | None = None
+
+
+class SavedSearchResponse(BaseModel):
+    id: str
+    name: str
+    query: str
+    modality: str
+    search_mode: str
+    output_format: str
+    extraction_type: str | None = None
+    video_ids: list[str] = Field(default_factory=list)
+    archived: bool
+    last_run_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class EvidenceFrameRequest(BaseModel):
@@ -298,6 +361,9 @@ class ChatThreadMessageResponse(BaseModel):
     intent: dict = Field(default_factory=dict)
     verification_summary: dict = Field(default_factory=dict)
     suggested_refinements: list[str] = Field(default_factory=list)
+    output_format: Literal["answer", "rows", "comparison"] = "answer"
+    rows: list[ChatExtractionRow] = Field(default_factory=list)
+    comparison: list[ChatComparisonClaim] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

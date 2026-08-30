@@ -227,9 +227,37 @@ class ChatSearchRun(Base):
     focus_start_time: Mapped[float | None] = mapped_column(Float)
     focus_end_time: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="completed")
+    stage: Mapped[str] = mapped_column(String(24), nullable=False, default="complete")
+    progress: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    output_format: Mapped[str] = mapped_column(String(24), nullable=False, default="answer")
     search_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     verification_summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    result_rows: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    comparison_claims: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class SavedSearch(Base):
+    __tablename__ = "saved_searches"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_saved_search_org_name"),
+        Index("ix_saved_searches_org_updated", "organization_id", "updated_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    modality: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
+    search_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="top")
+    output_format: Mapped[str] = mapped_column(String(24), nullable=False, default="answer")
+    extraction_type: Mapped[str | None] = mapped_column(String(32))
+    video_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_run_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("chat_search_runs.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class ChatEvidenceFeedback(Base):

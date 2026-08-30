@@ -9,8 +9,10 @@ def test_request_accepts_accuracy_controls_and_rejects_unknown_mode():
     request = ChatRequest(messages=[ChatMessage(role="user", content="face the camera")], modality="visual", search_mode="focused", focus_window_seconds=12)
     assert request.modality == "visual"
     assert request.focus_window_seconds == 12
+    all_request = ChatRequest(messages=[], search_mode="all")
+    assert all_request.search_mode == "all"
     with pytest.raises(ValidationError):
-        ChatRequest(messages=[], search_mode="all")
+        ChatRequest(messages=[], search_mode="unsupported")
 
 
 def test_routes_visual_question_with_predicate():
@@ -30,6 +32,7 @@ def test_routes_hybrid_and_focused_questions():
     intent = route_chat_intent("What did she say while holding the product?", focused=True)
     assert intent["modality"] == "hybrid"
     assert intent["search_mode"] == "focused"
+    assert route_chat_intent("Find every time the speaker faces us")["search_mode"] == "all"
 
 
 def test_override_and_verification_contract():

@@ -29,6 +29,7 @@ from .db import (
     Organization,
     OrganizationSetting,
     SessionLocal,
+    SavedSearch,
     Video,
     VideoChunk,
     VideoTranscriptSegment,
@@ -46,6 +47,7 @@ from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
 from .frame_extractor import extract_frame
 from .chat_accuracy import route_chat_intent, suggested_refinements, verification_for_hit
+from .chat_workflows import comparison_claims, extraction_rows
 from .head_pose import is_face_orientation_query
 from .visual_retrieval import rank_frame_candidates, sample_timestamps
 from .schemas import (
@@ -55,6 +57,11 @@ from .schemas import (
     ChatMessageVideoResponse,
     ChatEvidenceFeedbackRequest,
     ChatSearchRunResponse,
+    ChatExtractionRow,
+    ChatComparisonClaim,
+    SavedSearchRequest,
+    SavedSearchResponse,
+    SavedSearchUpdateRequest,
     ChatRequest,
     ChatOnboardingState,
     ChatResponse,
@@ -103,6 +110,7 @@ def _visual_rerank_hits(
     question: str,
     verifier=None,
     session: Session | None = None,
+    exhaustive: bool = False,
 ) -> list[dict]:
     """Rerank top chunk candidates and optionally verify frames with Pro vision."""
     candidates: list[dict] = []
@@ -110,7 +118,7 @@ def _visual_rerank_hits(
         with tempfile.TemporaryDirectory(prefix="vivadeo_visual_search_") as tmp_dir:
             local_videos: dict[str, str] = {}
             store = ObjectStore()
-            for hit in chunk_hits[:3]:
+            for hit in (chunk_hits if exhaustive else chunk_hits[:3]):
                 video_id = hit.get("video_id")
                 object_key = hit.get("object_key")
                 if not video_id:
@@ -134,7 +142,7 @@ def _visual_rerank_hits(
                 if keyframes:
                     frame_items = [
                         (frame.timestamp, frame.object_key, frame.pose, frame.pose_confidence)
-                        for frame in keyframes[:5]
+                        for frame in (keyframes if exhaustive else keyframes[:5])
                     ]
                 elif object_key:
                     local_video = local_videos.get(video_id)
@@ -168,21 +176,24 @@ def _visual_rerank_hits(
             ranked = rank_frame_candidates(query_embedding, candidates)
             if verifier is not None and ranked:
                 verification_candidates: list[dict] = []
-                seen_chunks: set[tuple[str, float]] = set()
-                for candidate in ranked:
-                    chunk_key = (candidate["video_id"], candidate["chunk_start"])
-                    if chunk_key in seen_chunks:
-                        continue
-                    seen_chunks.add(chunk_key)
-                    verification_candidates.append(candidate)
-                    if len(verification_candidates) >= 8:
-                        break
-                for candidate in ranked:
-                    if candidate in verification_candidates:
-                        continue
-                    verification_candidates.append(candidate)
-                    if len(verification_candidates) >= 5:
-                        break
+                if exhaustive:
+                    verification_candidates = ranked
+                else:
+                    seen_chunks: set[tuple[str, float]] = set()
+                    for candidate in ranked:
+                        chunk_key = (candidate["video_id"], candidate["chunk_start"])
+                        if chunk_key in seen_chunks:
+                            continue
+                        seen_chunks.add(chunk_key)
+                        verification_candidates.append(candidate)
+                        if len(verification_candidates) >= 8:
+                            break
+                    for candidate in ranked:
+                        if candidate in verification_candidates:
+                            continue
+                        verification_candidates.append(candidate)
+                        if len(verification_candidates) >= 5:
+                            break
                 verified_keys: dict[tuple[str, float], dict] = {}
                 for index, candidate in enumerate(verification_candidates, 1):
                     result = verifier.verify_visual_candidates(question, [candidate])
@@ -232,7 +243,7 @@ def _visual_rerank_hits(
             "verification_confidence": candidate.get("verification_confidence"),
             "match_reason": candidate.get("match_reason"),
         })
-        if len(selected) >= results:
+        if not exhaustive and len(selected) >= results:
             break
     return selected or chunk_hits
 
@@ -411,6 +422,17 @@ def _evidence_frame_response(frame: EvidenceFrame, store: ObjectStore | None = N
         status=frame.status,
         url=store.presigned_url(frame.object_key) if store and frame.object_key else None,
         job_id=job_id,
+        error=frame.error,
+    )
+
+
+def _keyframe_response(frame: VisualKeyframe, store: ObjectStore | None = None) -> EvidenceFrameResponse:
+    return EvidenceFrameResponse(
+        id=frame.id,
+        video_id=frame.video_id,
+        timestamp=frame.timestamp,
+        status=frame.status,
+        url=store.presigned_url(frame.object_key) if store and frame.object_key else None,
         error=frame.error,
     )
 
@@ -867,6 +889,19 @@ def request_evidence_frame(
     if video.duration is not None:
         timestamp = min(timestamp, max(0.0, video.duration))
     timestamp_key = f"{timestamp:.3f}"
+    cached_keyframes = session.scalars(
+        select(VisualKeyframe).where(
+            VisualKeyframe.video_id == video_id,
+            VisualKeyframe.organization_id == organization_id,
+            VisualKeyframe.status == "ready",
+            VisualKeyframe.object_key.is_not(None),
+            VisualKeyframe.timestamp >= max(0.0, timestamp - 2.5),
+            VisualKeyframe.timestamp <= timestamp + 2.5,
+        ).order_by(VisualKeyframe.timestamp)
+    ).all()
+    if cached_keyframes:
+        keyframe = min(cached_keyframes, key=lambda item: abs(item.timestamp - timestamp))
+        return _keyframe_response(keyframe, ObjectStore())
     frame = session.scalar(select(EvidenceFrame).where(EvidenceFrame.video_id == video_id, EvidenceFrame.organization_id == organization_id, EvidenceFrame.timestamp_key == timestamp_key))
     if frame is not None and frame.status == "ready":
         return _evidence_frame_response(frame, ObjectStore())
@@ -1221,9 +1256,15 @@ def get_media(
             EvidenceFrame.object_key == object_key,
         )
     ).first()
-    if video is None and clip is None and frame is None:
+    keyframe = session.scalars(
+        select(VisualKeyframe).where(
+            VisualKeyframe.organization_id == organization_id,
+            VisualKeyframe.object_key == object_key,
+        )
+    ).first()
+    if video is None and clip is None and frame is None and keyframe is None:
         raise HTTPException(status_code=404, detail="Media not found")
-    content_type = video.content_type if video else "image/jpeg" if frame else "video/mp4"
+    content_type = video.content_type if video else "image/jpeg" if frame or keyframe else "video/mp4"
     session.close()
     return stream_object(object_key, content_type=content_type, range_header=range_header)
 
@@ -1301,18 +1342,18 @@ def stream_job_events(
         pubsub = client.pubsub()
         pubsub.subscribe(f"vivadeo:job:{job_id}")
         try:
-            yield f"event: job\\ndata: {initial_event}\\n\\n"
+            yield f"event: job\ndata: {initial_event}\n\n"
             if initial_status in {"succeeded", "failed", "canceled"}:
                 return
             while True:
                 message = pubsub.get_message(ignore_subscribe_messages=True, timeout=15)
                 if message and message.get("data"):
                     payload = message["data"]
-                    yield f"event: job\\ndata: {payload}\\n\\n"
+                    yield f"event: job\ndata: {payload}\n\n"
                     if '"status":"succeeded"' in payload or '"status":"failed"' in payload or '"status":"canceled"' in payload:
                         return
                 else:
-                    yield ": keepalive\\n\\n"
+                    yield ": keepalive\n\n"
         finally:
             pubsub.close()
             client.close()
@@ -1484,6 +1525,9 @@ def _create_search_run(session: Session, *, organization_id: str, thread_id: str
         focus_start_time=request.focus_start_time,
         focus_end_time=request.focus_end_time,
         status="running",
+        stage="routing",
+        progress=0.0,
+        output_format=request.output_format,
         search_complete=False,
     )
     session.add(run)
@@ -1495,8 +1539,26 @@ def _finish_search_run(run: ChatSearchRun | None, *, status: str, summary: dict)
     if run is None:
         return
     run.status = status
+    run.stage = "complete" if status == "completed" else status
+    run.progress = 1.0 if status == "completed" else run.progress
     run.search_complete = status == "completed"
     run.verification_summary = summary
+
+
+def _set_search_stage(run: ChatSearchRun | None, stage: str, progress: float) -> None:
+    if run is None:
+        return
+    run.stage = stage
+    run.progress = min(1.0, max(run.progress, progress))
+    run.updated_at = utcnow()
+
+
+def _report_search_stage(session: Session, run: ChatSearchRun | None, callback, stage: str, progress: float, message: str) -> None:
+    _set_search_stage(run, stage, progress)
+    if run is not None:
+        session.commit()
+    if callback:
+        callback(progress, message)
 
 
 def _current_chat_message(thread: ChatThread) -> ChatThreadMessage | None:
@@ -1596,13 +1658,16 @@ def _complete_chat_message(
                 results=request.results,
                 parent_search_run_id=request.parent_search_run_id,
                 video_id=request.video_id if request.video_id in source_ids else None,
-                video_ids=[video_id for video_id in request.video_ids if video_id in source_ids] or source_ids,
+                video_ids=[video_id for video_id in [*request.video_ids, *request.comparison_video_ids] if video_id in source_ids] or source_ids,
                 provider=request.provider,
                 custom_base_url=request.custom_base_url,
                 custom_api_key=request.custom_api_key,
                 custom_model=request.custom_model,
                 modality=request.modality,
                 search_mode=request.search_mode,
+                output_format=request.output_format,
+                extraction_type=request.extraction_type,
+                comparison_video_ids=request.comparison_video_ids,
                 focus_video_id=request.focus_video_id,
                 focus_start_time=request.focus_start_time,
                 focus_end_time=request.focus_end_time,
@@ -1628,6 +1693,9 @@ def _complete_chat_message(
         "intent": answer.intent,
         "verification_summary": answer.verification_summary,
         "suggested_refinements": answer.suggested_refinements,
+        "output_format": answer.output_format,
+        "rows": [row.model_dump() for row in answer.rows],
+        "comparison": [claim.model_dump() for claim in answer.comparison],
     }
     if answer.search_run_id:
         search_run = session.get(ChatSearchRun, answer.search_run_id)
@@ -1692,6 +1760,9 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
                 "intent": (getattr(message, "generation_metadata", None) or {}).get("intent", {}),
                 "verification_summary": (getattr(message, "generation_metadata", None) or {}).get("verification_summary", {}),
                 "suggested_refinements": (getattr(message, "generation_metadata", None) or {}).get("suggested_refinements", []),
+                "output_format": (getattr(message, "generation_metadata", None) or {}).get("output_format", "answer"),
+                "rows": (getattr(message, "generation_metadata", None) or {}).get("rows", []),
+                "comparison": (getattr(message, "generation_metadata", None) or {}).get("comparison", []),
                 "created_at": message.created_at,
                 "updated_at": message.updated_at,
             }
@@ -1832,7 +1903,7 @@ def create_chat_message(
     if request.provider not in {"vivadeo-auto", "vivadeo-pro", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
         raise HTTPException(status_code=400, detail="Unsupported chat provider")
 
-    requested_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
+    requested_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else []), *request.comparison_video_ids]))
     if requested_video_ids:
         _attach_thread_sources(session, thread, requested_video_ids, organization_id)
     if request.focus_video_id:
@@ -2099,9 +2170,16 @@ def search_chat(
                 parent_id=current.id if current is not None else None,
             )
 
-    scope_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
+    comparison_video_ids = list(dict.fromkeys(request.comparison_video_ids))
+    if request.output_format == "comparison" and len(comparison_video_ids) < 2:
+        raise HTTPException(status_code=422, detail="Comparison requires at least two videos")
+    scope_video_ids = comparison_video_ids or list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
     if not request.video_id and not scope_video_ids and thread is not None:
         scope_video_ids = [source.video_id for source in thread.sources if source.video and source.video.status not in {"archived", "failed", "canceled"}]
+    if scope_video_ids and hasattr(session, "scalars"):
+        authorized_ids = set(session.scalars(select(Video.id).where(Video.organization_id == organization_id, Video.id.in_(scope_video_ids))).all())
+        if authorized_ids != set(scope_video_ids):
+            raise HTTPException(status_code=404, detail="One or more videos are not available in this workspace")
     if request.focus_video_id:
         focused_video = session.scalar(select(Video).where(Video.id == request.focus_video_id, Video.organization_id == organization_id))
         if focused_video is None:
@@ -2131,8 +2209,7 @@ def search_chat(
         request=request,
     )
     runtime_settings = get_runtime_settings()
-    if progress_callback:
-        progress_callback(0.2, "Retrieving relevant video moments")
+    _report_search_stage(session, search_run, progress_callback, "retrieving", 0.2, "Retrieving relevant video moments")
     try:
         plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
     except Exception:
@@ -2140,6 +2217,7 @@ def search_chat(
     use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
     visual_verifier = None
     visual_question = intent["modality"] in {"visual", "hybrid"}
+    result_limit = 100 if intent["search_mode"] == "all" else request.results
     if (
         visual_question
         and request.provider == "vivadeo-pro"
@@ -2160,25 +2238,25 @@ def search_chat(
         embedding = embedding_backend.embed_query(question)
         store = PostgresVideoStore(session)
         search_kwargs = {
-            "n_results": max(request.results, 30) if request.focus_video_id and request.focus_start_time is not None else request.results,
+            "n_results": max(result_limit, 30) if request.focus_video_id and request.focus_start_time is not None else result_limit,
             "organization_id": organization_id,
             "video_id": request.focus_video_id or request.video_id,
             **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
         }
         chunk_hits = store.search(embedding, **search_kwargs)
         if visual_question:
-            if progress_callback:
-                progress_callback(0.45, "Checking visual evidence")
+            _report_search_stage(session, search_run, progress_callback, "checking", 0.45, "Checking visual evidence")
             chunk_hits = _visual_rerank_hits(
                 embedding,
                 chunk_hits,
                 embedding_backend,
-                request.results,
+                result_limit,
                 question,
                 visual_verifier,
                 session,
+                exhaustive=intent["search_mode"] == "all",
             )
-        if use_nvidia and len(chunk_hits) < request.results and intent["modality"] in {"transcript", "hybrid"}:
+        if use_nvidia and len(chunk_hits) < result_limit and intent["modality"] in {"transcript", "hybrid"}:
             reset_embedder()
             transcript_embedder = get_embedder(
                 backend="nvidia",
@@ -2202,6 +2280,7 @@ def search_chat(
             if hit["video_id"] == request.focus_video_id and hit["end_time"] >= request.focus_start_time and hit["start_time"] <= focus_end
         ]
 
+    _report_search_stage(session, search_run, progress_callback, "grouping", 0.65, "Grouping evidence moments")
     citations = []
     seen_segment_ids: set[str] = set()
     seen_visual_keys: set[tuple[str, float]] = set()
@@ -2248,7 +2327,7 @@ def search_chat(
                         "match_reason": match_reason,
                     }
                 )
-                if len(citations) >= request.results:
+                if len(citations) >= result_limit:
                     break
         elif hit_modality == "visual" and hasattr(session, "get"):
             video = session.get(Video, hit["video_id"])
@@ -2272,7 +2351,7 @@ def search_chat(
                         "match_reason": match_reason,
                     }
                 )
-        if len(citations) >= request.results:
+        if len(citations) >= result_limit:
             break
 
     verified_citations = [item for item in citations if item["verification_status"] == "verified"]
@@ -2282,6 +2361,8 @@ def search_chat(
         "rejected": 0,
         "modality": intent["modality"],
     }
+    rows = extraction_rows(citations, request.extraction_type) if request.output_format == "rows" else []
+    comparison = []
 
     if not verified_citations and visual_question:
         answer = "I found possible visual matches, but I could not verify them confidently enough to answer. Try narrowing the question or asking about one of the moments."
@@ -2293,13 +2374,18 @@ def search_chat(
                 "intent": intent,
                 "verification_summary": verification_summary,
                 "suggested_refinements": suggested_refinements(intent, has_results=bool(citations)),
+                "rows": [],
+                "comparison": [],
             }
             if search_run is not None:
                 search_run.thread_id = thread.id
                 search_run.message_id = assistant.id
         if search_run is not None or thread is not None:
             session.commit()
-        return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=bool(citations)))
+        if search_run is not None:
+            search_run.result_rows = rows
+            search_run.comparison_claims = comparison
+        return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=bool(citations)), output_format=request.output_format, rows=rows, comparison=comparison)
 
     if not citations:
         answer = "No defensible evidence is available yet. Try a more specific question, attach a video, or ask about a shorter time range."
@@ -2333,10 +2419,12 @@ def search_chat(
             session.commit()
         elif search_run is not None:
             session.commit()
-        return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=False))
+        if search_run is not None:
+            search_run.result_rows = rows
+            search_run.comparison_claims = comparison
+        return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=False), output_format=request.output_format, rows=rows, comparison=comparison)
 
-    if progress_callback:
-        progress_callback(0.78, "Preparing answer")
+    _report_search_stage(session, search_run, progress_callback, "answering", 0.78, "Preparing answer")
     settings = get_runtime_settings()
     messages = [message.model_dump() for message in request.messages[-10:]]
     try:
@@ -2405,8 +2493,10 @@ def search_chat(
             session.flush()
             # Do not hold a database connection while waiting on an external model.
             session.commit()
-        answer_citations = verified_citations if visual_question else citations
+        answer_citations = (verified_citations if visual_question else citations)[:12]
         answer = generator.answer(messages, answer_citations)
+        if request.output_format == "comparison":
+            comparison = comparison_claims(verified_citations, answer)
     except Exception as exc:
         _finish_search_run(search_run, status="failed", summary=verification_summary)
         if thread is not None:
@@ -2426,6 +2516,9 @@ def search_chat(
             session.commit()
         raise HTTPException(status_code=502, detail="Answer generation failed. Please try again.") from exc
     _finish_search_run(search_run, status="completed", summary=verification_summary)
+    if search_run is not None:
+        search_run.result_rows = rows
+        search_run.comparison_claims = comparison
     if thread is not None and assistant_message is not None:
         assistant_message.content = answer
         assistant_message.citations = citations
@@ -2443,7 +2536,7 @@ def search_chat(
         session.commit()
     if search_run is not None:
         session.commit()
-    return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=bool(citations)))
+    return ChatResponse(answer=answer, citations=citations, thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=bool(citations)), output_format=request.output_format, rows=[ChatExtractionRow.model_validate(row) for row in rows], comparison=[ChatComparisonClaim.model_validate(claim) for claim in comparison])
 
 
 def _search_run_response(run: ChatSearchRun, feedback: list[ChatEvidenceFeedback] | None = None) -> ChatSearchRunResponse:
@@ -2452,10 +2545,16 @@ def _search_run_response(run: ChatSearchRun, feedback: list[ChatEvidenceFeedback
         query=run.query,
         modality=run.modality,
         search_mode=run.search_mode,
+        output_format=run.output_format,
         status=run.status,
+        stage=run.stage,
+        progress=run.progress,
         search_complete=run.search_complete,
         verification_summary=run.verification_summary or {},
+        rows=run.result_rows or [],
+        comparison=run.comparison_claims or [],
         created_at=run.created_at,
+        updated_at=run.updated_at,
         feedback=[
             {
                 "id": item.id,
@@ -2522,6 +2621,154 @@ def add_search_feedback(
     session.refresh(run)
     entries = session.scalars(select(ChatEvidenceFeedback).where(ChatEvidenceFeedback.search_run_id == run.id).order_by(ChatEvidenceFeedback.created_at.asc())).all()
     return _search_run_response(run, entries)
+
+
+def _saved_search_response(saved: SavedSearch) -> SavedSearchResponse:
+    return SavedSearchResponse(
+        id=saved.id,
+        name=saved.name,
+        query=saved.query,
+        modality=saved.modality,
+        search_mode=saved.search_mode,
+        output_format=saved.output_format,
+        extraction_type=saved.extraction_type,
+        video_ids=saved.video_ids or [],
+        archived=saved.archived,
+        last_run_id=saved.last_run_id,
+        created_at=saved.created_at,
+        updated_at=saved.updated_at,
+    )
+
+
+def _validate_saved_video_ids(session: Session, organization_id: str, video_ids: list[str]) -> list[str]:
+    ids = list(dict.fromkeys(video_ids))
+    if ids and hasattr(session, "scalars"):
+        available = set(session.scalars(select(Video.id).where(Video.organization_id == organization_id, Video.id.in_(ids))).all())
+        if available != set(ids):
+            raise HTTPException(status_code=404, detail="One or more saved-search videos are unavailable")
+    return ids
+
+
+@app.get(
+    "/v1/search/saved",
+    response_model=list[SavedSearchResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def list_saved_searches(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    saved = session.scalars(select(SavedSearch).where(SavedSearch.organization_id == organization_id).order_by(SavedSearch.archived.asc(), SavedSearch.updated_at.desc())).all()
+    return [_saved_search_response(item) for item in saved]
+
+
+@app.post(
+    "/v1/search/saved",
+    response_model=SavedSearchResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def create_saved_search(
+    request: SavedSearchRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    if request.search_mode == "focused":
+        raise HTTPException(status_code=422, detail="Focused searches must be saved from a selected moment")
+    if request.output_format == "rows" and not request.extraction_type:
+        raise HTTPException(status_code=422, detail="An extraction type is required for row searches")
+    video_ids = _validate_saved_video_ids(session, organization_id, request.video_ids)
+    saved = SavedSearch(
+        id=new_id(), organization_id=organization_id, name=request.name.strip(), query=request.query.strip(),
+        modality=request.modality, search_mode=request.search_mode, output_format=request.output_format,
+        extraction_type=request.extraction_type, video_ids=video_ids,
+    )
+    session.add(saved)
+    try:
+        session.commit()
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="A saved search with that name already exists") from exc
+    session.refresh(saved)
+    return _saved_search_response(saved)
+
+
+@app.patch(
+    "/v1/search/saved/{saved_id}",
+    response_model=SavedSearchResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def update_saved_search(
+    saved_id: str,
+    request: SavedSearchUpdateRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    saved = session.scalar(select(SavedSearch).where(SavedSearch.id == saved_id, SavedSearch.organization_id == organization_id))
+    if saved is None:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    if request.name is None and request.archived is None:
+        raise HTTPException(status_code=400, detail="No saved-search changes supplied")
+    if request.name is not None:
+        saved.name = request.name.strip()
+    if request.archived is not None:
+        saved.archived = request.archived
+    try:
+        session.commit()
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="A saved search with that name already exists") from exc
+    session.refresh(saved)
+    return _saved_search_response(saved)
+
+
+@app.delete(
+    "/v1/search/saved/{saved_id}",
+    status_code=204,
+    dependencies=[Depends(require_api_key)],
+)
+def delete_saved_search(
+    saved_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    saved = session.scalar(select(SavedSearch).where(SavedSearch.id == saved_id, SavedSearch.organization_id == organization_id))
+    if saved is None:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    session.delete(saved)
+    session.commit()
+
+
+@app.post(
+    "/v1/search/saved/{saved_id}/run",
+    response_model=ChatResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def run_saved_search(
+    saved_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    saved = session.scalar(select(SavedSearch).where(SavedSearch.id == saved_id, SavedSearch.organization_id == organization_id, SavedSearch.archived.is_(False)))
+    if saved is None:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    video_ids = _validate_saved_video_ids(session, organization_id, saved.video_ids or [])
+    response = search_chat(
+        ChatRequest(
+            messages=[ChatMessage(role="user", content=saved.query)],
+            results=100 if saved.search_mode == "all" else 8,
+            video_ids=video_ids,
+            modality=saved.modality,
+            search_mode=saved.search_mode,
+            output_format=saved.output_format,
+            extraction_type=saved.extraction_type,
+            comparison_video_ids=video_ids if saved.output_format == "comparison" else [],
+        ),
+        session=session,
+        organization_id=organization_id,
+    )
+    saved.last_run_id = response.search_run_id
+    session.commit()
+    return response
 
 
 @app.post(

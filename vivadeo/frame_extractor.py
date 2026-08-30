@@ -16,8 +16,8 @@ def extract_frame(source_file: str, timestamp: float, output_path: str) -> str:
         [
             _get_ffmpeg_executable(),
             "-y",
-            "-i", source_file,
             "-ss", f"{timestamp:.3f}",
+            "-i", source_file,
             "-frames:v", "1",
             "-q:v", "2",
             output_path,

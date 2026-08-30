@@ -6,7 +6,7 @@ import re
 from typing import Literal, TypedDict
 
 Modality = Literal["visual", "transcript", "hybrid"]
-SearchMode = Literal["top", "focused"]
+SearchMode = Literal["top", "all", "focused"]
 VerificationStatus = Literal["verified", "possible", "rejected"]
 
 _VISUAL_RULES: tuple[tuple[str, str], ...] = (
@@ -18,6 +18,7 @@ _VISUAL_RULES: tuple[tuple[str, str], ...] = (
     (r"\bwear(?:s|ing)?\b|\bcolor\b|\bbackground\b|\bobject\b", "appearance"),
     (r"\benter(?:s|ed|ing)?\b|\bleave(?:s|d|ing)?\b", "movement"),
 )
+_ALL_RULE = re.compile(r"\b(?:find\s+)?(?:every|each|all)\b(?:[^?\n]{0,32})\b(?:time|moment|occurrence|instance)s?\b|\bfind all\b", re.I)
 _TRANSCRIPT_RULES = (
     r"\bsay(?:s|ing)?\b",
     r"\bmention(?:s|ed|ing)?\b",
@@ -61,8 +62,8 @@ def route_chat_intent(
         modality, confidence = "transcript", 0.45
 
     requested_mode = (search_mode_override or "").strip().lower()
-    search_mode: SearchMode = "focused" if focused else "top"
-    if requested_mode in {"top", "focused"}:
+    search_mode: SearchMode = "focused" if focused else ("all" if _ALL_RULE.search(normalized) else "top")
+    if requested_mode in {"top", "all", "focused"}:
         search_mode = requested_mode  # type: ignore[assignment]
     return {
         "modality": modality,

@@ -54,6 +54,39 @@ type Citation = {
   match_reason?: string;
 };
 
+type ExtractionRow = {
+  item: string;
+  source: string;
+  video_id: string;
+  start_time: number;
+  end_time: number;
+  confidence: number;
+  verification_status: "verified" | "possible";
+  evidence_key: string;
+};
+
+type ComparisonClaim = {
+  claim: string;
+  confidence: number;
+  left_citations: Citation[];
+  right_citations: Citation[];
+};
+
+type SavedSearch = {
+  id: string;
+  name: string;
+  query: string;
+  modality: string;
+  search_mode: string;
+  output_format: string;
+  extraction_type?: string | null;
+  video_ids: string[];
+  archived: boolean;
+  last_run_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ChatTurn = ChatMessage & {
   id?: string;
   parentId?: string | null;
@@ -63,6 +96,9 @@ type ChatTurn = ChatMessage & {
   intent?: { modality?: string; search_mode?: string; confidence?: number };
   verification_summary?: { verified?: number; possible?: number; rejected?: number; modality?: string };
   suggested_refinements?: string[];
+  rows?: ExtractionRow[];
+  comparison?: ComparisonClaim[];
+  output_format?: string;
   attachments?: MessageAttachment[];
   citations?: Citation[];
 };
@@ -224,19 +260,19 @@ function CitationPreview({
       {sourceUrl && !showSkeleton ? (
         <video
           playsInline
-          preload="none"
+          preload="metadata"
           poster={posterUrl || undefined}
           tabIndex={0}
           aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`}
           src={`${sourceUrl}#t=${previewStart},${previewEnd}`}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = citation.start_time; }}
           onPlay={onPlay}
-          onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); }}
-          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play(); else event.currentTarget.pause(); } }}
+          onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined); else event.currentTarget.pause(); }}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined); else event.currentTarget.pause(); } }}
           onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }}
         />
       ) : posterUrl ? (
-        <img className="search-citation-poster" src={posterUrl} alt="" decoding="async" />
+        <img className="search-citation-poster" src={posterUrl} alt="" decoding="async" onError={() => { setPosterUrl(null); setPosterStatus("unavailable"); }} />
       ) : showSkeleton ? (
         <span className="search-citation-skeleton" aria-hidden="true" />
       ) : (
@@ -323,7 +359,11 @@ export function SearchContent({
   const [videoIds, setVideoIds] = useState(initialVideoIds);
   const [chatModel, setChatModel] = useState("vivadeo-auto");
   const [modalityOverride, setModalityOverride] = useState<"auto" | "visual" | "transcript" | "hybrid">("auto");
-  const [searchMode, setSearchMode] = useState<"top" | "focused">("top");
+  const [searchMode, setSearchMode] = useState<"top" | "all" | "focused">("top");
+  const [outputFormat, setOutputFormat] = useState<"answer" | "rows" | "comparison">("answer");
+  const [extractionType, setExtractionType] = useState("claims");
+  const [comparisonVideoIds, setComparisonVideoIds] = useState<string[]>(initialVideoIds);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [parentSearchRunId, setParentSearchRunId] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
@@ -338,6 +378,7 @@ export function SearchContent({
   const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
+  const [chatProgress, setChatProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [activeChatJobId, setActiveChatJobId] = useState<string | null>(null);
@@ -355,6 +396,7 @@ export function SearchContent({
   const [browseOpen, setBrowseOpen] = useState(false);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
+  const [savedSearchName, setSavedSearchName] = useState("");
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
@@ -388,6 +430,15 @@ export function SearchContent({
       })
       .catch(() => undefined);
   }, [workspacePlan]);
+
+  useEffect(() => {
+    void fetch("/api/proxy/v1/search/saved", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        setSavedSearches(await response.json() as SavedSearch[]);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void fetch("/api/proxy/v1/videos", { cache: "no-store" })
@@ -510,7 +561,8 @@ export function SearchContent({
         try {
           const response = await fetch(`/api/proxy/v1/jobs/${jobId}`, { cache: "no-store" });
           if (response.ok) {
-            const payload = await response.json() as { status: string; message?: string | null; error?: string | null };
+            const payload = await response.json() as { status: string; progress?: number; message?: string | null; error?: string | null };
+            setChatProgress(payload.progress ?? 0);
             setStatus(payload.message || "Preparing answer...");
             if (["succeeded", "failed", "canceled"].includes(payload.status)) return finish(payload);
           }
@@ -524,7 +576,8 @@ export function SearchContent({
       };
       stream.addEventListener("job", (event) => {
         try {
-          const payload = JSON.parse((event as MessageEvent).data) as { status: string; message?: string | null; error?: string | null };
+          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null };
+          setChatProgress(payload.progress ?? 0);
           setStatus(payload.message || "Preparing answer...");
           if (["succeeded", "failed", "canceled"].includes(payload.status)) finish(payload);
         } catch { recover(); }
@@ -732,6 +785,41 @@ export function SearchContent({
     setStatus(feedback === "relevant" ? "Marked as relevant." : "Marked as not relevant. Refine the question to search again.");
   }
 
+  async function saveCurrentSearch(turn: ChatTurn) {
+    const name = window.prompt("Name this saved search", turns.find((item) => item.role === "user" && item.id && item.id === turn.parentId)?.content.slice(0, 80) || "Verified video search");
+    if (!name?.trim()) return;
+    const response = await fetch("/api/proxy/v1/search/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        query: turns.find((item) => item.id === turn.parentId)?.content || question,
+        modality: turn.intent?.modality || "auto",
+        search_mode: turn.intent?.search_mode || "top",
+        output_format: turn.output_format || "answer",
+        video_ids: threadSources.map((source) => source.video_id),
+      }),
+    });
+    if (!response.ok) {
+      setStatus("Could not save that search.");
+      return;
+    }
+    const saved = await response.json() as SavedSearch;
+    setSavedSearches((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+    setStatus("Saved search added.");
+  }
+
+  function useSavedSearch(saved: SavedSearch) {
+    setQuestion(saved.query);
+    setModalityOverride(saved.modality as typeof modalityOverride);
+    setSearchMode(saved.search_mode as typeof searchMode);
+    setOutputFormat(saved.output_format as typeof outputFormat);
+    if (saved.extraction_type) setExtractionType(saved.extraction_type);
+    setVideoIds(saved.video_ids);
+    setComparisonVideoIds(saved.video_ids);
+    setStatus("Saved search loaded. Ask to run it.");
+  }
+
   function focusMoment(citation: Citation, prompt = "What is happening in this moment?", runId?: string | null) {
     setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time });
     setParentSearchRunId(runId || null);
@@ -758,7 +846,8 @@ export function SearchContent({
     setLoading(true);
     setStartedAt(requestStartedAt);
     setElapsedSeconds(0);
-    setStatus("Finding evidence, then preparing an answer...");
+    setStatus("Starting search...");
+    setChatProgress(0);
 
     try {
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {
@@ -770,6 +859,9 @@ export function SearchContent({
           provider: chatModel === "vivadeo-pro" ? "vivadeo-pro" : chatModel,
           modality: modalityOverride,
           search_mode: momentContext ? "focused" : searchMode,
+          output_format: outputFormat,
+          extraction_type: outputFormat === "rows" ? extractionType : null,
+          comparison_video_ids: outputFormat === "comparison" ? (comparisonVideoIds.length ? comparisonVideoIds : threadSources.map((source) => source.video_id)) : [],
           parent_search_run_id: parentSearchRunId,
           focus_window_seconds: momentContext ? Math.max(8, momentContext.endTime - momentContext.startTime) : null,
           custom_base_url: chatModel === "custom" ? customBaseUrl || null : null,
@@ -799,6 +891,7 @@ export function SearchContent({
       setMomentContext(null);
       setParentSearchRunId(null);
       setSearchMode("top");
+      setOutputFormat("answer");
       setStatus(citations.length ? `Answer ready in ${seconds}s with ${citations.length} cited evidence range(s).` : `Answer ready in ${seconds}s. No cited evidence yet.`);
     } catch (cause) {
       setStatus(cause instanceof Error ? cause.message : "Chat failed");
@@ -806,6 +899,7 @@ export function SearchContent({
       setLoading(false);
       setActiveChatJobId(null);
       setStartedAt(null);
+      setChatProgress(0);
     }
   }
 
@@ -1077,9 +1171,27 @@ export function SearchContent({
                     </select>
                     <select aria-label="Search depth" value={momentContext ? "focused" : searchMode} onChange={(event) => setSearchMode(event.target.value as typeof searchMode)} disabled={Boolean(momentContext)}>
                       <option value="top">Best matches</option>
+                      <option value="all">Find every occurrence</option>
                       <option value="focused" disabled={!momentContext}>Focused moment</option>
                     </select>
+                    <select aria-label="Answer format" value={outputFormat} onChange={(event) => setOutputFormat(event.target.value as typeof outputFormat)}>
+                      <option value="answer">Answer</option>
+                      <option value="rows">Extract rows</option>
+                      <option value="comparison" disabled={threadSources.length < 2}>Compare videos</option>
+                    </select>
+                    {outputFormat === "rows" ? <select aria-label="Extraction type" value={extractionType} onChange={(event) => setExtractionType(event.target.value)}>
+                      <option value="claims">Claims</option>
+                      <option value="action_items">Action items</option>
+                      <option value="people">People</option>
+                      <option value="appearances">Appearances</option>
+                      <option value="objections">Objections</option>
+                      <option value="chapters">Chapters</option>
+                      <option value="visual_events">Visual events</option>
+                    </select> : null}
                   </div>
+                  {outputFormat === "comparison" && threadSources.length > 1 ? <select className="chat-comparison-picker" aria-label="Videos to compare" multiple value={comparisonVideoIds} onChange={(event) => setComparisonVideoIds(Array.from(event.target.selectedOptions, (option) => option.value))}>
+                    {threadSources.map((source) => <option key={source.video_id} value={source.video_id}>{source.filename}</option>)}
+                  </select> : null}
                 </div>
                 <div className="chat-composer-meta">
                   {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "source" : "sources"}</span> : null}
@@ -1221,6 +1333,23 @@ export function SearchContent({
                           </div>
                         </div>
                       ) : null}
+                      {turn.rows?.length ? <section className="chat-extraction-results" aria-label="Extracted evidence rows">
+                        <div className="chat-extraction-head"><span>Extracted evidence</span><strong>{turn.rows.length} rows</strong></div>
+                        <div className="chat-extraction-list">
+                          {turn.rows.map((row) => <div className="chat-extraction-row" key={row.evidence_key}>
+                            <div><strong>{row.item}</strong><small>{row.source} · {fmt(row.start_time)}–{fmt(row.end_time)} · {row.verification_status === "verified" ? "Verified" : "Possible match"}</small></div>
+                            <button type="button" onClick={() => { setMomentContext({ videoId: row.video_id, filename: row.source, startTime: row.start_time, endTime: row.end_time }); setSearchMode("focused"); setQuestion("What is important about this moment?"); }}>Ask about</button>
+                          </div>)}
+                        </div>
+                      </section> : null}
+                      {turn.comparison?.length ? <section className="chat-comparison-results" aria-label="Video comparison">
+                        <div className="chat-extraction-head"><span>Comparison</span><strong>{turn.comparison.length} claim{turn.comparison.length === 1 ? "" : "s"}</strong></div>
+                        {turn.comparison.map((claim, claimIndex) => <div className="chat-comparison-claim" key={`${claim.claim}-${claimIndex}`}>
+                          <p>{claim.claim}</p>
+                          <div className="chat-comparison-sides"><div><small>First video</small>{claim.left_citations.map((citation) => <button type="button" key={evidenceKey(citation)} onClick={() => focusMoment(citation, "What is important about this moment?")}>{fmt(citation.start_time)}–{fmt(citation.end_time)}</button>)}</div><div><small>Second video</small>{claim.right_citations.map((citation) => <button type="button" key={evidenceKey(citation)} onClick={() => focusMoment(citation, "What is important about this moment?")}>{fmt(citation.start_time)}–{fmt(citation.end_time)}</button>)}</div></div>
+                        </div>)}
+                      </section> : null}
+                      {turn.role === "assistant" && turn.search_run_id ? <button type="button" className="chat-save-search" onClick={() => void saveCurrentSearch(turn)}>Save this search</button> : null}
                       {turn.role === "assistant" && turn.suggested_refinements?.length ? <div className="chat-refinement-row" aria-label="Suggested refinements">
                         <span>Refine</span>
                         {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => { setParentSearchRunId(turn.search_run_id || null); setQuestion(suggestion); }}>{suggestion}</button>)}
@@ -1235,6 +1364,7 @@ export function SearchContent({
                     <div className="chat-pending-status" aria-live="polite" aria-busy="true">
                       <span className="chat-typing" aria-hidden="true"><span /><span /><span /></span>
                       <span className="chat-progress-copy">{status || "Preparing answer..."}</span>
+                      <span className="chat-progress-percent">{Math.round(chatProgress * 100)}%</span>
                     </div>
                   </div>
                   <span className="chat-status-actions"><strong>{elapsedSeconds}s elapsed</strong>{activeChatJobId ? <button type="button" className="button-secondary" onClick={() => void cancelChatGeneration()}>Cancel</button> : null}</span>
@@ -1254,6 +1384,10 @@ export function SearchContent({
               </div>
               <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New thread</button>
               <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search threads" aria-label="Search threads" />
+              {savedSearches.filter((saved) => !saved.archived).length ? <section className="chat-saved-searches" aria-label="Saved searches">
+                <h3>Saved searches</h3>
+                {savedSearches.filter((saved) => !saved.archived).slice(0, 8).map((saved) => <button key={saved.id} type="button" onClick={() => useSavedSearch(saved)}><span>{saved.name}</span><small>{saved.output_format === "rows" ? "Rows" : saved.output_format === "comparison" ? "Compare" : "Answer"} · Run</small></button>)}
+              </section> : null}
               <div className="chat-history-list">
                 {groupedThreads.length ? groupedThreads.map((group) => (
                   <section key={group.label} className="chat-history-group">

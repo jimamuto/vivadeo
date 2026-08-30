@@ -19,7 +19,7 @@ def test_extract_frame_writes_timestamped_jpeg(monkeypatch, tmp_path):
 
     assert frame_extractor.extract_frame("source.mp4", 12.3456, str(output)) == str(output)
     assert output.read_bytes() == b"jpeg"
-    assert calls["command"][-7:] == ["-ss", "12.346", "-frames:v", "1", "-q:v", "2", str(output)]
+    assert calls["command"] == ["ffmpeg", "-y", "-ss", "12.346", "-i", "source.mp4", "-frames:v", "1", "-q:v", "2", str(output)]
 
 
 def test_extract_frame_rejects_negative_timestamp(tmp_path):
