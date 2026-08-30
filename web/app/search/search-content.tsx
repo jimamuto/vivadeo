@@ -1052,12 +1052,6 @@ export function SearchContent({
               </div>
             ) : null}
             <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts.</p>
-            {status ? (
-              <div className={`search-status ${loading ? "is-loading" : ""}`} aria-live="polite" aria-busy={loading}>
-                <span className="chat-status-copy">{loading ? <span className="chat-status-dot" aria-hidden="true" /> : null}<span>{status}</span></span>
-                {loading ? <span className="chat-status-actions"><strong>{elapsedSeconds}s elapsed</strong>{activeChatJobId ? <button type="button" className="button-secondary" onClick={() => void cancelChatGeneration()}>Cancel</button> : null}</span> : null}
-              </div>
-            ) : null}
           </section>
 
           <section className="search-layout">
@@ -1154,11 +1148,15 @@ export function SearchContent({
                   );
                 })
               )}
-              {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label="Vivadeo is preparing an answer">
+              {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label={status || "Vivadeo is preparing an answer"}>
                 <div className="search-top">
                   <div className="search-meta">
-                    <div className="chat-typing" aria-hidden="true"><span /><span /><span /></div>
+                    <div className="chat-pending-status" aria-live="polite" aria-busy="true">
+                      <span className="chat-typing" aria-hidden="true"><span /><span /><span /></span>
+                      <span className="chat-progress-copy">{status || "Preparing answer..."}</span>
+                    </div>
                   </div>
+                  <span className="chat-status-actions"><strong>{elapsedSeconds}s elapsed</strong>{activeChatJobId ? <button type="button" className="button-secondary" onClick={() => void cancelChatGeneration()}>Cancel</button> : null}</span>
                 </div>
               </article> : null}
             </section>

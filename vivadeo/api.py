@@ -1470,6 +1470,7 @@ def _complete_chat_message(
     thread_id: str,
     message_id: str,
     request: ChatMessageRequest,
+    progress_callback=None,
 ) -> ChatThread:
     thread = _get_chat_thread(session, thread_id, organization_id)
     assistant = session.scalar(
@@ -1517,6 +1518,7 @@ def _complete_chat_message(
             ),
             session=session,
             organization_id=organization_id,
+            progress_callback=progress_callback,
         )
     except Exception:
         assistant.status = "failed"
@@ -1962,6 +1964,7 @@ def search_chat(
     request: ChatRequest,
     session: Session = Depends(db_dep),
     organization_id: str = Depends(workspace_dep),
+    progress_callback=None,
 ):
     question = next(
         (message.content.strip() for message in reversed(request.messages) if message.role == "user" and message.content.strip()),
@@ -2000,6 +2003,8 @@ def search_chat(
             raise HTTPException(status_code=400, detail="Focused video is not attached to this thread")
 
     runtime_settings = get_runtime_settings()
+    if progress_callback:
+        progress_callback(0.2, "Retrieving relevant video moments")
     try:
         plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
     except Exception:
@@ -2033,6 +2038,8 @@ def search_chat(
         }
         chunk_hits = store.search(embedding, **search_kwargs)
         if is_visual_query(question):
+            if progress_callback:
+                progress_callback(0.45, "Checking visual evidence")
             chunk_hits = _visual_rerank_hits(
                 embedding,
                 chunk_hits,
@@ -2123,6 +2130,8 @@ def search_chat(
             session.commit()
         return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None)
 
+    if progress_callback:
+        progress_callback(0.78, "Preparing answer")
     settings = get_runtime_settings()
     messages = [message.model_dump() for message in request.messages[-10:]]
     try:

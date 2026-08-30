@@ -440,12 +440,13 @@ def generate_chat_task(
 ) -> None:
     try:
         _raise_if_canceled(job_id)
-        _update_job(job_id, status="running", progress=0.1, message="Retrieving transcript evidence")
+        _update_job(job_id, status="running", progress=0.1, message="Retrieving relevant video moments")
         from .api import _complete_chat_message
         from .schemas import ChatMessageRequest
 
         _raise_if_canceled(job_id)
-        _update_job(job_id, status="running", progress=0.35, message="Preparing Vivadeo Auto answer")
+        _update_job(job_id, status="running", progress=0.12, message="Starting search")
+        report_progress = lambda progress, message: _update_job(job_id, status="running", progress=progress, message=message)
         request_payload = dict(request_payload)
         if request_payload.get("provider") in {"custom", "openai", "anthropic", "gemini", "nvidia"}:
             request_payload["custom_api_key"] = progress_bus.get(f"vivadeo:chat-key:{job_id}")
@@ -457,6 +458,7 @@ def generate_chat_task(
                 thread_id=thread_id,
                 message_id=message_id,
                 request=ChatMessageRequest.model_validate(request_payload),
+                progress_callback=report_progress,
             )
         if _job_canceled(job_id):
             with session_scope() as session:
