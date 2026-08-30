@@ -1800,12 +1800,34 @@ main { width: 100%; }
 }
 
 .search-citation-scroller {
-  display: flex;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scroll-snap-type: x mandatory;
   scrollbar-width: thin;
   padding-bottom: 8px;
+}
+
+.search-citation-filmstrip {
+  width: max-content;
+  min-width: 100%;
+  padding: 0 12px;
+  background: var(--color-ink-900);
+}
+
+.search-citation-sprockets {
+  display: block;
+  height: 28px;
+  background-color: var(--color-ink-900);
+  background-image: repeating-linear-gradient(90deg, transparent 0 10px, var(--grain) 10px 24px, transparent 24px 40px);
+  background-position: center;
+  background-size: 40px 10px;
+  background-repeat: repeat-x;
+}
+
+.search-citation-filmstrip-frames {
+  display: flex;
+  gap: 10px;
+  padding: 0;
 }
 
 .search-citation-head {
@@ -1823,27 +1845,15 @@ main { width: 100%; }
   color: var(--text);
 }
 
-.search-citation-card {
+.search-citation-filmstrip .search-citation-card {
   flex: 0 0 min(360px, 78vw);
   gap: 0;
   overflow: hidden;
   padding: 0;
-  border-radius: 0;
-  background: rgba(255, 255, 255, 0.72);
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
   scroll-snap-align: start;
-}
-
-.search-citation-card + .search-citation-card {
-  border-left: 0;
-}
-
-.search-citation-card:first-child {
-  border-radius: 14px 0 0 14px;
-}
-
-.search-citation-card:last-child {
-  border-radius: 0 14px 14px 0;
-  border-right-width: 1px;
 }
 
 .search-citation-preview {
@@ -1855,7 +1865,7 @@ main { width: 100%; }
   overflow: hidden;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: 3px;
   background: var(--blackboard);
   color: var(--color-content-inverse);
   text-align: left;

@@ -1139,12 +1139,15 @@ export function SearchContent({
                             <strong>{citations.length} found</strong>
                           </div>
                           <div className="search-citation-scroller" aria-label="Relevant video moments">
+                            <div className="search-citation-filmstrip">
+                              <span className="search-citation-sprockets" aria-hidden="true" />
+                              <div className="search-citation-filmstrip-frames">
                             {visibleCitations.map((citation, citationIndex) => {
                               const citationSource = videos.find((video) => video.id === citation.video_id) || threadSources.find((source) => source.video_id === citation.video_id);
                               const previewStart = Math.max(0, citation.start_time - 1);
                               const previewEnd = citationSource?.duration ? Math.min(citationSource.duration, citation.end_time + 1) : citation.end_time + 1;
                               return (
-                                <article key={citation.segment_id} className="detail-card search-citation-card">
+                                <article key={citation.segment_id} className="search-citation-card">
                                   <CitationPreview
                                     citation={citation}
                                     sourceUrl={citationSource?.url}
@@ -1156,6 +1159,9 @@ export function SearchContent({
                                 </article>
                               );
                             })}
+                              </div>
+                              <span className="search-citation-sprockets" aria-hidden="true" />
+                            </div>
                           </div>
                         </div>
                       ) : null}
