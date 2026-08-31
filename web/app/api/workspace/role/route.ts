@@ -8,6 +8,12 @@ export async function GET(request: NextRequest) {
     ? (await getWorkspaceForEmail(email)) || cookieWorkspace
     : cookieWorkspace;
   const role = await getWorkspaceRoleForRequest(request, workspace);
+  if (!role) {
+    return NextResponse.json(
+      { detail: "Workspace access is required." },
+      { status: 401 },
+    );
+  }
   const response = NextResponse.json({ role });
   if (workspace !== cookieWorkspace) {
     response.cookies.set("vivadeo_workspace", workspace, {

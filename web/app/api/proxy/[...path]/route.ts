@@ -14,17 +14,21 @@ async function forward(
 ): Promise<NextResponse> {
   const targetPath = `/${path.join("/")}`;
   const workspace = request.cookies.get("vivadeo_workspace")?.value;
-  if (requiresEditorAccess(request.method, targetPath)) {
-    const role = await getWorkspaceRoleForRequest(
-      request,
-      workspace || "default-workspace",
+  const role = await getWorkspaceRoleForRequest(
+    request,
+    workspace || "default-workspace",
+  );
+  if (!role) {
+    return NextResponse.json(
+      { detail: "Workspace access is required." },
+      { status: 401 },
     );
-    if (role === "viewer") {
-      return NextResponse.json(
-        { detail: "Viewer role cannot modify workspace content." },
-        { status: 403 },
-      );
-    }
+  }
+  if (requiresEditorAccess(request.method, targetPath) && role === "viewer") {
+    return NextResponse.json(
+      { detail: "Viewer role cannot modify workspace content." },
+      { status: 403 },
+    );
   }
   const backendUrl = getBackendUrl(targetPath);
   const headers = getBackendHeaders(

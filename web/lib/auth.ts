@@ -275,15 +275,10 @@ async function getSessionEmail(request: Request): Promise<string | null> {
 async function getWorkspaceRoleForRequest(
   request: Request,
   organizationId: string,
-): Promise<WorkspaceRole> {
+): Promise<WorkspaceRole | null> {
   const email = await getSessionEmail(request);
-  if (!email) return "viewer";
+  if (!email || !databaseUrl) return null;
 
-  const overrides = await getWorkspaceRoleOverrides(organizationId);
-  const overrideRole = overrides.workspaceRoles[email] || overrides.inviteRoles[email];
-  if (overrideRole) return overrideRole;
-
-  if (!databaseUrl) return "viewer";
   const sql = postgres(databaseUrl, { max: 1 });
   try {
     const rows = await sql<{ role: string | null }[]>`
@@ -293,7 +288,12 @@ async function getWorkspaceRoleForRequest(
       WHERE m.organization_id = ${organizationId} AND lower(u.email) = ${email}
       LIMIT 1
     `;
-    return rows[0] ? normalizeWorkspaceRole(rows[0].role) : "viewer";
+    if (!rows[0]) return null;
+
+    const overrides = await getWorkspaceRoleOverrides(organizationId);
+    return overrides.workspaceRoles[email]
+      || overrides.inviteRoles[email]
+      || normalizeWorkspaceRole(rows[0].role);
   } finally {
     await sql.end();
   }
