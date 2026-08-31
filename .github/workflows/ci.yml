@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   docker:
@@ -68,3 +69,30 @@ jobs:
           labels: ${{ steps.meta-web.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+      - name: Log in to Azure
+        if: github.event_name == 'push'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Container Apps
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="sha-${GITHUB_SHA::7}"
+          az extension add --name containerapp --upgrade --yes
+          az containerapp update --resource-group rg-vivadeo --name vivadeo-api --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --output none
+          az containerapp update --resource-group rg-vivadeo --name vivadeo-worker --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --output none
+          az containerapp update --resource-group rg-vivadeo --name vivadeo-web --image "ghcr.io/jimamuto/vivadeo-web:${tag}" --output none
+
+          for app in vivadeo-api vivadeo-worker; do
+            test "$(az containerapp show --resource-group rg-vivadeo --name "$app" --query properties.template.containers[0].image --output tsv)" = "ghcr.io/jimamuto/vivadeo-api:${tag}"
+          done
+          test "$(az containerapp show --resource-group rg-vivadeo --name vivadeo-web --query properties.template.containers[0].image --output tsv)" = "ghcr.io/jimamuto/vivadeo-web:${tag}"
+
+          web_url="https://$(az containerapp show --resource-group rg-vivadeo --name vivadeo-web --query properties.configuration.ingress.fqdn --output tsv)"
+          curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 10 "$web_url" > /dev/null
