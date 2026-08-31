@@ -462,6 +462,8 @@ export function SearchContent({
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
   const [savedSearchName, setSavedSearchName] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState("");
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
@@ -879,12 +881,10 @@ export function SearchContent({
     setStatus("Saved search loaded. Ask to run it.");
   }
 
-  function editPrompt(content: string) {
-    setQuestion(content);
-    window.requestAnimationFrame(() => {
-      questionInputRef.current?.focus();
-      questionInputRef.current?.setSelectionRange(content.length, content.length);
-    });
+  function editPrompt(message: ChatTurn) {
+    if (!message.id || loading) return;
+    setEditingMessageId(message.id);
+    setEditingPrompt(message.content);
   }
 
   async function copyPrompt(content: string) {
@@ -905,18 +905,30 @@ export function SearchContent({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextQuestion = question.trim() || (!turns.length ? DEFAULT_CHAT_PROMPT : "");
+    await sendPrompt(nextQuestion);
+  }
+
+  async function submitEditedPrompt(event: FormEvent<HTMLFormElement>, messageId: string) {
+    event.preventDefault();
+    await sendPrompt(editingPrompt.trim(), messageId);
+  }
+
+  async function sendPrompt(nextQuestion: string, editMessageId: string | null = null) {
     if (!nextQuestion || loading) return;
     const threadId = await ensureActiveThread();
     if (!threadId) return;
 
     const userTurn: ChatTurn = { role: "user", content: nextQuestion, status: "completed" };
-    const nextTurns: ChatTurn[] = [...turns, userTurn];
+    const editIndex = editMessageId ? turns.findIndex((turn) => turn.id === editMessageId) : -1;
+    const nextTurns: ChatTurn[] = [...(editIndex >= 0 ? turns.slice(0, editIndex) : turns), userTurn];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New thread" ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New thread" || editIndex === 0 ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
-    setQuestion("");
+    if (!editMessageId) setQuestion("");
+    setEditingMessageId(null);
+    setEditingPrompt("");
     const requestStartedAt = Date.now();
     setLoading(true);
     setStatus("Starting search...");
@@ -933,6 +945,7 @@ export function SearchContent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: nextQuestion,
+          edit_message_id: editMessageId,
           results: 6,
           provider: chatModel === "vivadeo-pro" ? "vivadeo-pro" : chatModel,
           modality: modalityOverride,
@@ -972,6 +985,7 @@ export function SearchContent({
       setOutputFormat("answer");
       setStatus(citations.length ? `Answer ready in ${seconds}s with ${citations.length} cited evidence range(s).` : `Answer ready in ${seconds}s. No cited evidence yet.`);
     } catch (cause) {
+      if (editMessageId) await refreshThread(threadId);
       setStatus(cause instanceof Error ? cause.message : "Chat failed");
     } finally {
       setLoading(false);
@@ -1373,15 +1387,23 @@ export function SearchContent({
                           ) : (
                             <>
                               <div className="chat-message-author">You</div>
-                              <h3>{turn.content}</h3>
-                              <div className="chat-user-message-actions" aria-label="Prompt actions">
-                                <button type="button" onClick={() => editPrompt(turn.content)} aria-label="Edit prompt">
-                                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" /></svg>
-                                </button>
-                                <button type="button" onClick={() => void copyPrompt(turn.content)} aria-label="Copy prompt">
-                                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" /><path d="M16 8V5H5v11h3" /></svg>
-                                </button>
-                              </div>
+                              {editingMessageId === turn.id ? <form className="chat-prompt-editor" onSubmit={(event) => void submitEditedPrompt(event, turn.id!)}>
+                                <textarea autoFocus rows={2} maxLength={3000} value={editingPrompt} onChange={(event) => setEditingPrompt(event.target.value)} aria-label="Edit prompt" />
+                                <div>
+                                  <button type="button" onClick={() => { setEditingMessageId(null); setEditingPrompt(""); }}>Cancel</button>
+                                  <button type="submit" disabled={!editingPrompt.trim()}>Send edit</button>
+                                </div>
+                              </form> : <>
+                                <h3>{turn.content}</h3>
+                                <div className="chat-user-message-actions" aria-label="Prompt actions">
+                                  <button type="button" onClick={() => editPrompt(turn)} aria-label="Edit prompt">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" /></svg>
+                                  </button>
+                                  <button type="button" onClick={() => void copyPrompt(turn.content)} aria-label="Copy prompt">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" /><path d="M16 8V5H5v11h3" /></svg>
+                                  </button>
+                                </div>
+                              </>}
                               {turn.attachments?.length ? <div className="chat-message-attachments" aria-label="Videos attached to this question">
                                 {turn.attachments.map((attachment) => <span key={attachment.video_id} className={`chat-message-attachment chat-message-attachment-${attachment.status}`}><span aria-hidden="true" />{attachment.filename}</span>)}
                               </div> : null}
@@ -1403,7 +1425,7 @@ export function SearchContent({
                             <strong>{citations.length} found</strong>
                           </div>
                           <div className="search-citation-scroller" aria-label="Relevant video moments">
-                            <div className="search-citation-filmstrip">
+                            <div className={`search-citation-filmstrip ${citations.length === 1 ? "is-single" : ""}`}>
                               <span className="search-citation-sprockets" aria-hidden="true" />
                               <div className="search-citation-filmstrip-frames">
                             {visibleCitations.map((citation, citationIndex) => {

@@ -214,6 +214,7 @@ class ChatCitation(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=3000)
+    edit_message_id: str | None = None
     results: int = Field(8, ge=1, le=100)
     provider: str = "vivadeo-auto"
     custom_base_url: str | None = None

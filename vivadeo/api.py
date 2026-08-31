@@ -1911,12 +1911,22 @@ def create_chat_message(
             raise HTTPException(status_code=400, detail="Focused video is not attached to this thread")
 
     current = _current_chat_message(thread)
+    parent_id = current.id if current is not None else None
+    if request.edit_message_id:
+        edited_message = session.scalar(select(ChatThreadMessage).where(
+            ChatThreadMessage.id == request.edit_message_id,
+            ChatThreadMessage.thread_id == thread.id,
+            ChatThreadMessage.role == "user",
+        ))
+        if edited_message is None:
+            raise HTTPException(status_code=404, detail="Editable prompt not found")
+        parent_id = edited_message.parent_id
     user_message = _append_chat_message(
         thread,
         session=session,
         role="user",
         content=question,
-        parent_id=current.id if current is not None else None,
+        parent_id=parent_id,
     )
     message_video_ids = requested_video_ids or [source.video_id for source in thread.sources if source.video is not None]
     _attach_message_videos(session, user_message, message_video_ids, organization_id)

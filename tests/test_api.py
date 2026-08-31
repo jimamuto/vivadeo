@@ -333,6 +333,45 @@ def test_append_chat_message_updates_current_branch_pointer():
     assert thread.messages == [message]
 
 
+def test_editing_chat_prompt_branches_before_the_edited_message(monkeypatch):
+    edited = SimpleNamespace(id="user-old", parent_id="answer-before", role="user")
+    thread = SimpleNamespace(id="thread-1", sources=[], messages=[edited], current_message_id="answer-after")
+    parent_ids = []
+
+    class FakeSession:
+        def get(self, model, key):
+            return None
+
+        def scalar(self, statement):
+            return edited
+
+        def add(self, value):
+            pass
+
+        def commit(self):
+            pass
+
+    def append_message(target, *, role, content, parent_id, **kwargs):
+        parent_ids.append(parent_id)
+        message = SimpleNamespace(id=f"{role}-new", parent_id=parent_id, role=role, content=content)
+        target.current_message_id = message.id
+        return message
+
+    monkeypatch.setattr(api, "_get_chat_thread", lambda *args: thread)
+    monkeypatch.setattr(api, "_append_chat_message", append_message)
+    monkeypatch.setattr(api, "_job_response", lambda job: job)
+    monkeypatch.setattr(api.generate_chat_task, "delay", lambda *args: None)
+
+    api.create_chat_message(
+        "thread-1",
+        api.ChatMessageRequest(content="Edited question", edit_message_id="user-old"),
+        session=FakeSession(),
+        organization_id="workspace-1",
+    )
+
+    assert parent_ids == ["answer-before", "user-new"]
+
+
 def test_search_by_image_returns_search_results(monkeypatch):
     _disable_startup_io(monkeypatch)
     monkeypatch.setattr(
