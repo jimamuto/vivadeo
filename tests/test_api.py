@@ -238,6 +238,81 @@ def test_search_chat_answers_with_transcript_citations(monkeypatch):
     assert response.citations[0].similarity_score == 0.87
 
 
+def test_comparison_retrieves_each_video_independently(monkeypatch):
+    segments = [
+        SimpleNamespace(id="segment-1", video_id="video-1", start_time=10.0, end_time=18.0, text="The first launch is Friday."),
+        SimpleNamespace(id="segment-2", video_id="video-2", start_time=20.0, end_time=28.0, text="The second launch moved to Monday."),
+    ]
+    videos = [
+        SimpleNamespace(id="video-1", filename="first.mp4", source_uri="first.mp4"),
+        SimpleNamespace(id="video-2", filename="second.mp4", source_uri="second.mp4"),
+    ]
+    searches = []
+
+    class FakeEmbedder:
+        def embed_query(self, query):
+            return [0.1, 0.2]
+
+    class FakeStore:
+        def __init__(self, session):
+            self.session = session
+
+        def search(self, embedding, n_results, organization_id, video_id, **kwargs):
+            searches.append((video_id, n_results))
+            index = 0 if video_id == "video-1" else 1
+            return [{
+                "video_id": video_id,
+                "start_time": segments[index].start_time,
+                "end_time": segments[index].end_time,
+                "similarity_score": 0.9,
+            }]
+
+    class FakeRows:
+        def __init__(self, row):
+            self.row = row
+
+        def all(self):
+            return [self.row]
+
+    class FakeSession:
+        calls = 0
+
+        def execute(self, stmt):
+            index = self.calls
+            self.calls += 1
+            return FakeRows((segments[index], videos[index]))
+
+    class FakeGemma:
+        def __init__(self, app_name, function_name, timeout):
+            pass
+
+        def answer(self, messages, context):
+            assert {item["video_id"] for item in context} == {"video-1", "video-2"}
+            return "The launch moved from Friday to Monday."
+
+    monkeypatch.setattr(api, "get_embedder", lambda: FakeEmbedder())
+    monkeypatch.setattr(api, "reset_embedder", lambda: None)
+    monkeypatch.setattr(api, "PostgresVideoStore", FakeStore)
+    monkeypatch.setattr(api, "ModalGemmaChat", FakeGemma)
+    monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(modal_gemma_app="gemma-app", modal_gemma_function="answer", modal_timeout=30))
+
+    response = api.search_chat(
+        api.ChatRequest(
+            messages=[api.ChatMessage(role="user", content="Compare the launch updates")],
+            results=4,
+            output_format="comparison",
+            comparison_video_ids=["video-1", "video-2"],
+        ),
+        session=FakeSession(),
+        organization_id="default-workspace",
+    )
+
+    assert searches == [("video-1", 2), ("video-2", 2)]
+    assert {citation.video_id for citation in response.citations} == {"video-1", "video-2"}
+    assert response.comparison[0].left_citations[0].video_id == "video-1"
+    assert response.comparison[0].right_citations[0].video_id == "video-2"
+
+
 def test_chat_message_path_follows_selected_branch():
     root = SimpleNamespace(id="root", parent_id=None, role="user", content="first")
     answer_a = SimpleNamespace(id="answer-a", parent_id="root", role="assistant", content="A")

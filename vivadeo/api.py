@@ -2237,37 +2237,46 @@ def search_chat(
         embedding_backend = get_embedder()
         embedding = embedding_backend.embed_query(question)
         store = PostgresVideoStore(session)
-        search_kwargs = {
-            "n_results": max(result_limit, 30) if request.focus_video_id and request.focus_start_time is not None else result_limit,
-            "organization_id": organization_id,
-            "video_id": request.focus_video_id or request.video_id,
-            **({"video_ids": scope_video_ids} if scope_video_ids and not request.focus_video_id and not request.video_id else {}),
-        }
-        chunk_hits = store.search(embedding, **search_kwargs)
+        source_scopes = comparison_video_ids if request.output_format == "comparison" else [None]
+        scope_limit = max(1, (result_limit + len(source_scopes) - 1) // len(source_scopes))
+        chunk_hits = []
+        transcript_embedding = None
         if visual_question:
             _report_search_stage(session, search_run, progress_callback, "checking", 0.45, "Checking visual evidence")
-            chunk_hits = _visual_rerank_hits(
-                embedding,
-                chunk_hits,
-                embedding_backend,
-                result_limit,
-                question,
-                visual_verifier,
-                session,
-                exhaustive=intent["search_mode"] == "all",
-            )
-        if use_nvidia and len(chunk_hits) < result_limit and intent["modality"] in {"transcript", "hybrid"}:
-            reset_embedder()
-            transcript_embedder = get_embedder(
-                backend="nvidia",
-                api_key=runtime_settings.pro_embedding_api_key,
-                base_url=runtime_settings.pro_embedding_base_url,
-                model=runtime_settings.pro_embedding_model,
-                timeout=runtime_settings.pro_embedding_timeout,
-            )
-            transcript_hits = store.search_transcript_embeddings(transcript_embedder.embed_query(question), **search_kwargs)
-            seen_hits = {(hit["video_id"], hit["start_time"], hit["end_time"]) for hit in chunk_hits}
-            chunk_hits.extend(hit for hit in transcript_hits if (hit["video_id"], hit["start_time"], hit["end_time"]) not in seen_hits)
+        for source_id in source_scopes:
+            search_kwargs = {
+                "n_results": max(scope_limit, 30) if request.focus_video_id and request.focus_start_time is not None else scope_limit,
+                "organization_id": organization_id,
+                "video_id": source_id or request.focus_video_id or request.video_id,
+                **({"video_ids": scope_video_ids} if source_id is None and scope_video_ids and not request.focus_video_id and not request.video_id else {}),
+            }
+            source_hits = store.search(embedding, **search_kwargs)
+            if visual_question:
+                source_hits = _visual_rerank_hits(
+                    embedding,
+                    source_hits,
+                    embedding_backend,
+                    scope_limit,
+                    question,
+                    visual_verifier,
+                    session,
+                    exhaustive=intent["search_mode"] == "all",
+                )
+            if use_nvidia and len(source_hits) < scope_limit and intent["modality"] in {"transcript", "hybrid"}:
+                if transcript_embedding is None:
+                    reset_embedder()
+                    transcript_embedder = get_embedder(
+                        backend="nvidia",
+                        api_key=runtime_settings.pro_embedding_api_key,
+                        base_url=runtime_settings.pro_embedding_base_url,
+                        model=runtime_settings.pro_embedding_model,
+                        timeout=runtime_settings.pro_embedding_timeout,
+                    )
+                    transcript_embedding = transcript_embedder.embed_query(question)
+                transcript_hits = store.search_transcript_embeddings(transcript_embedding, **search_kwargs)
+                seen_hits = {(hit["video_id"], hit["start_time"], hit["end_time"]) for hit in source_hits}
+                source_hits.extend(hit for hit in transcript_hits if (hit["video_id"], hit["start_time"], hit["end_time"]) not in seen_hits)
+            chunk_hits.extend(source_hits[:scope_limit])
     finally:
         reset_embedder()
 
