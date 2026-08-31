@@ -2171,6 +2171,8 @@ def search_chat(
             )
 
     comparison_video_ids = list(dict.fromkeys(request.comparison_video_ids))
+    if request.output_format == "rows" and not request.extraction_type:
+        raise HTTPException(status_code=422, detail="An extraction type is required for row searches")
     if request.output_format == "comparison" and len(comparison_video_ids) < 2:
         raise HTTPException(status_code=422, detail="Comparison requires at least two videos")
     scope_video_ids = comparison_video_ids or list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else [])]))
@@ -2370,7 +2372,7 @@ def search_chat(
         "rejected": 0,
         "modality": intent["modality"],
     }
-    rows = extraction_rows(citations, request.extraction_type) if request.output_format == "rows" else []
+    rows = []
     comparison = []
 
     if not verified_citations and visual_question:
@@ -2506,6 +2508,22 @@ def search_chat(
         answer = generator.answer(messages, answer_citations)
         if request.output_format == "comparison":
             comparison = comparison_claims(verified_citations, answer)
+        elif request.output_format == "rows":
+            _report_search_stage(session, search_run, progress_callback, "extracting", 0.9, "Structuring evidence")
+            evidence_catalog = "\n".join(
+                f"[{index}] {citation['filename']} {citation['start_time']:.3f}-{citation['end_time']:.3f}: {citation.get('text') or citation.get('match_reason') or ''}"
+                for index, citation in enumerate(answer_citations)
+            )
+            extraction_output = generator.answer([{
+                "role": "user",
+                "content": (
+                    f"Extract only {request.extraction_type.replace('_', ' ')} supported by the evidence below. "
+                    "Return only JSON as {\"rows\":[{\"item\":\"concise extracted fact\",\"evidence_index\":0}]}. "
+                    "Use the matching bracketed evidence index. Omit unsupported or uncertain items.\n\n"
+                    f"Question: {question}\nEvidence:\n{evidence_catalog}"
+                ),
+            }], answer_citations)
+            rows = extraction_rows(answer_citations, extraction_output)
     except Exception as exc:
         _finish_search_run(search_run, status="failed", summary=verification_summary)
         if thread is not None:
@@ -2536,6 +2554,9 @@ def search_chat(
             "intent": intent,
             "verification_summary": verification_summary,
             "suggested_refinements": suggested_refinements(intent, has_results=bool(citations)),
+            "output_format": request.output_format,
+            "rows": rows,
+            "comparison": comparison,
         }
         if search_run is not None:
             search_run.message_id = assistant_message.id

@@ -13,10 +13,19 @@ def _citation(video_id, start, text="evidence"):
     }
 
 
-def test_extraction_rows_preserve_evidence_identity():
-    rows = extraction_rows([_citation("one", 4.0, "Launch is Friday")], "claims")
-    assert rows[0]["item"] == "Launch is Friday"
+def test_extraction_rows_preserve_model_item_and_evidence_identity():
+    rows = extraction_rows(
+        [_citation("one", 4.0, "Launch is Friday")],
+        '```json\n{"rows":[{"item":"Launch happens Friday","evidence_index":0}]}\n```',
+    )
+    assert rows[0]["item"] == "Launch happens Friday"
     assert rows[0]["evidence_key"] == "one:4.000-6.000"
+
+
+def test_extraction_rows_reject_malformed_or_ungrounded_items():
+    citations = [_citation("one", 4.0)]
+    assert extraction_rows(citations, "not json") == []
+    assert extraction_rows(citations, '{"rows":[{"item":"Invented","evidence_index":2}]}') == []
 
 
 def test_comparison_claim_requires_two_sources():
