@@ -1,14 +1,14 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Playfair_Display, Raleway } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 
-const display = Playfair_Display({
+const display = Manrope({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
   variable: "--font-display",
 });
 
-const ui = Raleway({
+const ui = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-ui",
