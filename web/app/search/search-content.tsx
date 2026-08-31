@@ -452,22 +452,18 @@ export function SearchContent({
   const [loading, setLoading] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [activeChatJobId, setActiveChatJobId] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
   const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
   const [threadSearch, setThreadSearch] = useState("");
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
-  const [urlDialogOpen, setUrlDialogOpen] = useState(false);
-  const [urlValue, setUrlValue] = useState("");
-  const [urlError, setUrlError] = useState<string | null>(null);
   const [browseOpen, setBrowseOpen] = useState(false);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
   const [savedSearchName, setSavedSearchName] = useState("");
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
 
@@ -558,14 +554,6 @@ export function SearchContent({
     initialQuerySubmitted.current = true;
     window.setTimeout(() => document.querySelector<HTMLFormElement>(".chat-composer")?.requestSubmit(), 0);
   }, [initialQuery, activeThreadId]);
-
-  useEffect(() => {
-    if (!loading || startedAt === null) return;
-    const timer = window.setInterval(() => {
-      setElapsedSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [loading, startedAt]);
 
   function recordRecentSearch(value: string) {
     const next = value.trim();
@@ -697,7 +685,7 @@ export function SearchContent({
   }
 
   function watchUploadJob(itemId: string, jobId: string) {
-    return new Promise<void>((resolve) => {
+    return new Promise<string>((resolve) => {
       let polling = false;
       let settled = false;
       const stream = new EventSource(`/api/job-events/${jobId}`);
@@ -706,7 +694,7 @@ export function SearchContent({
         if (["succeeded", "failed", "canceled"].includes(payload.status)) {
           settled = true;
           stream.close();
-          resolve();
+          resolve(payload.status);
         }
       };
       const poll = async () => {
@@ -732,18 +720,11 @@ export function SearchContent({
     });
   }
 
-  async function ingestVideoUrl(rawUrl: string) {
+  async function ingestVideoUrl(rawUrl: string): Promise<string | null> {
     const threadId = await ensureActiveThread();
-    if (!threadId) return;
+    if (!threadId) return null;
     const url = rawUrl.trim();
-    if (!url) return;
-    if (!/^https?:\/\//i.test(url)) {
-      setUrlError("Use a full http or https URL.");
-      return;
-    }
-    setUrlDialogOpen(false);
-    setUrlValue("");
-    setUrlError(null);
+    if (!/^https?:\/\//i.test(url)) return null;
     const itemId = `${Date.now()}-url`;
     setUploadItems((current) => [...current, { id: itemId, filename: url, status: "uploading", progress: 0 }]);
     try {
@@ -755,10 +736,15 @@ export function SearchContent({
       if (!response.ok) throw new Error(`URL ingest failed (${response.status})`);
       const job = (await response.json()) as { id: string; video_id?: string };
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
-      await watchUploadJob(itemId, job.id);
+      setActiveChatJobId(job.id);
+      const jobStatus = await watchUploadJob(itemId, job.id);
       await refreshThreadSources(threadId);
+      return jobStatus === "succeeded" ? job.video_id || null : null;
     } catch (cause) {
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "URL ingest failed" } : item));
+      return null;
+    } finally {
+      setActiveChatJobId(null);
     }
   }
 
@@ -893,6 +879,22 @@ export function SearchContent({
     setStatus("Saved search loaded. Ask to run it.");
   }
 
+  function editPrompt(content: string) {
+    setQuestion(content);
+    window.requestAnimationFrame(() => {
+      questionInputRef.current?.focus();
+      questionInputRef.current?.setSelectionRange(content.length, content.length);
+    });
+  }
+
+  async function copyPrompt(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      setStatus("Could not copy this prompt.");
+    }
+  }
+
   function focusMoment(citation: Citation, prompt = "What is happening in this moment?", runId?: string | null) {
     setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time });
     setParentSearchRunId(runId || null);
@@ -917,12 +919,15 @@ export function SearchContent({
     setQuestion("");
     const requestStartedAt = Date.now();
     setLoading(true);
-    setStartedAt(requestStartedAt);
-    setElapsedSeconds(0);
     setStatus("Starting search...");
     setChatProgress(0);
 
     try {
+      const linkedUrl = nextQuestion.match(/https?:\/\/[^\s<>()]+/i)?.[0].replace(/[),.!?]+$/, "") || null;
+      if (linkedUrl) setStatus("Preparing the linked video…");
+      const linkedVideoId = linkedUrl ? await ingestVideoUrl(linkedUrl) : null;
+      if (linkedUrl && !linkedVideoId) throw new Error("Vivadeo could not prepare the linked video.");
+      setStatus("Starting search...");
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -941,7 +946,7 @@ export function SearchContent({
           custom_api_key: chatModel === "custom" ? customApiKey || null : null,
           custom_model: chatModel === "custom" ? customModel || null : null,
           video_id: videoId || null,
-          video_ids: Array.from(new Set([...videoIds, ...threadSources.map((source) => source.video_id)])),
+          video_ids: Array.from(new Set([...videoIds, ...threadSources.map((source) => source.video_id), ...(linkedVideoId ? [linkedVideoId] : [])])),
           focus_video_id: momentContext?.videoId || null,
           focus_start_time: momentContext?.startTime ?? null,
           focus_end_time: momentContext?.endTime ?? null,
@@ -971,7 +976,6 @@ export function SearchContent({
     } finally {
       setLoading(false);
       setActiveChatJobId(null);
-      setStartedAt(null);
       setChatProgress(0);
     }
   }
@@ -979,7 +983,7 @@ export function SearchContent({
   async function cancelChatGeneration() {
     if (!activeChatJobId) return;
     const response = await fetch(`/api/proxy/v1/jobs/${activeChatJobId}/cancel`, { method: "POST" });
-    if (response.ok) setStatus("Canceling answer generation...");
+    if (response.ok) setStatus("Stopping current task...");
   }
 
   async function regenerateMessage(message: ChatTurn) {
@@ -1171,6 +1175,7 @@ export function SearchContent({
                 <label htmlFor="query">Ask about your videos</label>
                 {momentContext ? <button type="button" className="chat-moment-context" onClick={() => setMomentContext(null)}>Focused on {momentContext.filename} · {fmt(momentContext.startTime)} ×</button> : null}
                 <textarea
+                  ref={questionInputRef}
                   id="query"
                   rows={1}
                   value={question}
@@ -1185,13 +1190,18 @@ export function SearchContent({
                   disabled={loading}
                 />
               </div>
-              <button className="chat-send" type="submit" disabled={loading || (!question.trim() && turns.length > 0)} aria-label={loading ? "Asking" : "Ask"}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>
+              <button
+                className={`chat-send ${loading ? "chat-stop" : ""}`}
+                type={loading ? "button" : "submit"}
+                disabled={loading ? !activeChatJobId : (!question.trim() && turns.length > 0)}
+                onClick={loading ? () => void cancelChatGeneration() : undefined}
+                aria-label={loading ? "Stop current task" : "Ask"}
+              >
+                {loading ? <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" /></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>}
               </button>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
                   <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" data-tooltip="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
-                  <button type="button" onClick={() => { setUrlDialogOpen(true); setUrlError(null); }} aria-label="Add a video URL" data-tooltip="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
                   <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" data-tooltip="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
                   <div className="chat-model-control">
                     <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen((open) => !open); }}>
@@ -1292,20 +1302,6 @@ export function SearchContent({
                 </div>
               </div>
             </form>
-            {urlDialogOpen ? (
-              <form className="chat-tool-panel" onSubmit={(event) => { event.preventDefault(); void ingestVideoUrl(urlValue); }}>
-                <div>
-                  <strong>Add a video URL</strong>
-                  <p className="muted">Paste a permitted http or https video link. It will be added to this thread and processed in the background.</p>
-                </div>
-                <div className="chat-tool-row">
-                  <input autoFocus value={urlValue} onChange={(event) => { setUrlValue(event.target.value); setUrlError(null); }} placeholder="https://example.com/video.mp4" aria-label="Video URL" />
-                  <button className="button" type="submit">Add video</button>
-                  <button className="button-secondary" type="button" onClick={() => { setUrlDialogOpen(false); setUrlValue(""); setUrlError(null); }}>Cancel</button>
-                </div>
-                {urlError ? <p className="chat-tool-error" role="alert">{urlError}</p> : null}
-              </form>
-            ) : null}
             {browseOpen ? (
               <div className="chat-tool-panel" role="dialog" aria-label="Browse workspace videos">
                 <div>
@@ -1322,7 +1318,7 @@ export function SearchContent({
                 ) : <p className="muted">No videos are available yet. Attach a file or add a URL first.</p>}
               </div>
             ) : null}
-            <p className="chat-disclaimer">Vivadeo may generate inaccurate information about people, places, or facts.</p>
+            <p className="chat-disclaimer">Only share videos you have permission to process. Vivadeo may make mistakes.</p>
           </section>
 
           <section className="search-layout">
@@ -1378,6 +1374,14 @@ export function SearchContent({
                             <>
                               <div className="chat-message-author">You</div>
                               <h3>{turn.content}</h3>
+                              <div className="chat-user-message-actions" aria-label="Prompt actions">
+                                <button type="button" onClick={() => editPrompt(turn.content)} aria-label="Edit prompt">
+                                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" /></svg>
+                                </button>
+                                <button type="button" onClick={() => void copyPrompt(turn.content)} aria-label="Copy prompt">
+                                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" /><path d="M16 8V5H5v11h3" /></svg>
+                                </button>
+                              </div>
                               {turn.attachments?.length ? <div className="chat-message-attachments" aria-label="Videos attached to this question">
                                 {turn.attachments.map((attachment) => <span key={attachment.video_id} className={`chat-message-attachment chat-message-attachment-${attachment.status}`}><span aria-hidden="true" />{attachment.filename}</span>)}
                               </div> : null}
@@ -1385,6 +1389,13 @@ export function SearchContent({
                           )}
                         </div>
                       </div>
+                      {turn.role === "assistant" && (turn.search_run_id || turn.suggested_refinements?.length) ? <div className="chat-answer-actions">
+                        {turn.suggested_refinements?.length ? <div className="chat-refinement-row" aria-label="Suggested follow-ups">
+                          <span>Follow up</span>
+                          {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => { setParentSearchRunId(turn.search_run_id || null); setQuestion(suggestion); }}>{suggestion}</button>)}
+                        </div> : null}
+                        {turn.search_run_id ? <button type="button" className="chat-save-search" onClick={() => void saveCurrentSearch(turn)}>Save search</button> : null}
+                      </div> : null}
                       {citations.length ? (
                         <div className="search-citations">
                           <div className="search-citation-head">
@@ -1412,12 +1423,16 @@ export function SearchContent({
                                     onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })}
                                   />
                                   <div className="chat-evidence-actions">
-                                    <span className={`chat-evidence-status chat-evidence-status-${verification}`} aria-label={`Evidence status: ${verification}`}>{verification === "verified" ? "Verified" : verification === "possible" ? "Possible match" : "Not relevant"}</span>
-                                    {citation.match_reason ? <span className="chat-evidence-reason">{citation.match_reason}</span> : null}
-                                    <button type="button" className={feedback === "relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "relevant")}>Relevant</button>
-                                    <button type="button" className={feedback === "not_relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "not_relevant")}>Not relevant</button>
-                                    <button type="button" onClick={() => focusMoment(citation, "Show nearby context around this moment.", turn.search_run_id)}>Nearby</button>
-                                    <button type="button" onClick={() => focusMoment(citation, "What is happening in this moment?", turn.search_run_id)}>Ask about this</button>
+                                    <div className="chat-evidence-summary-row">
+                                      <span className={`chat-evidence-status chat-evidence-status-${verification}`} aria-label={`Evidence status: ${verification}`}>{verification === "verified" ? "Verified" : verification === "possible" ? "Possible match" : "Not relevant"}</span>
+                                      {citation.match_reason ? <span className="chat-evidence-reason">{citation.match_reason}</span> : null}
+                                    </div>
+                                    <div className="chat-evidence-controls">
+                                      <button type="button" className={feedback === "relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "relevant")}>Relevant</button>
+                                      <button type="button" className={feedback === "not_relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "not_relevant")}>Not relevant</button>
+                                      <button type="button" onClick={() => focusMoment(citation, "Show nearby context around this moment.", turn.search_run_id)}>Nearby</button>
+                                      <button type="button" onClick={() => focusMoment(citation, "What is happening in this moment?", turn.search_run_id)}>Ask about this</button>
+                                    </div>
                                   </div>
                                 </article>
                               );
@@ -1444,11 +1459,6 @@ export function SearchContent({
                           <div className="chat-comparison-sides"><div><small>First video</small>{claim.left_citations.map((citation) => <button type="button" key={evidenceKey(citation)} onClick={() => focusMoment(citation, "What is important about this moment?")}>{fmt(citation.start_time)}–{fmt(citation.end_time)}</button>)}</div><div><small>Second video</small>{claim.right_citations.map((citation) => <button type="button" key={evidenceKey(citation)} onClick={() => focusMoment(citation, "What is important about this moment?")}>{fmt(citation.start_time)}–{fmt(citation.end_time)}</button>)}</div></div>
                         </div>)}
                       </section> : null}
-                      {turn.role === "assistant" && turn.search_run_id ? <button type="button" className="chat-save-search" onClick={() => void saveCurrentSearch(turn)}>Save this search</button> : null}
-                      {turn.role === "assistant" && turn.suggested_refinements?.length ? <div className="chat-refinement-row" aria-label="Suggested refinements">
-                        <span>Refine</span>
-                        {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => { setParentSearchRunId(turn.search_run_id || null); setQuestion(suggestion); }}>{suggestion}</button>)}
-                      </div> : null}
                     </article>
                   );
                 })
@@ -1463,7 +1473,6 @@ export function SearchContent({
                       <span className="chat-progress-percent">{Math.round(chatProgress * 100)}%</span>
                     </div>
                   </div>
-                  <span className="chat-status-actions"><strong>{elapsedSeconds}s elapsed</strong>{activeChatJobId ? <button type="button" className="button-secondary" onClick={() => void cancelChatGeneration()}>Cancel</button> : null}</span>
                 </div>
               </article> : null}
             </section>
