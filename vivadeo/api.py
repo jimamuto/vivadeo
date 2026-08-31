@@ -47,7 +47,7 @@ from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
 from .frame_extractor import extract_frame
 from .chat_accuracy import route_chat_intent, suggested_refinements, verification_for_hit
-from .chat_workflows import comparison_claims, extraction_rows
+from .chat_workflows import comparison_claims, extraction_rows, merge_evidence_ranges
 from .head_pose import is_face_orientation_query
 from .visual_retrieval import rank_frame_candidates, sample_timestamps
 from .schemas import (
@@ -2365,6 +2365,10 @@ def search_chat(
         if len(citations) >= result_limit:
             break
 
+    citations = merge_evidence_ranges(
+        citations,
+        max_ranges=None if intent["search_mode"] == "all" or request.output_format == "comparison" else 3,
+    )
     verified_citations = [item for item in citations if item["verification_status"] == "verified"]
     verification_summary = {
         "verified": len(verified_citations),

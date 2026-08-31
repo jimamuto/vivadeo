@@ -12,7 +12,7 @@ VerificationStatus = Literal["verified", "possible", "rejected"]
 _VISUAL_RULES: tuple[tuple[str, str], ...] = (
     (r"\bface(?:s|d|ing)?\b|\bfacing\b|\bdirect eye contact\b|\beye contact\b", "faces_camera"),
     (r"\blook(?:s|ed|ing)?\b|\bwatch(?:es|ed|ing)?\b", "looking"),
-    (r"\bgesture\w*\b|\bwave\w*\b|\bpoint(?:s|ed|ing)?\b", "gesture"),
+    (r"\bgesture\w*\b|\bwave\w*\b|\bpoint(?:ed|ing)\b|\b(?:he|she|they|speaker|person|interviewee|man|woman)\s+points?\b|\bpoints?\s+(?:at|to|toward|towards)\b", "gesture"),
     (r"\bhold(?:s|ing)?\b|\bcarry(?:ing|ies)?\b", "holding_object"),
     (r"\bshow(?:s|ed|ing)?\b|\bappear(?:s|ed|ing)?\b|\bvisible\b", "visible"),
     (r"\bwear(?:s|ing)?\b|\bcolor\b|\bbackground\b|\bobject\b", "appearance"),

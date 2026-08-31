@@ -28,6 +28,13 @@ def test_routes_spoken_question_without_visual_override():
     assert intent["visual_predicates"] == []
 
 
+def test_routes_conceptual_points_to_transcript_and_pointing_gestures_to_visual():
+    conceptual = route_chat_intent("What is the most important point given by the interviewee?")
+    assert conceptual["modality"] == "transcript"
+    assert conceptual["visual_predicates"] == []
+    assert route_chat_intent("When does the interviewee point at the screen?")["modality"] == "visual"
+
+
 def test_routes_hybrid_and_focused_questions():
     intent = route_chat_intent("What did she say while holding the product?", focused=True)
     assert intent["modality"] == "hybrid"

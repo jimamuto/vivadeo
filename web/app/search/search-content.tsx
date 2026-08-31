@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
 
@@ -434,6 +435,7 @@ export function SearchContent({
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [parentSearchRunId, setParentSearchRunId] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
+  const [customModelView, setCustomModelView] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
   const [customModel, setCustomModel] = useState("");
@@ -471,7 +473,10 @@ export function SearchContent({
 
   useEffect(() => {
     if (!threadMenuId) return;
-    const closeMenu = () => setThreadMenuId(null);
+    const closeMenu = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".chat-thread-menu, .chat-thread-more")) return;
+      setThreadMenuId(null);
+    };
     document.addEventListener("pointerdown", closeMenu);
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, [threadMenuId]);
@@ -1176,7 +1181,7 @@ export function SearchContent({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  placeholder={turns.length ? "" : DEFAULT_CHAT_PROMPT}
+                  placeholder={turns.length ? "Ask Vivadeo about your videos…" : DEFAULT_CHAT_PROMPT}
                   disabled={loading}
                 />
               </div>
@@ -1185,15 +1190,15 @@ export function SearchContent({
               </button>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
-                  <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" title="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
-                  <button type="button" onClick={() => { setUrlDialogOpen(true); setUrlError(null); }} aria-label="Add a video URL" title="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
-                  <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" title="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
+                  <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" data-tooltip="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
+                  <button type="button" onClick={() => { setUrlDialogOpen(true); setUrlError(null); }} aria-label="Add a video URL" data-tooltip="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
+                  <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" data-tooltip="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
                   <div className="chat-model-control">
-                    <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => setModelOpen((open) => !open)}>
+                    <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen((open) => !open); }}>
                       <strong>{chatModel === "vivadeo-pro" ? "Vivadeo Pro" : chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
-                    {modelOpen ? (
+                    {modelOpen && typeof document !== "undefined" ? createPortal(
                       <div className="chat-model-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setModelOpen(false); }}>
                         <section className="chat-model-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-model-title">
                           <header>
@@ -1203,27 +1208,29 @@ export function SearchContent({
                             </div>
                             <button autoFocus type="button" className="chat-model-close" onClick={() => setModelOpen(false)} aria-label="Close answer service picker">×</button>
                           </header>
-                          <div className="chat-model-options">
+                          {!customModelView ? <div className="chat-model-options">
                             <p>Vivadeo</p>
                             <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-auto"); setModelOpen(false); }}><span>Vivadeo Auto</span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
                             {["pro", "enterprise"].includes(workspacePlan) ? <button type="button" className={chatModel === "vivadeo-pro" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-pro"); setModelOpen(false); }}><span>Vivadeo Pro</span><span aria-hidden="true">{chatModel === "vivadeo-pro" ? "✓" : ""}</span></button> : null}
                             <p>Your provider</p>
-                            <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setChatModel("custom")}><span>Custom endpoint</span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "openai" ? "is-selected" : ""} onClick={() => setChatModel("openai")}><span>OpenAI-compatible</span><span aria-hidden="true">{chatModel === "openai" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "anthropic" ? "is-selected" : ""} onClick={() => setChatModel("anthropic")}><span>Anthropic</span><span aria-hidden="true">{chatModel === "anthropic" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "ollama" ? "is-selected" : ""} onClick={() => setChatModel("ollama")}><span>Ollama</span><span aria-hidden="true">{chatModel === "ollama" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "gemini" ? "is-selected" : ""} onClick={() => setChatModel("gemini")}><span>Gemini-compatible</span><span aria-hidden="true">{chatModel === "gemini" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "nvidia" ? "is-selected" : ""} onClick={() => setChatModel("nvidia")}><span>NVIDIA-compatible</span><span aria-hidden="true">{chatModel === "nvidia" ? "✓" : ""}</span></button>
-                          </div>
-                          {chatModel !== "vivadeo-auto" && chatModel !== "vivadeo-pro" ? <div className="chat-model-custom">
+                            <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setCustomModelView(true)}><span>Custom endpoint</span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "openai" ? "is-selected" : ""} onClick={() => { setChatModel("openai"); setModelOpen(false); }}><span>OpenAI-compatible</span><span aria-hidden="true">{chatModel === "openai" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "anthropic" ? "is-selected" : ""} onClick={() => { setChatModel("anthropic"); setModelOpen(false); }}><span>Anthropic</span><span aria-hidden="true">{chatModel === "anthropic" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "ollama" ? "is-selected" : ""} onClick={() => { setChatModel("ollama"); setModelOpen(false); }}><span>Ollama</span><span aria-hidden="true">{chatModel === "ollama" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "gemini" ? "is-selected" : ""} onClick={() => { setChatModel("gemini"); setModelOpen(false); }}><span>Gemini-compatible</span><span aria-hidden="true">{chatModel === "gemini" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "nvidia" ? "is-selected" : ""} onClick={() => { setChatModel("nvidia"); setModelOpen(false); }}><span>NVIDIA-compatible</span><span aria-hidden="true">{chatModel === "nvidia" ? "✓" : ""}</span></button>
+                          </div> : null}
+                          {customModelView ? <div className="chat-model-custom">
+                            <button type="button" className="chat-model-back" onClick={() => setCustomModelView(false)}>← Back to answer services</button>
                             <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
                             <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
                             <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
                             <small>Your key is used only for your requests and is never displayed again.</small>
-                            <button type="button" onClick={() => setModelOpen(false)}>Done</button>
+                            <button type="button" className="chat-model-done" onClick={() => { setChatModel("custom"); setModelOpen(false); }}>Done</button>
                           </div> : null}
                         </section>
-                      </div>
+                      </div>,
+                      document.body,
                     ) : null}
                   </div>
                   <div className="chat-accuracy-controls" aria-label="Evidence search controls">
@@ -1355,6 +1362,7 @@ export function SearchContent({
                         <div className="search-meta">
                           {turn.role === "assistant" ? (
                             <>
+                              <div className="chat-message-author">Vivadeo</div>
                               {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <div className="search-answer-text">{turn.content}</div> : null}
                               {turn.intent?.modality ? <div className="chat-evidence-summary">{turn.intent.modality === "visual" ? "Visual evidence" : turn.intent.modality === "hybrid" ? "Visual + spoken evidence" : "Transcript evidence"}{turn.verification_summary?.verified ? ` · ${turn.verification_summary.verified} verified` : ""}{turn.verification_summary?.possible ? ` · ${turn.verification_summary.possible} possible` : ""}</div> : null}
                               {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
@@ -1368,6 +1376,7 @@ export function SearchContent({
                             </>
                           ) : (
                             <>
+                              <div className="chat-message-author">You</div>
                               <h3>{turn.content}</h3>
                               {turn.attachments?.length ? <div className="chat-message-attachments" aria-label="Videos attached to this question">
                                 {turn.attachments.map((attachment) => <span key={attachment.video_id} className={`chat-message-attachment chat-message-attachment-${attachment.status}`}><span aria-hidden="true" />{attachment.filename}</span>)}
@@ -1447,6 +1456,7 @@ export function SearchContent({
               {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label={status || "Vivadeo is preparing an answer"}>
                 <div className="search-top">
                   <div className="search-meta">
+                    <div className="chat-message-author">Vivadeo</div>
                     <div className="chat-pending-status" aria-live="polite" aria-busy="true">
                       <span className="chat-typing" aria-hidden="true"><span /><span /><span /></span>
                       <span className="chat-progress-copy">{status || "Preparing answer..."}</span>
@@ -1480,7 +1490,7 @@ export function SearchContent({
                     <h3>{group.label}</h3>
                     <div className="chat-history-group-list">
                     {group.threads.map((thread) => (
-                      <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""}`}>
+                      <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === thread.id ? "menu-open" : ""}`}>
                     {renamingThreadId === thread.id ? (
                       <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
                         <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Thread name" />
