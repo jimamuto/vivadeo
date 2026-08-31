@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 import { forwardAuthCookies } from "@/lib/auth-cookies";
 import { emailVerificationEnabled, postAuthEndpoint } from "@/lib/auth";
+import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET(request: NextRequest) {
-  return NextResponse.redirect(new URL("/sign-up", request.url));
+  return NextResponse.redirect(publicAppUrl(request, "/sign-up"));
 }
 
 export async function POST(request: NextRequest) {
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
   const confirmPassword = String(form.get("confirmPassword") || "");
   if (password !== confirmPassword) {
     if (wantsJson) return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
-    return NextResponse.redirect(new URL("/sign-up?error=PASSWORD_MISMATCH", request.url));
+    return NextResponse.redirect(publicAppUrl(request, "/sign-up?error=PASSWORD_MISMATCH"));
   }
   const backendResponse = await fetch(getBackendUrl("/v1/workspaces"), {
     method: "POST",
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     name: String(form.get("name") || ""),
     email: String(form.get("email") || ""),
     password,
-    callbackURL: new URL("/dashboard", request.url).toString(),
+    callbackURL: publicAppUrl(request, "/dashboard").toString(),
   });
 
   if (authResponse.ok) {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       ? `/sign-up?email=${encodeURIComponent(email)}&verify=sent`
       : "/dashboard";
 
-    const response = NextResponse.redirect(new URL(destination, request.url));
+    const response = NextResponse.redirect(publicAppUrl(request, destination));
     if (!emailVerificationEnabled) {
       forwardAuthCookies(authResponse, response);
     }
@@ -91,6 +92,6 @@ export async function POST(request: NextRequest) {
   }
   if (wantsJson) return NextResponse.json({ error: errorCode }, { status: 400 });
   return NextResponse.redirect(
-    new URL(`/sign-up?error=${encodeURIComponent(errorCode)}`, request.url),
+    publicAppUrl(request, `/sign-up?error=${encodeURIComponent(errorCode)}`),
   );
 }

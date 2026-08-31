@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authHandlers } from "@/lib/auth";
+import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET(request: NextRequest) {
-  return NextResponse.redirect(new URL("/sign-in", request.url));
+  return NextResponse.redirect(publicAppUrl(request, "/sign-in"));
 }
 
 export async function POST(request: NextRequest) {
@@ -13,5 +14,5 @@ export async function POST(request: NextRequest) {
       headers: authResponse.headers
     });
   }
-  return NextResponse.redirect(new URL("/dashboard?invite=accepted", request.url));
+  return NextResponse.redirect(publicAppUrl(request, "/dashboard?invite=accepted"));
 }

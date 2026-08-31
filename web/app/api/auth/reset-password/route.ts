@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { postAuthEndpoint } from "@/lib/auth";
+import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET(request: NextRequest) {
-  return NextResponse.redirect(new URL("/reset-password", request.url));
+  return NextResponse.redirect(publicAppUrl(request, "/reset-password"));
 }
 
 export async function POST(request: NextRequest) {
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
     newPassword: String(form.get("password") || ""),
   });
   if (authResponse.ok) {
-    return NextResponse.redirect(new URL("/sign-in?reset=done", request.url));
+    return NextResponse.redirect(publicAppUrl(request, "/sign-in?reset=done"));
   }
   let errorCode = "UNKNOWN";
   try {
@@ -22,9 +23,6 @@ export async function POST(request: NextRequest) {
     /* ignore */
   }
   return NextResponse.redirect(
-    new URL(
-      `/reset-password?error=${encodeURIComponent(errorCode)}`,
-      request.url,
-    ),
+    publicAppUrl(request, `/reset-password?error=${encodeURIComponent(errorCode)}`),
   );
 }

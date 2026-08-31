@@ -13,10 +13,12 @@ COPY styles ./styles
 COPY app ./app
 COPY components ./components
 COPY lib ./lib
+COPY public ./public
 
 RUN npm run build
 RUN mkdir -p .next/standalone/.next \
-  && cp -r .next/static .next/standalone/.next/static
+  && cp -r .next/static .next/standalone/.next/static \
+  && cp -r public .next/standalone/public
 
 EXPOSE 3000
 

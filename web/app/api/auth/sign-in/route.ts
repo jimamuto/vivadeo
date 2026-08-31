@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { forwardAuthCookies } from "@/lib/auth-cookies";
 import { getWorkspaceForEmail, postAuthEndpoint } from "@/lib/auth";
+import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET(request: NextRequest) {
-  return NextResponse.redirect(new URL("/sign-in", request.url));
+  return NextResponse.redirect(publicAppUrl(request, "/sign-in"));
 }
 
 export async function POST(request: NextRequest) {
@@ -13,11 +14,11 @@ export async function POST(request: NextRequest) {
     email,
     password: String(form.get("password") || ""),
     rememberMe: form.get("rememberMe") === "on",
-    callbackURL: new URL("/chat", request.url).toString(),
+    callbackURL: publicAppUrl(request, "/chat").toString(),
   });
 
   if (authResponse.ok) {
-    const response = NextResponse.redirect(new URL("/chat", request.url));
+    const response = NextResponse.redirect(publicAppUrl(request, "/chat"));
     forwardAuthCookies(authResponse, response);
     const requestedWorkspace = request.nextUrl.searchParams.get("workspace") || request.cookies.get("vivadeo_workspace")?.value;
     const workspace =
@@ -43,6 +44,6 @@ export async function POST(request: NextRequest) {
     // ignore parse failures
   }
   return NextResponse.redirect(
-    new URL(`/sign-in?error=${encodeURIComponent(errorCode)}`, request.url),
+    publicAppUrl(request, `/sign-in?error=${encodeURIComponent(errorCode)}`),
   );
 }
