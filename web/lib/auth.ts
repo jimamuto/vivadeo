@@ -268,8 +268,8 @@ async function getSessionEmail(request: Request): Promise<string | null> {
     createAuthEndpointRequest(request, "/get-session"),
   );
   if (!sessionResponse.ok) return null;
-  const sessionPayload = (await sessionResponse.json()) as { user?: { email?: string | null } };
-  return sessionPayload.user?.email?.trim().toLowerCase() || null;
+  const sessionPayload = (await sessionResponse.json()) as { user?: { email?: string | null } } | null;
+  return sessionPayload?.user?.email?.trim().toLowerCase() || null;
 }
 
 async function getWorkspaceRoleForRequest(
