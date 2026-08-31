@@ -6,8 +6,76 @@ import { appendActivity } from "@/lib/activity-log";
 
 const RECENT_SEARCHES_KEY = "vivadeo.recent-searches";
 const CHAT_ONBOARDING_KEY = "vivadeo.chat-onboarding-seen";
+const DEFAULT_CHAT_PROMPT = "What did the speaker say about the launch timeline?";
 const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+type ComposerSelectOption = {
+  value: string;
+  label: string;
+  disabled?: boolean;
+};
+
+function ComposerSelect({
+  label,
+  value,
+  options,
+  disabled = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: ComposerSelectOption[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+
+  return (
+    <div className="chat-inline-select" ref={rootRef} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
+      <button
+        type="button"
+        className="chat-inline-select-trigger"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected?.label}</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open ? (
+        <div className="chat-inline-select-menu" role="listbox" aria-label={label}>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={option.value === value ? "is-selected" : ""}
+              disabled={option.disabled}
+              onClick={() => { onChange(option.value); setOpen(false); }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function readCachedPoster(key: string) {
   try {
@@ -829,7 +897,7 @@ export function SearchContent({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextQuestion = question.trim();
+    const nextQuestion = question.trim() || (!turns.length ? DEFAULT_CHAT_PROMPT : "");
     if (!nextQuestion || loading) return;
     const threadId = await ensureActiveThread();
     if (!threadId) return;
@@ -1108,86 +1176,104 @@ export function SearchContent({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  placeholder={turns.length ? "" : "What did the speaker say about the launch timeline?"}
+                  placeholder={turns.length ? "" : DEFAULT_CHAT_PROMPT}
                   disabled={loading}
                 />
               </div>
-              <button className="chat-send" type="submit" disabled={loading || !question.trim()} aria-label={loading ? "Asking" : "Ask"}>
+              <button className="chat-send" type="submit" disabled={loading || (!question.trim() && turns.length > 0)} aria-label={loading ? "Asking" : "Ask"}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>
               </button>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
-                  <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach videos</span></button>
-                  <button type="button" onClick={() => { setUrlDialogOpen(true); setUrlError(null); }} aria-label="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
-                  <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse videos</span></button>
+                  <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" title="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
+                  <button type="button" onClick={() => { setUrlDialogOpen(true); setUrlError(null); }} aria-label="Add a video URL" title="Add a video URL"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 8.5 15a3 3 0 0 1-4.2-4.2l3-3a3 3 0 0 1 4.2 0 M14 10.5 15.5 9a3 3 0 0 1 4.2 4.2l-3 3a3 3 0 0 1-4.2 0 M8.5 12h7" /></svg><span>Add URL</span></button>
+                  <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" title="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
                   <div className="chat-model-control">
-                    <span>Model</span>
                     <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => setModelOpen((open) => !open)}>
                       <strong>{chatModel === "vivadeo-pro" ? "Vivadeo Pro" : chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
                     {modelOpen ? (
-                      <div className="chat-model-menu">
-                        <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-auto"); setModelOpen(false); }}>
-                          <span>Vivadeo Auto</span>
-                        </button>
-                        {["pro", "enterprise"].includes(workspacePlan) ? <button type="button" className={chatModel === "vivadeo-pro" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-pro"); setModelOpen(false); }}>
-                          <span>Vivadeo Pro</span>
-                        </button> : null}
-                        <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setChatModel("custom")}>
-                          <span>Custom endpoint (BYOK)</span>
-                        </button>
-                        <button type="button" className={chatModel === "openai" ? "is-selected" : ""} onClick={() => setChatModel("openai")}>
-                          <span>OpenAI-compatible</span>
-                        </button>
-                        <button type="button" className={chatModel === "anthropic" ? "is-selected" : ""} onClick={() => setChatModel("anthropic")}>
-                          <span>Anthropic</span>
-                        </button>
-                        <button type="button" className={chatModel === "ollama" ? "is-selected" : ""} onClick={() => setChatModel("ollama")}>
-                          <span>Ollama</span>
-                        </button>
-                        <button type="button" className={chatModel === "gemini" ? "is-selected" : ""} onClick={() => setChatModel("gemini")}>
-                          <span>Gemini-compatible</span>
-                        </button>
-                        <button type="button" className={chatModel === "nvidia" ? "is-selected" : ""} onClick={() => setChatModel("nvidia")}>
-                          <span>NVIDIA-compatible</span>
-                        </button>
-                        {chatModel !== "vivadeo-auto" && chatModel !== "vivadeo-pro" ? <div className="chat-model-custom">
-                          <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
-                          <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
-                          <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
-                          <small>Your key is used only for your requests and is never displayed again.</small>
-                        </div> : null}
+                      <div className="chat-model-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setModelOpen(false); }}>
+                        <section className="chat-model-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-model-title">
+                          <header>
+                            <div>
+                              <h2 id="chat-model-title">Choose an answer service</h2>
+                              <p>Select Vivadeo or connect your own provider.</p>
+                            </div>
+                            <button autoFocus type="button" className="chat-model-close" onClick={() => setModelOpen(false)} aria-label="Close answer service picker">×</button>
+                          </header>
+                          <div className="chat-model-options">
+                            <p>Vivadeo</p>
+                            <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-auto"); setModelOpen(false); }}><span>Vivadeo Auto</span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
+                            {["pro", "enterprise"].includes(workspacePlan) ? <button type="button" className={chatModel === "vivadeo-pro" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-pro"); setModelOpen(false); }}><span>Vivadeo Pro</span><span aria-hidden="true">{chatModel === "vivadeo-pro" ? "✓" : ""}</span></button> : null}
+                            <p>Your provider</p>
+                            <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setChatModel("custom")}><span>Custom endpoint</span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "openai" ? "is-selected" : ""} onClick={() => setChatModel("openai")}><span>OpenAI-compatible</span><span aria-hidden="true">{chatModel === "openai" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "anthropic" ? "is-selected" : ""} onClick={() => setChatModel("anthropic")}><span>Anthropic</span><span aria-hidden="true">{chatModel === "anthropic" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "ollama" ? "is-selected" : ""} onClick={() => setChatModel("ollama")}><span>Ollama</span><span aria-hidden="true">{chatModel === "ollama" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "gemini" ? "is-selected" : ""} onClick={() => setChatModel("gemini")}><span>Gemini-compatible</span><span aria-hidden="true">{chatModel === "gemini" ? "✓" : ""}</span></button>
+                            <button type="button" className={chatModel === "nvidia" ? "is-selected" : ""} onClick={() => setChatModel("nvidia")}><span>NVIDIA-compatible</span><span aria-hidden="true">{chatModel === "nvidia" ? "✓" : ""}</span></button>
+                          </div>
+                          {chatModel !== "vivadeo-auto" && chatModel !== "vivadeo-pro" ? <div className="chat-model-custom">
+                            <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
+                            <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
+                            <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
+                            <small>Your key is used only for your requests and is never displayed again.</small>
+                            <button type="button" onClick={() => setModelOpen(false)}>Done</button>
+                          </div> : null}
+                        </section>
                       </div>
                     ) : null}
                   </div>
                   <div className="chat-accuracy-controls" aria-label="Evidence search controls">
-                    <label htmlFor="evidence-mode">Evidence</label>
-                    <select id="evidence-mode" value={modalityOverride} onChange={(event) => setModalityOverride(event.target.value as typeof modalityOverride)}>
-                      <option value="auto">Auto</option>
-                      <option value="visual">Visual</option>
-                      <option value="transcript">Transcript</option>
-                      <option value="hybrid">Both</option>
-                    </select>
-                    <select aria-label="Search depth" value={momentContext ? "focused" : searchMode} onChange={(event) => setSearchMode(event.target.value as typeof searchMode)} disabled={Boolean(momentContext)}>
-                      <option value="top">Best matches</option>
-                      <option value="all">Find every occurrence</option>
-                      <option value="focused" disabled={!momentContext}>Focused moment</option>
-                    </select>
-                    <select aria-label="Answer format" value={outputFormat} onChange={(event) => setOutputFormat(event.target.value as typeof outputFormat)}>
-                      <option value="answer">Answer</option>
-                      <option value="rows">Extract rows</option>
-                      <option value="comparison" disabled={threadSources.length < 2}>Compare videos</option>
-                    </select>
-                    {outputFormat === "rows" ? <select aria-label="Extraction type" value={extractionType} onChange={(event) => setExtractionType(event.target.value)}>
-                      <option value="claims">Claims</option>
-                      <option value="action_items">Action items</option>
-                      <option value="people">People</option>
-                      <option value="appearances">Appearances</option>
-                      <option value="objections">Objections</option>
-                      <option value="chapters">Chapters</option>
-                      <option value="visual_events">Visual events</option>
-                    </select> : null}
+                    <span className="chat-evidence-label">Evidence</span>
+                    <ComposerSelect
+                      label="Evidence type"
+                      value={modalityOverride}
+                      options={[
+                        { value: "auto", label: "Auto" },
+                        { value: "visual", label: "Visual" },
+                        { value: "transcript", label: "Transcript" },
+                        { value: "hybrid", label: "Both" },
+                      ]}
+                      onChange={(value) => setModalityOverride(value as typeof modalityOverride)}
+                    />
+                    <ComposerSelect
+                      label="Search depth"
+                      value={momentContext ? "focused" : searchMode}
+                      disabled={Boolean(momentContext)}
+                      options={[
+                        { value: "top", label: "Best matches" },
+                        { value: "all", label: "Find every occurrence" },
+                        { value: "focused", label: "Focused moment", disabled: !momentContext },
+                      ]}
+                      onChange={(value) => setSearchMode(value as typeof searchMode)}
+                    />
+                    <ComposerSelect
+                      label="Answer format"
+                      value={outputFormat}
+                      options={[
+                        { value: "answer", label: "Answer" },
+                        { value: "rows", label: "Extract rows" },
+                        { value: "comparison", label: "Compare videos", disabled: threadSources.length < 2 },
+                      ]}
+                      onChange={(value) => setOutputFormat(value as typeof outputFormat)}
+                    />
+                    {outputFormat === "rows" ? <ComposerSelect
+                      label="Extraction type"
+                      value={extractionType}
+                      options={[
+                        { value: "claims", label: "Claims" },
+                        { value: "action_items", label: "Action items" },
+                        { value: "people", label: "People" },
+                        { value: "appearances", label: "Appearances" },
+                        { value: "objections", label: "Objections" },
+                        { value: "chapters", label: "Chapters" },
+                        { value: "visual_events", label: "Visual events" },
+                      ]}
+                      onChange={setExtractionType}
+                    /> : null}
                   </div>
                   {outputFormat === "comparison" && threadSources.length > 1 ? <select className="chat-comparison-picker" aria-label="Videos to compare" multiple value={comparisonVideoIds} onChange={(event) => setComparisonVideoIds(Array.from(event.target.selectedOptions, (option) => option.value))}>
                     {threadSources.map((source) => <option key={source.video_id} value={source.video_id}>{source.filename}</option>)}
