@@ -1,4 +1,18 @@
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: vivadeo
+      POSTGRES_USER: vivadeo
+      POSTGRES_PASSWORD: vivadeo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vivadeo -d vivadeo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -12,7 +26,7 @@ services:
     command: sh -c "alembic upgrade head && uvicorn vivadeo.api:app --host 0.0.0.0 --port 8000 --reload"
     env_file: .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${VIVADEO_DEV_DATABASE_URL:-postgresql+psycopg://vivadeo:vivadeo@postgres:5432/vivadeo}
       REDIS_URL: redis://redis:6379/0
       VIVADEO_INTERNAL_SERVICE_KEY: ${VIVADEO_INTERNAL_SERVICE_KEY:-change-me}
       VIVADEO_DEFAULT_ORG_ID: ${VIVADEO_DEFAULT_ORG_ID:-default-workspace}
@@ -49,6 +63,8 @@ services:
     ports:
       - "8000:8000"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -62,7 +78,7 @@ services:
     command: sh -c "celery -A vivadeo.worker.celery_app worker --loglevel=INFO --concurrency $${VIVADEO_WORKER_CONCURRENCY:-4} --max-tasks-per-child=100"
     env_file: .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${VIVADEO_DEV_DATABASE_URL:-postgresql+psycopg://vivadeo:vivadeo@postgres:5432/vivadeo}
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: ${STORAGE_BACKEND:-azure}
       STORAGE_PUBLIC_ENDPOINT_URL: ${STORAGE_PUBLIC_ENDPOINT_URL:-http://localhost:3000/api/proxy/v1/media}
@@ -104,8 +120,8 @@ services:
     command: npm run dev
     environment:
       API_INTERNAL_URL: http://api:8000
-      AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:?AUTH_DATABASE_URL is required}
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      AUTH_DATABASE_URL: ${VIVADEO_DEV_AUTH_DATABASE_URL:-postgres://vivadeo:vivadeo@postgres:5432/vivadeo}
+      DATABASE_URL: ${VIVADEO_DEV_DATABASE_URL:-postgresql+psycopg://vivadeo:vivadeo@postgres:5432/vivadeo}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-vivadeo-better-auth-secret-change-before-production}
@@ -129,5 +145,6 @@ services:
         condition: service_healthy
 
 volumes:
+  postgres_data:
   web_node_modules:
   web_next:

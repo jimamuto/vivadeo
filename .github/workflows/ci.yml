@@ -13,8 +13,38 @@ permissions:
   id-token: write
 
 jobs:
+  migration-test:
+    name: Test database migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: vivadeo
+          POSTGRES_USER: vivadeo
+          POSTGRES_PASSWORD: vivadeo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vivadeo -d vivadeo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: latest
+      - name: Install Python dependencies
+        run: uv sync --frozen
+      - name: Apply all migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://vivadeo:vivadeo@localhost:5432/vivadeo
+        run: uv run alembic upgrade head
+
   docker:
     name: Build and publish Docker images
+    needs: migration-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +107,19 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run production database migrations
+        if: github.event_name == 'push'
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_DATABASE_URL"
+          tag="sha-${GITHUB_SHA::7}"
+          image="ghcr.io/jimamuto/vivadeo-api:${tag}"
+          docker pull "$image"
+          docker run --rm --env DATABASE_URL="$PRODUCTION_DATABASE_URL" "$image" alembic upgrade head
 
       - name: Deploy to Azure Container Apps
         if: github.event_name == 'push'
