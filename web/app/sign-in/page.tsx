@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SigninForm } from "./signin-form";
 import { BrandLogo } from "@/components/brand-logo";
+import { AuthSocialOptions } from "@/components/auth-social-options";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: "Your email address has not been verified. Enter the code from your inbox.",
@@ -28,17 +29,18 @@ export default async function SignInPage({
 
   return (
     <div className="auth-minimal-page">
+      <Link href="/" className="auth-minimal-logo"><BrandLogo /></Link>
       <main className="auth-minimal-main">
         <section className="auth-minimal-card fade-in">
-          <Link href="/" className="auth-minimal-logo"><BrandLogo /></Link>
           <h1>Sign in</h1>
-          <p className="muted">Use your workspace account to continue.</p>
+          <p className="muted">Access your private video archive.</p>
 
           {params.verify === "done" && <p className="notice notice-good">Email verified. You can now sign in.</p>}
           {params.reset === "sent" && <p className="notice notice-good">Password reset email sent - check your inbox.</p>}
           {params.error && <p className="notice notice-bad">{errorMessage(params.error)}</p>}
 
           <SigninForm />
+          <AuthSocialOptions />
           <div className="auth-minimal-links">
             <Link href="/forgot-password">Forgot password?</Link>
             <Link href="/sign-up">Create an account</Link>

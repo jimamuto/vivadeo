@@ -8,9 +8,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const form = await request.formData();
+  const token = String(form.get("token") || "");
+  const password = String(form.get("password") || "");
+  if (password !== String(form.get("confirmPassword") || "")) {
+    return NextResponse.redirect(
+      publicAppUrl(request, `/reset-password?token=${encodeURIComponent(token)}&error=PASSWORD_MISMATCH`),
+    );
+  }
   const authResponse = await postAuthEndpoint(request, "/reset-password", {
-    token: String(form.get("token") || ""),
-    newPassword: String(form.get("password") || ""),
+    token,
+    newPassword: password,
   });
   if (authResponse.ok) {
     return NextResponse.redirect(publicAppUrl(request, "/sign-in?reset=done"));
@@ -23,6 +30,6 @@ export async function POST(request: NextRequest) {
     /* ignore */
   }
   return NextResponse.redirect(
-    publicAppUrl(request, `/reset-password?error=${encodeURIComponent(errorCode)}`),
+    publicAppUrl(request, `/reset-password?token=${encodeURIComponent(token)}&error=${encodeURIComponent(errorCode)}`),
   );
 }

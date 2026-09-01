@@ -4,47 +4,47 @@ import { BrandLogo } from "@/components/brand-logo";
 export default async function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; token?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, token = "" } = await searchParams;
 
   return (
-    <div className="shell page">
-      <div className="topbar">
-        <div className="brand"><BrandLogo /></div>
-        <Link href="/sign-in" className="button-secondary">
-          Back to sign in
-        </Link>
-      </div>
+    <div className="auth-minimal-page">
+      <Link href="/" className="auth-minimal-logo"><BrandLogo /></Link>
+      <main className="auth-minimal-main">
+        <section className="auth-minimal-card fade-in">
+          <h1>Choose a new password</h1>
+          <p className="muted">Create a new password for your account.</p>
 
-      <section className="card fade-in">
-        <h1>Choose a new password</h1>
-        <p className="muted">
-          Enter the reset token from your email to complete the password reset.
-        </p>
+          {(error || !token) && (
+            <p className="notice notice-bad" role="alert">
+              {!token || error === "INVALID_TOKEN"
+                ? "This reset link is invalid or has expired. Please request a new one."
+                : error === "PASSWORD_MISMATCH"
+                  ? "Passwords do not match."
+                  : `Reset failed: ${error}`}
+            </p>
+          )}
 
-        {error && (
-          <p style={{ color: "var(--color-error, #f87171)", marginBottom: 16 }}>
-            {error === "INVALID_TOKEN"
-              ? "This reset link is invalid or has expired. Please request a new one."
-              : `Reset failed: ${error}`}
-          </p>
-        )}
-
-        <form className="form" method="post" action="/api/auth/reset-password">
-          <div className="field">
-            <label htmlFor="token">Reset token</label>
-            <input id="token" name="token" type="text" required />
+          {token ? (
+            <form className="form" method="post" action="/api/auth/reset-password">
+              <input name="token" type="hidden" value={token} />
+              <div className="field">
+                <label htmlFor="password">New password</label>
+                <input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+              </div>
+              <div className="field">
+                <label htmlFor="confirmPassword">Confirm new password</label>
+                <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
+              </div>
+              <button className="button" type="submit">Reset password</button>
+            </form>
+          ) : null}
+          <div className="auth-minimal-links auth-minimal-links-centered">
+            <Link href="/sign-in">Back to sign in</Link>
           </div>
-          <div className="field">
-            <label htmlFor="password">New password</label>
-            <input id="password" name="password" type="password" required />
-          </div>
-          <button className="button" type="submit">
-            Reset password
-          </button>
-        </form>
-      </section>
+        </section>
+      </main>
     </div>
   );
 }

@@ -68,7 +68,7 @@ export function SignupForm({
         <label htmlFor="email">Email</label>
         <input id="email" name="email" type="email" autoComplete="email" defaultValue={verificationEmail} required />
       </div>
-      <div className="field">
+      <div className="field signup-password-field">
         <label htmlFor="password">Password</label>
         <div className="password-input-wrap">
           <input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} required />
@@ -87,7 +87,7 @@ export function SignupForm({
           </button>
         </div>
       </div>
-      <div className="field">
+      <div className="field signup-password-field">
         <label htmlFor="confirmPassword">Confirm password</label>
         <div className="password-input-wrap">
           <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" minLength={8} required />
