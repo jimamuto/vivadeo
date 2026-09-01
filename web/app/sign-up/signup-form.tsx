@@ -15,6 +15,8 @@ export function SignupForm({
   const [error, setError] = useState(initialError === "PASSWORD_MISMATCH" ? "Passwords do not match." : "");
   const [verificationSent, setVerificationSent] = useState(initialVerificationSent);
   const [resendSeconds, setResendSeconds] = useState(initialVerificationSent ? 60 : 0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (!resendSeconds) return;
@@ -63,20 +65,46 @@ export function SignupForm({
         <input id="name" name="name" type="text" autoComplete="name" required />
       </div>
       <div className="field">
-        <label htmlFor="workspace">Workspace name</label>
-        <input id="workspace" name="workspace" type="text" required />
-      </div>
-      <div className="field">
         <label htmlFor="email">Email</label>
         <input id="email" name="email" type="email" autoComplete="email" defaultValue={verificationEmail} required />
       </div>
       <div className="field">
         <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+        <div className="password-input-wrap">
+          <input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} required />
+          <button
+            className="password-visibility-toggle"
+            type="button"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((visible) => !visible)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-5 10-5 10 5 10 5-3.5 5-10 5S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="2.5" />
+              {showPassword ? <path d="m3 3 18 18" /> : null}
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="field">
         <label htmlFor="confirmPassword">Confirm password</label>
-        <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
+        <div className="password-input-wrap">
+          <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" minLength={8} required />
+          <button
+            className="password-visibility-toggle"
+            type="button"
+            aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
+            aria-pressed={showConfirmPassword}
+            onClick={() => setShowConfirmPassword((visible) => !visible)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.5-5 10-5 10 5 10 5-3.5 5-10 5S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="2.5" />
+              {showConfirmPassword ? <path d="m3 3 18 18" /> : null}
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="field auth-code-field">
         <label htmlFor="signup-code">Verification code</label>
@@ -94,8 +122,8 @@ export function SignupForm({
         </div>
       </div>
       {verificationSent ? <p className="notice notice-good" role="status">Code sent. Enter it above to verify your email.</p> : null}
-      <SubmitButton pendingLabel={verificationSent ? "Verifying..." : "Creating workspace..."}>
-        {verificationSent ? "Verify email" : "Create workspace"}
+      <SubmitButton pendingLabel={verificationSent ? "Verifying..." : "Creating account..."}>
+        {verificationSent ? "Verify email" : "Create account"}
       </SubmitButton>
     </form>
   );

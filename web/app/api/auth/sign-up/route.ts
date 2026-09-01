@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const form = await request.formData();
-  const workspaceName = String(form.get("workspace") || "New workspace");
+  const workspaceName = "Personal workspace";
   const email = String(form.get("email") || "").trim().toLowerCase();
   const wantsJson = request.headers.get("accept")?.includes("application/json") ?? false;
   const password = String(form.get("password") || "");
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   if (authResponse.ok) {
     const workspaceId =
-      workspace?.id || String(form.get("workspace") || "new-workspace");
+      workspace?.id || "new-workspace";
 
     if (workspace?.id && email) {
       await fetch(getBackendUrl(`/v1/workspaces/${encodeURIComponent(workspace.id)}/bootstrap-auth`), {

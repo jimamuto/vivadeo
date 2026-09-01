@@ -3307,6 +3307,28 @@ main { width: 100%; }
   background: var(--color-surface-solid);
 }
 
+.password-input-wrap { position: relative; }
+.password-input-wrap input { padding-right: 52px; }
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.password-visibility-toggle:hover { background: var(--color-action-subtle); color: var(--color-oxblood); }
+.password-visibility-toggle:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.password-visibility-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+
 .auth-minimal-card .button {
   width: 100%;
   min-height: 52px;
@@ -3322,6 +3344,7 @@ main { width: 100%; }
 }
 
 .auth-minimal-links-centered {
+  align-items: baseline;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -3339,6 +3362,7 @@ main { width: 100%; }
 
 .auth-code-row .button-secondary {
   min-width: 112px;
+  border-radius: 12px;
 }
 
 .auth-code-timer {

@@ -19,7 +19,7 @@ export default async function SignUpPage({
       <main className="auth-minimal-main">
         <section className="auth-minimal-card auth-minimal-card-signup fade-in">
           <Link href="/" className="auth-minimal-logo"><BrandLogo /></Link>
-          <h1>{params.verify === "sent" ? "Verify your email" : "Create your workspace"}</h1>
+          <h1>{params.verify === "sent" ? "Verify your email" : "Create your account"}</h1>
           <p className="muted">{params.verify === "sent" ? `Enter the six-digit code sent to ${params.email || "your email address"}.` : "Set up your private video archive."}</p>
           <SignupForm initialError={params.error} verificationEmail={params.email} verificationSent={params.verify === "sent"} />
           <div className="auth-minimal-links auth-minimal-links-centered">
