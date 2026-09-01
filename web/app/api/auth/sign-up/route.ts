@@ -12,13 +12,7 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const workspaceName = "Personal workspace";
   const email = String(form.get("email") || "").trim().toLowerCase();
-  const wantsJson = request.headers.get("accept")?.includes("application/json") ?? false;
   const password = String(form.get("password") || "");
-  const confirmPassword = String(form.get("confirmPassword") || "");
-  if (password !== confirmPassword) {
-    if (wantsJson) return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
-    return NextResponse.redirect(publicAppUrl(request, "/sign-up?error=PASSWORD_MISMATCH"));
-  }
   const backendResponse = await fetch(getBackendUrl("/v1/workspaces"), {
     method: "POST",
     headers: getBackendHeaders({
@@ -53,21 +47,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (wantsJson && emailVerificationEnabled) {
-      const response = NextResponse.json({ verificationSent: true });
-      response.cookies.set("vivadeo_workspace", workspaceId, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      });
-      return response;
-    }
-
     // If email verification is required, collect the code sent by email.
     // Otherwise (dev mode) send them straight to the dashboard.
     const destination = emailVerificationEnabled
-      ? `/sign-up?email=${encodeURIComponent(email)}&verify=sent`
+      ? `/verify-email?email=${encodeURIComponent(email)}&sent=1`
       : "/dashboard";
 
     const response = NextResponse.redirect(publicAppUrl(request, destination));
@@ -90,7 +73,6 @@ export async function POST(request: NextRequest) {
   } catch {
     // ignore parse failures
   }
-  if (wantsJson) return NextResponse.json({ error: errorCode }, { status: 400 });
   return NextResponse.redirect(
     publicAppUrl(request, `/sign-up?error=${encodeURIComponent(errorCode)}`),
   );

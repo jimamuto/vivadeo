@@ -3289,22 +3289,17 @@ main { width: 100%; }
 }
 
 .auth-minimal-card-signup {
-  width: min(100%, 450px);
-  gap: 8px;
-  padding: 20px 24px;
-  border-radius: 28px;
+  width: min(100%, 400px);
+  gap: 10px;
+  padding: 24px 28px;
 }
 .auth-minimal-card-signup h1 { font-size: clamp(1.6rem, 3vw, 1.8rem); }
 .auth-minimal-card-signup > .muted { margin: -4px 0 2px; font-size: 0.86rem; }
-.auth-minimal-card-signup .form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; }
-.auth-minimal-card-signup .form > * { grid-column: 1 / -1; }
-.auth-minimal-card-signup .form > .signup-password-field { grid-column: auto; }
-.auth-minimal-card-signup .field { gap: 3px; }
-.auth-minimal-card-signup .field label { font-size: 0.76rem; }
-.auth-minimal-card-signup .field input { min-height: 42px; padding-top: 9px; padding-bottom: 9px; }
-.auth-minimal-card-signup .button { min-height: 42px; margin-top: 1px; }
-.auth-minimal-card-signup .auth-social-options { gap: 8px; }
-.auth-minimal-card-signup .auth-social-buttons button { min-height: 40px; }
+.auth-minimal-card-signup .form { gap: 9px; }
+.auth-minimal-card-signup .field { gap: 4px; }
+.auth-minimal-card-signup .field label { font-size: 0.78rem; }
+.auth-minimal-card-signup .field input { min-height: 44px; padding-top: 9px; padding-bottom: 9px; }
+.auth-minimal-card-signup .button { min-height: 44px; margin-top: 2px; }
 
 .auth-minimal-logo {
   position: absolute;
@@ -3457,8 +3452,13 @@ main { width: 100%; }
   text-align: center;
 }
 
-.auth-verification-inline .verify-resend-form {
+.auth-verification-inline .verify-resend-form,
+.auth-minimal-card .verify-resend-form {
   margin-top: 0;
+}
+.auth-minimal-card .verify-resend-form .button-secondary {
+  width: 100%;
+  min-height: 48px;
 }
 
 .auth-minimal-links a {
@@ -3471,8 +3471,7 @@ main { width: 100%; }
   .auth-minimal-logo { top: 22px; left: 20px; }
   .auth-minimal-main { place-items: start center; padding: 88px 16px 48px; }
   .auth-minimal-card { padding: 30px 22px; border-radius: 28px; }
-  .auth-minimal-card-signup .form { grid-template-columns: 1fr; }
-  .auth-minimal-card-signup .form > .signup-password-field { grid-column: 1; }
+  .auth-minimal-card-signup { padding: 24px 22px; }
   .auth-minimal-links { align-items: center; flex-direction: column; }
   .chat-tool-row { align-items: stretch; flex-direction: column; }
   .chat-tool-row .button, .chat-tool-row .button-secondary { width: 100%; }

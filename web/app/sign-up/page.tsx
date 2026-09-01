@@ -9,7 +9,7 @@ import { AuthSocialOptions } from "@/components/auth-social-options";
 export default async function SignUpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; email?: string; verify?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (session?.user) redirect("/dashboard");
@@ -20,9 +20,9 @@ export default async function SignUpPage({
       <Link href="/" className="auth-minimal-logo"><BrandLogo /></Link>
       <main className="auth-minimal-main">
         <section className="auth-minimal-card auth-minimal-card-signup fade-in">
-          <h1>{params.verify === "sent" ? "Verify your email" : "Create your account"}</h1>
-          <p className="muted">{params.verify === "sent" ? `Enter the six-digit code sent to ${params.email || "your email address"}.` : "Set up your private video archive."}</p>
-          <SignupForm initialError={params.error} verificationEmail={params.email} verificationSent={params.verify === "sent"} />
+          <h1>Create account</h1>
+          <p className="muted">Set up your private video archive.</p>
+          <SignupForm initialError={params.error} />
           <AuthSocialOptions />
           <div className="auth-minimal-links auth-minimal-links-centered">
             <span className="muted">Already have an account?</span>
