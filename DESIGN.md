@@ -54,3 +54,9 @@ Do not add extra accent colors outside grain, blackboard, oxblood, and tan.
 - Use restrained depth: soft shadows and thin borders should support hierarchy, not decoration.
 - Avoid large decorative elements that compete with video/search content.
 - Buttons, filters, status chips, and rails should remain readable against creamy backgrounds.
+
+## UI Library Iteration
+
+- When adding a UI library during design iteration, install it in the running web container instead of rebuilding the frontend image.
+- Keep the dependency recorded in `web/package.json` and `web/package-lock.json`.
+- Rebuild the frontend only after the UI has been visually reviewed and approved, so iteration stays fast.

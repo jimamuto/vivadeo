@@ -2,6 +2,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
+import { LandingFaq } from "@/components/landing-faq";
+import { ScrollAnimation } from "@/components/ui/scroll-animation";
 import ScrollBaseAnimation from "@/components/ui/scroll-text-marque";
 
 const archiveTeams = "Studios   •   Broadcasters   •   Newsrooms   •   Film archives   •   Sports media   •   Universities   •   Creative agencies   •";
@@ -102,53 +104,53 @@ export default async function HomePage() {
       </section>
 
       <section className="landing-solutions" id="about">
-        <div className="landing-solutions-heading">
+        <ScrollAnimation className="landing-solutions-heading">
           <p>Solutions</p>
           <h2>Solve your team&apos;s<br />biggest footage challenges.</h2>
-        </div>
+        </ScrollAnimation>
         <div className="landing-solution-points">
           {solutions.map((solution) => (
-            <article className="landing-solution-point" key={solution.title}>
+            <ScrollAnimation as="article" className="landing-solution-point" key={solution.title}>
               <span aria-hidden="true">{solution.icon}</span>
               <div>
                 <h3>{solution.title}</h3>
                 <p>{solution.body}</p>
               </div>
-            </article>
+            </ScrollAnimation>
           ))}
         </div>
-        <div className="landing-product-stage">
+        <ScrollAnimation className="landing-product-stage">
           <img src="/images/landing/dashboard-overview.webp" alt="Vivadeo archive search workspace" />
           <span className="landing-product-time" aria-hidden="true">00:42</span>
           <span className="landing-product-check" aria-hidden="true">✓</span>
-        </div>
+        </ScrollAnimation>
       </section>
 
       <section className="landing-connections">
-        <div className="landing-section-heading">
+        <ScrollAnimation className="landing-section-heading">
           <p>Connections</p>
           <h2>Bring your video workflow together.</h2>
           <span>Connect the tools around your archive without fragmenting search and review.</span>
-        </div>
+        </ScrollAnimation>
         <div className="landing-connection-map">
           <div className="landing-connection-core"><img src="/images/connections/vivadeo-mark.webp" alt="Vivadeo" /></div>
           {connections.map((connection) => (
-            <article className="landing-connection" key={connection.name}>
+            <ScrollAnimation as="article" className="landing-connection" key={connection.name}>
               <span><img src={connection.icon} alt={`${connection.name} logo`} /></span>
               <h3>{connection.name}</h3>
-            </article>
+            </ScrollAnimation>
           ))}
         </div>
       </section>
 
       <section className="landing-stories">
-        <div className="landing-section-heading">
+        <ScrollAnimation className="landing-section-heading">
           <p>Illustrative team stories</p>
           <h2>Built for people who live in footage.</h2>
-        </div>
+        </ScrollAnimation>
         <div className="landing-stories-grid">
           {teamStories.map((story) => (
-            <article className="landing-story" key={story.role}>
+            <ScrollAnimation as="article" className="landing-story" key={story.role}>
               <p>{story.body}</p>
               <div>
                 <img className="landing-story-avatar" src={story.image} alt="" />
@@ -157,23 +159,23 @@ export default async function HomePage() {
                   <small>{story.role}</small>
                 </span>
               </div>
-            </article>
+            </ScrollAnimation>
           ))}
-          <div className="landing-story-visual">
+          <ScrollAnimation className="landing-story-visual">
             <img src="/images/testimonials/featured-portrait.webp" alt="Video editor working in a film archive" />
             <span>Watch the story</span>
-          </div>
+          </ScrollAnimation>
         </div>
       </section>
 
       <section className="landing-pricing" id="pricing">
-        <div className="landing-pricing-heading">
+        <ScrollAnimation className="landing-pricing-heading">
           <p>Pricing</p>
           <h2>Simple plans for every archive.</h2>
-        </div>
+        </ScrollAnimation>
         <div className="landing-pricing-grid">
           {plans.map((plan) => (
-            <article className={`landing-plan${plan.featured ? " landing-plan-featured" : ""}`} key={plan.name}>
+            <ScrollAnimation as="article" className={`landing-plan${plan.featured ? " landing-plan-featured" : ""}`} key={plan.name}>
               <div>
                 <h3>{plan.name}</h3>
                 <p>{plan.description}</p>
@@ -186,13 +188,15 @@ export default async function HomePage() {
               <ul>
                 {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
               </ul>
-            </article>
+            </ScrollAnimation>
           ))}
         </div>
       </section>
 
+      <LandingFaq />
+
       <footer className="landing-footer" id="contact">
-        <div className="landing-footer-top">
+        <ScrollAnimation className="landing-footer-top">
           <div>
             <Link href="/" className="landing-footer-brand"><BrandLogo /></Link>
             <h2>Find more in every frame.</h2>
@@ -209,14 +213,14 @@ export default async function HomePage() {
             <Link href="#pricing">Pricing</Link>
             <Link href={signedIn ? "/dashboard" : "/sign-up"}>Get started</Link>
           </nav>
-        </div>
-        <div className="landing-footer-art" aria-hidden="true">
+        </ScrollAnimation>
+        <ScrollAnimation className="landing-footer-art" aria-hidden="true">
           <span>⌕</span><span>00:42</span><span>▶</span><span>CC</span><span>✓</span>
-        </div>
-        <div className="landing-footer-bottom">
+        </ScrollAnimation>
+        <ScrollAnimation className="landing-footer-bottom">
           <span>© {new Date().getFullYear()} Vivadeo</span>
           <span>Video search and review for workspace teams.</span>
-        </div>
+        </ScrollAnimation>
       </footer>
     </div>
   );
