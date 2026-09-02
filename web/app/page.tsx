@@ -95,7 +95,7 @@ export default async function HomePage() {
         </div>
         <div className="landing-hero-marquee" aria-label="Built for video teams">
           <p>Built for video teams</p>
-          <ScrollBaseAnimation baseVelocity={3} scrollDependent clasname="landing-marquee-text">
+          <ScrollBaseAnimation baseVelocity={2} scrollDependent clasname="landing-marquee-text">
             {archiveTeams}
           </ScrollBaseAnimation>
         </div>
