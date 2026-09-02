@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
 
+const archiveTeams = ["Studios", "Broadcasters", "Newsrooms", "Film archives", "Sports media", "Universities", "Creative agencies"];
+
 const services = [
   { title: "Search", body: "Ask about footage and get transcript-grounded answers with timestamp citations.", meta: "Cited answers" },
   { title: "Ingest", body: "Upload files or queue URLs, then watch every indexing stage move toward ready.", meta: "Live pipeline" },
@@ -15,10 +17,6 @@ const services = [
 export default async function HomePage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const signedIn = Boolean(session?.user);
-  const profileInitial = (session?.user?.name || session?.user?.email || "V")
-    .trim()
-    .slice(0, 1)
-    .toUpperCase();
 
   return (
     <div className="landing-page">
@@ -29,22 +27,15 @@ export default async function HomePage() {
             <Link href="/" className="nav-link">Home</Link>
             <Link href="#about" className="nav-link">About</Link>
             <Link href="#features" className="nav-link">Services</Link>
-            <Link href="#contact" className="nav-link">Contact</Link>
           </div>
           <div className="nav-spacer" />
           <div className="nav-actions">
             {signedIn ? (
-              <>
-                <Link href="/dashboard" className="button-secondary">Console</Link>
-                <Link href="/settings" className="nav-user" aria-label="Profile">{profileInitial}</Link>
-                <form action="/api/auth/sign-out" method="post">
-                  <button className="nav-logout" type="submit">Log out</button>
-                </form>
-              </>
+              <Link href="/dashboard" className="button-secondary">Console</Link>
             ) : (
               <>
                 <Link href="/sign-in" className="button-secondary">Sign in</Link>
-                <Link href="/sign-up" className="button">Sign Up</Link>
+                <Link href="#contact" className="button">Contact</Link>
               </>
             )}
           </div>
@@ -53,11 +44,21 @@ export default async function HomePage() {
 
       <section className="landing-hero fade-in">
         <div className="landing-hero-copy">
-          <h1>Find the moment.<br /><span>Keep the story moving.</span></h1>
+          <h1>Search less.<br /><span>Find more.</span></h1>
           <p>Search your video archive, review cited moments, and move from question to footage in one place.</p>
           <div className="landing-hero-actions">
-            <Link href={signedIn ? "/dashboard" : "/sign-up"}>Open console</Link>
-            <Link href="#features">See services</Link>
+            <Link href={signedIn ? "/dashboard" : "/sign-up"}>{signedIn ? "Open console" : "Get started for free"}</Link>
+            <Link href="#contact">Talk to sales team</Link>
+          </div>
+        </div>
+        <div className="landing-hero-marquee" aria-label="Built for video teams">
+          <p>Built for video teams</p>
+          <div className="landing-marquee-track">
+            {[0, 1].map((copy) => (
+              <div aria-hidden={copy === 1} className="landing-marquee-group" key={copy}>
+                {archiveTeams.map((team) => <span key={team}>{team}</span>)}
+              </div>
+            ))}
           </div>
         </div>
       </section>
