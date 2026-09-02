@@ -2,8 +2,9 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
+import ScrollBaseAnimation from "@/components/ui/scroll-text-marque";
 
-const archiveTeams = ["Studios", "Broadcasters", "Newsrooms", "Film archives", "Sports media", "Universities", "Creative agencies"];
+const archiveTeams = "Studios   •   Broadcasters   •   Newsrooms   •   Film archives   •   Sports media   •   Universities   •   Creative agencies   •";
 
 const plans = [
   {
@@ -94,13 +95,9 @@ export default async function HomePage() {
         </div>
         <div className="landing-hero-marquee" aria-label="Built for video teams">
           <p>Built for video teams</p>
-          <div className="landing-marquee-track">
-            {[0, 1].map((copy) => (
-              <div aria-hidden={copy === 1} className="landing-marquee-group" key={copy}>
-                {archiveTeams.map((team) => <span key={team}>{team}</span>)}
-              </div>
-            ))}
-          </div>
+          <ScrollBaseAnimation baseVelocity={3} scrollDependent clasname="landing-marquee-text">
+            {archiveTeams}
+          </ScrollBaseAnimation>
         </div>
       </section>
 
