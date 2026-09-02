@@ -66,9 +66,9 @@ export default async function HomePage() {
         <div className="topbar-shell">
           <Link href="/" className="brand"><BrandLogo /></Link>
           <div className="nav-center">
-            <Link href="/" className="nav-link">Home</Link>
             <Link href="#about" className="nav-link">About</Link>
             <Link href="#about" className="nav-link">Services</Link>
+            <Link href="#pricing" className="nav-link">Pricing</Link>
           </div>
           <div className="nav-spacer" />
           <div className="nav-actions">
