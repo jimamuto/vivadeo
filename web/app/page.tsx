@@ -49,11 +49,10 @@ const teamStories = [
   { image: "/images/testimonials/newsroom-researcher.webp", name: "Nadia Okafor", role: "Newsroom researcher", body: "The citations make answers useful in an editorial workflow. I can verify the source moment before anything moves forward." },
 ];
 
-const capabilities = [
-  { icon: "⌕", title: "Answers stay grounded", body: "Every answer points back to cited moments in the source footage." },
-  { icon: "↥", title: "Every stage stays visible", body: "Follow ingest work from upload through indexing without losing context." },
-  { icon: "◷", title: "One archive, one workflow", body: "Search, review, and operational activity stay together in one workspace." },
-  { icon: "✓", title: "Workspace access stays clear", body: "Keep team permissions and archive activity organized by workspace." },
+const solutions = [
+  { icon: "⌕", title: "Find the right moment", body: "Ask a question and move directly to the relevant part of your archive." },
+  { icon: "✓", title: "Keep evidence attached", body: "Review source context and timestamps before footage moves forward." },
+  { icon: "◎", title: "Work from one shared view", body: "Give every teammate the same place to search, review, and organize." },
 ];
 
 export default async function HomePage() {
@@ -68,7 +67,7 @@ export default async function HomePage() {
           <div className="nav-center">
             <Link href="/" className="nav-link">Home</Link>
             <Link href="#about" className="nav-link">About</Link>
-            <Link href="#features" className="nav-link">Services</Link>
+            <Link href="#about" className="nav-link">Services</Link>
           </div>
           <div className="nav-spacer" />
           <div className="nav-actions">
@@ -105,19 +104,26 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="landing-capabilities" id="features">
-        <div className="landing-capabilities-heading">
-          <p>Built around the footage</p>
-          <h2>Simplify archive work<br />for modern teams.</h2>
+      <section className="landing-solutions" id="about">
+        <div className="landing-solutions-heading">
+          <p>Solutions</p>
+          <h2>Solve your team&apos;s<br />biggest footage challenges.</h2>
         </div>
-        <div className="landing-capabilities-grid">
-          {capabilities.map((capability) => (
-            <article className="landing-capability" key={capability.title}>
-              <span aria-hidden="true">{capability.icon}</span>
-              <h3>{capability.title}</h3>
-              <p>{capability.body}</p>
+        <div className="landing-solution-points">
+          {solutions.map((solution) => (
+            <article className="landing-solution-point" key={solution.title}>
+              <span aria-hidden="true">{solution.icon}</span>
+              <div>
+                <h3>{solution.title}</h3>
+                <p>{solution.body}</p>
+              </div>
             </article>
           ))}
+        </div>
+        <div className="landing-product-stage">
+          <img src="/images/landing/dashboard-overview.webp" alt="Vivadeo archive search workspace" />
+          <span className="landing-product-time" aria-hidden="true">00:42</span>
+          <span className="landing-product-check" aria-hidden="true">✓</span>
         </div>
       </section>
 
@@ -202,7 +208,7 @@ export default async function HomePage() {
           </nav>
           <nav aria-label="Company">
             <h3>Company</h3>
-            <Link href="#features">About</Link>
+            <Link href="#about">About</Link>
             <Link href="#pricing">Pricing</Link>
             <Link href={signedIn ? "/dashboard" : "/sign-up"}>Get started</Link>
           </nav>
