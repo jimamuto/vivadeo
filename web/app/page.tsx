@@ -5,13 +5,55 @@ import { BrandLogo } from "@/components/brand-logo";
 
 const archiveTeams = ["Studios", "Broadcasters", "Newsrooms", "Film archives", "Sports media", "Universities", "Creative agencies"];
 
-const services = [
-  { title: "Search", body: "Ask about footage and get transcript-grounded answers with timestamp citations.", meta: "Cited answers" },
-  { title: "Ingest", body: "Upload files or queue URLs, then watch every indexing stage move toward ready.", meta: "Live pipeline" },
-  { title: "Clip review", body: "Use cited moments as the starting point for faster editorial review.", meta: "Evidence first" },
-  { title: "Workspaces", body: "Keep teams, jobs, libraries, and permissions isolated by organization.", meta: "Role aware" },
-  { title: "Automation", body: "Background processing keeps heavier video tasks off the front end.", meta: "Async jobs" },
-  { title: "Admin", body: "Invite users, switch workspaces, and review operational settings.", meta: "Controlled ops" },
+const plans = [
+  {
+    name: "Free",
+    description: "For exploring a searchable video archive.",
+    price: "Free",
+    detail: "Start with the essential search workflow.",
+    features: ["Video ingest", "Transcript-grounded search", "Timestamp citations"],
+    action: "Get started",
+  },
+  {
+    name: "Pro",
+    description: "For teams reviewing footage every day.",
+    price: "Pro",
+    detail: "Advanced search for collaborative work.",
+    features: ["Everything in Free", "Premium answers", "Team workspace controls", "Transcript reindexing"],
+    action: "Choose Pro",
+    featured: true,
+  },
+  {
+    name: "Enterprise",
+    description: "For organizations with broader rollout needs.",
+    price: "Custom",
+    detail: "A tailored path for larger teams.",
+    features: ["Everything in Pro", "Multiple workspace operations", "Administrative controls", "Rollout support"],
+    action: "Contact us",
+  },
+];
+
+const connections = [
+  { icon: "/images/connections/google-drive.svg", name: "Google Drive" },
+  { icon: "/images/connections/dropbox.svg", name: "Dropbox" },
+  { icon: "/images/connections/one-drive.svg", name: "OneDrive" },
+  { icon: "/images/connections/slack.svg", name: "Slack" },
+  { icon: "/images/connections/notion.svg", name: "Notion" },
+  { icon: "/images/connections/premiere-pro.svg", name: "Adobe Premiere Pro" },
+];
+
+const teamStories = [
+  { image: "/images/testimonials/documentary-editor.webp", name: "Maya Chen", role: "Documentary editor", body: "I can ask about an interview and jump straight to the cited moment. Review starts with the footage instead of another search." },
+  { image: "/images/testimonials/archive-manager.webp", name: "Elena Ward", role: "Archive manager", body: "Vivadeo keeps ingest progress, source context, and workspace access together. I always know what is ready and what needs attention." },
+  { image: "/images/testimonials/sports-producer.webp", name: "Noah Brooks", role: "Sports producer", body: "Finding the exact play used to mean scrubbing through entire recordings. Now I can return to the relevant time range immediately." },
+  { image: "/images/testimonials/newsroom-researcher.webp", name: "Nadia Okafor", role: "Newsroom researcher", body: "The citations make answers useful in an editorial workflow. I can verify the source moment before anything moves forward." },
+];
+
+const capabilities = [
+  { icon: "⌕", title: "Answers stay grounded", body: "Every answer points back to cited moments in the source footage." },
+  { icon: "↥", title: "Every stage stays visible", body: "Follow ingest work from upload through indexing without losing context." },
+  { icon: "◷", title: "One archive, one workflow", body: "Search, review, and operational activity stay together in one workspace." },
+  { icon: "✓", title: "Workspace access stays clear", body: "Keep team permissions and archive activity organized by workspace." },
 ];
 
 export default async function HomePage() {
@@ -44,7 +86,7 @@ export default async function HomePage() {
 
       <section className="landing-hero fade-in">
         <div className="landing-hero-copy">
-          <h1>Search less.<br /><span>Find more.</span></h1>
+          <h1>Search less,<br /><span>find more.</span></h1>
           <p>Search your video archive, review cited moments, and move from question to footage in one place.</p>
           <div className="landing-hero-actions">
             <Link href={signedIn ? "/dashboard" : "/sign-up"}>{signedIn ? "Open console" : "Get started for free"}</Link>
@@ -63,124 +105,114 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="service-band" id="features">
-        <div className="section-heading">
-          <p className="eyebrow eyebrow-dark">Efficient and integrated video services</p>
-          <h2>Everything the archive needs, in one system.</h2>
-          <p>Search, ingest, clip, and administer without fragmenting the workflow.</p>
+      <section className="landing-capabilities" id="features">
+        <div className="landing-capabilities-heading">
+          <p>Built around the footage</p>
+          <h2>Simplify archive work<br />for modern teams.</h2>
         </div>
-        <div className="service-grid">
-          {services.map((service) => (
-            <article className="service-card" key={service.title}>
-              <span>{service.meta}</span>
-              <h3>{service.title}</h3>
-              <p>{service.body}</p>
+        <div className="landing-capabilities-grid">
+          {capabilities.map((capability) => (
+            <article className="landing-capability" key={capability.title}>
+              <span aria-hidden="true">{capability.icon}</span>
+              <h3>{capability.title}</h3>
+              <p>{capability.body}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="benefits-band">
-        <div className="benefits-visual workflow-preview" aria-label="Indexing workflow preview">
-          <div className="workflow-card workflow-card-active">
-            <span>01</span>
-            <strong>Upload source</strong>
-            <p>Drop a video or queue a permitted URL.</p>
+      <section className="landing-connections">
+        <div className="landing-section-heading">
+          <p>Connections</p>
+          <h2>Bring your video workflow together.</h2>
+          <span>Connect the tools around your archive without fragmenting search and review.</span>
+        </div>
+        <div className="landing-connection-map">
+          <div className="landing-connection-core"><img src="/images/connections/vivadeo-mark.webp" alt="Vivadeo" /></div>
+          {connections.map((connection) => (
+            <article className="landing-connection" key={connection.name}>
+              <span><img src={connection.icon} alt={`${connection.name} logo`} /></span>
+              <h3>{connection.name}</h3>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-stories">
+        <div className="landing-section-heading">
+          <p>Illustrative team stories</p>
+          <h2>Built for people who live in footage.</h2>
+        </div>
+        <div className="landing-stories-grid">
+          {teamStories.map((story) => (
+            <article className="landing-story" key={story.role}>
+              <p>{story.body}</p>
+              <div>
+                <img className="landing-story-avatar" src={story.image} alt="" />
+                <span className="landing-story-person">
+                  <strong>{story.name}</strong>
+                  <small>{story.role}</small>
+                </span>
+              </div>
+            </article>
+          ))}
+          <div className="landing-story-visual">
+            <img src="/images/testimonials/featured-portrait.webp" alt="Video editor working in a film archive" />
+            <span>Watch the story</span>
           </div>
-          <div className="workflow-card">
-            <span>02</span>
-            <strong>Index transcript</strong>
-            <p>Chunks, embeddings, and job status stay visible.</p>
+        </div>
+      </section>
+
+      <section className="landing-pricing" id="pricing">
+        <div className="landing-pricing-heading">
+          <p>Pricing</p>
+          <h2>Simple plans for every archive.</h2>
+        </div>
+        <div className="landing-pricing-grid">
+          {plans.map((plan) => (
+            <article className={`landing-plan${plan.featured ? " landing-plan-featured" : ""}`} key={plan.name}>
+              <div>
+                <h3>{plan.name}</h3>
+                <p>{plan.description}</p>
+              </div>
+              <div className="landing-plan-price">
+                <strong>{plan.price}</strong>
+                <span>{plan.detail}</span>
+              </div>
+              <Link href={plan.name === "Enterprise" ? "#contact" : signedIn ? "/dashboard" : "/sign-up"}>{plan.action}</Link>
+              <ul>
+                {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <footer className="landing-footer" id="contact">
+        <div className="landing-footer-top">
+          <div>
+            <Link href="/" className="landing-footer-brand"><BrandLogo /></Link>
+            <h2>Find more in every frame.</h2>
           </div>
-          <div className="workflow-card">
-            <span>03</span>
-            <strong>Ask and cite</strong>
-            <p>Answers point back to the exact footage range.</p>
-          </div>
-          <div className="workflow-rail"><span /></div>
+          <nav aria-label="Product">
+            <h3>Product</h3>
+            <Link href="/search">Search</Link>
+            <Link href="/dashboard/library">Library</Link>
+            <Link href="/jobs">Jobs</Link>
+          </nav>
+          <nav aria-label="Company">
+            <h3>Company</h3>
+            <Link href="#features">About</Link>
+            <Link href="#pricing">Pricing</Link>
+            <Link href={signedIn ? "/dashboard" : "/sign-up"}>Get started</Link>
+          </nav>
         </div>
-        <div className="benefits-copy">
-          <p className="eyebrow">Key benefits</p>
-          <h2>Search, clip, and manage footage with less friction.</h2>
-          <ul>
-            <li><strong>Accurate retrieval</strong> Text and image search share one embedding path.</li>
-            <li><strong>Faster review</strong> Inline clip preview keeps context on screen.</li>
-            <li><strong>Cleaner ops</strong> Workspace controls stay visible and scannable.</li>
-          </ul>
+        <div className="landing-footer-art" aria-hidden="true">
+          <span>⌕</span><span>00:42</span><span>▶</span><span>CC</span><span>✓</span>
         </div>
-      </section>
-
-      <section className="pricing-band">
-        <div className="section-heading section-heading-dark">
-          <p className="eyebrow eyebrow-dark">Tailored plans</p>
-          <h2>Pricing for one workspace or many.</h2>
-          <p>Pick a shape that fits your team, then scale without changing workflows.</p>
-        </div>
-        <div className="pricing-grid">
-          <article className="pricing-card">
-            <h3>Studio</h3>
-            <p>For small teams getting started with searchable archives.</p>
-            <strong>Launch</strong>
-            <span>Simple onboarding and a focused workspace.</span>
-            <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary pricing-cta">Get started</Link>
-          </article>
-          <article className="pricing-card">
-            <h3>Archive</h3>
-            <p>For larger teams that need multiple workspaces and tighter controls.</p>
-            <strong>Custom</strong>
-            <span>Audit, admin, and rollout support.</span>
-            <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary pricing-cta">Talk to sales</Link>
-          </article>
-        </div>
-        <div className="pricing-pro">
-          <h3>Professional</h3>
-          <p>Designed for flexibility, with advanced tools for custom tailoring.</p>
-          <Link href={signedIn ? "/dashboard" : "/sign-in"} className="button pricing-cta">Open console</Link>
-        </div>
-      </section>
-
-      <section className="integration-band" id="contact">
-        <div>
-          <h2>Empowering teams with seamless integrations.</h2>
-          <p>Vivadeo keeps search, review, and workspace context synchronized.</p>
-          <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button-secondary">Work with us</Link>
-        </div>
-        <div className="integration-orbit">
-          <span>API</span>
-          <span>Storage</span>
-          <span>Review</span>
-          <span>Auth</span>
-          <span>Jobs</span>
-          <span>Media</span>
-        </div>
-      </section>
-
-      <section className="cta-band">
-        <h2>From idea to production in days.</h2>
-        <p>Ship searchable video workflows without rebuilding the stack around them.</p>
-        <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button">Start free</Link>
-      </section>
-
-      <footer className="footer">
-        <div>
-          <Link href="/" className="brand"><BrandLogo /></Link>
-          <p>Video search and clip review for workspace teams.</p>
-        </div>
-        <div>
-          <h4>Company</h4>
-          <a href="#about">About us</a>
-          <a href="#about">Customers</a>
-          <a href="#features">Newsroom</a>
-        </div>
-        <div>
-          <h4>Products</h4>
-          <a href="/dashboard">Search</a>
-          <a href="/dashboard">Clips</a>
-          <a href="/dashboard">Admin</a>
-        </div>
-        <div>
-          <h4>Get in touch</h4>
-          <a href="mailto:hello@vivadeo.example">hello@vivadeo.example</a>
+        <div className="landing-footer-bottom">
+          <span>© {new Date().getFullYear()} Vivadeo</span>
+          <span>Video search and review for workspace teams.</span>
         </div>
       </footer>
     </div>
