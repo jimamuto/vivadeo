@@ -21,7 +21,7 @@ export default async function HomePage() {
     .toUpperCase();
 
   return (
-    <div className="shell page">
+    <div className="landing-page">
       <header className="topbar">
         <div className="topbar-shell">
           <Link href="/" className="brand"><BrandLogo /></Link>
@@ -51,43 +51,13 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <section className="hero hero-home fade-in">
-        <div className="hero-copy">
-          <p className="eyebrow">Transcript-grounded video search</p>
-          <h1>Search footage with clarity and keep review in one place.</h1>
-          <p className="hero-lead">
-            Vivadeo gives teams a clear place to search footage, review cited moments, and keep archive work moving.
-          </p>
-          <div className="hero-actions">
-            <Link href={signedIn ? "/dashboard" : "/sign-up"} className="button">Open console</Link>
-            <Link href="#features" className="button-secondary">See services</Link>
-          </div>
-        </div>
-        <div className="hero-product-demo" aria-label="Vivadeo workflow preview">
-          <div className="demo-toolbar">
-            <span className="demo-live-dot" />
-            <strong>Archive search</strong>
-            <span>Workspace ready</span>
-          </div>
-          <div className="demo-question">What did the team decide about launch timing?</div>
-          <div className="demo-answer">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="demo-citation demo-citation-one">
-            <strong>00:42-01:08</strong>
-            <span>Launch shifts after final accessibility pass.</span>
-          </div>
-          <div className="demo-citation demo-citation-two">
-            <strong>03:14-03:38</strong>
-            <span>Archive owner confirms review window.</span>
-          </div>
-          <div className="demo-pipeline" aria-label="Ingest pipeline stages">
-            <span>Upload</span>
-            <span>Chunk</span>
-            <span>Embed</span>
-            <span>Ready</span>
+      <section className="landing-hero fade-in">
+        <div className="landing-hero-copy">
+          <h1>Find the moment.<br /><span>Keep the story moving.</span></h1>
+          <p>Search your video archive, review cited moments, and move from question to footage in one place.</p>
+          <div className="landing-hero-actions">
+            <Link href={signedIn ? "/dashboard" : "/sign-up"}>Open console</Link>
+            <Link href="#features">See services</Link>
           </div>
         </div>
       </section>

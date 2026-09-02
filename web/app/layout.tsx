@@ -1,18 +1,5 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter, Manrope } from "next/font/google";
-
-const display = Manrope({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-});
-
-const ui = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-ui",
-});
 
 export const metadata: Metadata = {
   title: "Vivadeo",
@@ -21,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${ui.variable}`}>
+    <html lang="en">
       <body>
         <main>{children}</main>
       </body>
