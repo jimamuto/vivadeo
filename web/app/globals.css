@@ -876,7 +876,7 @@ main { width: 100%; }
 }
 
 .landing-page .topbar {
-  position: absolute;
+  position: fixed;
   inset: 20px 0 auto;
   z-index: 50;
   margin: 0;
