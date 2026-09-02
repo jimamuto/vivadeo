@@ -1230,8 +1230,9 @@ main { width: 100%; }
 }
 
 @keyframes solution-reveal {
-  from { opacity: 0; transform: translateY(42px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translateY(42px) scale(0.985); }
+  18%, 82% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-42px) scale(0.985); }
 }
 
 @supports (animation-timeline: view()) {
@@ -1240,7 +1241,7 @@ main { width: 100%; }
   .landing-product-stage {
     animation: solution-reveal linear both;
     animation-timeline: view();
-    animation-range: entry 5% cover 30%;
+    animation-range: entry 0% exit 100%;
   }
 }
 
@@ -1330,6 +1331,12 @@ main { width: 100%; }
   box-shadow: 0 18px 34px rgba(86, 86, 86, 0.16);
   overflow: hidden;
   transform: translate(-50%, -50%);
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 280ms ease;
+}
+
+.landing-connection-core:hover {
+  box-shadow: 0 24px 46px rgba(118, 50, 63, 0.22);
+  transform: translate(-50%, -50%) scale(1.08) rotate(3deg);
 }
 
 .landing-connection-core img {
@@ -1339,6 +1346,7 @@ main { width: 100%; }
 }
 
 .landing-connection {
+  position: relative;
   min-height: 210px;
   display: grid;
   place-items: center;
@@ -1346,6 +1354,14 @@ main { width: 100%; }
   gap: 14px;
   background: var(--color-surface-solid);
   text-align: center;
+  transition: translate 260ms cubic-bezier(0.16, 1, 0.3, 1), background 260ms ease, box-shadow 260ms ease;
+}
+
+.landing-connection:hover {
+  z-index: 2;
+  translate: 0 -8px;
+  background: #f7f3ee;
+  box-shadow: 0 24px 48px rgba(86, 86, 86, 0.16);
 }
 
 .landing-connection > span {
@@ -1359,6 +1375,13 @@ main { width: 100%; }
   box-shadow: 0 12px 26px rgba(86, 86, 86, 0.09);
   color: var(--oxblood);
   font-weight: 700;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), border-color 260ms ease, box-shadow 260ms ease;
+}
+
+.landing-connection:hover > span {
+  border-color: rgba(118, 50, 63, 0.32);
+  box-shadow: 0 16px 32px rgba(118, 50, 63, 0.16);
+  transform: scale(1.08) rotate(-3deg);
 }
 
 .landing-connection img {
@@ -1366,7 +1389,10 @@ main { width: 100%; }
   height: 34px;
   object-fit: contain;
   opacity: 0.82;
+  transition: opacity 260ms ease, transform 260ms ease;
 }
+
+.landing-connection:hover img { opacity: 1; transform: scale(1.08); }
 
 .landing-connection h3 { margin: 0; font-size: 1rem; font-weight: 550; }
 .landing-stories { background: #f7f3ee; }
@@ -1386,6 +1412,15 @@ main { width: 100%; }
   border: 1px solid rgba(86, 86, 86, 0.14);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.48);
+  transition: translate 280ms cubic-bezier(0.16, 1, 0.3, 1), border-color 280ms ease, background 280ms ease, box-shadow 280ms ease;
+}
+
+.landing-story:hover,
+.landing-story-visual:hover {
+  translate: 0 -8px;
+  border-color: rgba(118, 50, 63, 0.26);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 24px 52px rgba(86, 86, 86, 0.14);
 }
 
 .landing-story {
@@ -1402,6 +1437,12 @@ main { width: 100%; }
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 280ms ease;
+}
+
+.landing-story:hover .landing-story-avatar {
+  box-shadow: 0 8px 18px rgba(86, 86, 86, 0.2);
+  transform: scale(1.1);
 }
 
 .landing-story-person { display: grid; gap: 2px; }
@@ -1424,7 +1465,10 @@ main { width: 100%; }
   height: 100%;
   display: block;
   object-fit: cover;
+  transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.landing-story-visual:hover img { transform: scale(1.035); }
 
 .landing-story-visual span {
   position: absolute;
@@ -1445,7 +1489,7 @@ main { width: 100%; }
   .landing-story-visual {
     animation: landing-section-enter linear both;
     animation-timeline: view();
-    animation-range: entry 5% cover 30%;
+    animation-range: entry 0% exit 100%;
   }
 }
 
@@ -1507,6 +1551,20 @@ main { width: 100%; }
   border: 1px solid rgba(86, 86, 86, 0.14);
   border-radius: 24px;
   background: rgba(215, 206, 199, 0.12);
+  box-shadow: 0 10px 28px rgba(86, 86, 86, 0.05);
+  transition: translate 280ms cubic-bezier(0.16, 1, 0.3, 1), border-color 280ms ease, background 280ms ease, box-shadow 280ms ease;
+}
+
+.landing-plan:hover {
+  translate: 0 -9px;
+  border-color: rgba(118, 50, 63, 0.3);
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 28px 60px rgba(86, 86, 86, 0.15);
+}
+
+.landing-plan-featured:hover {
+  background: var(--oxblood);
+  box-shadow: 0 34px 70px rgba(118, 50, 63, 0.28);
 }
 
 .landing-plan-featured {
@@ -1560,6 +1618,12 @@ main { width: 100%; }
   color: #f7f3ee;
   font-weight: 650;
   text-align: center;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.landing-plan > a:hover {
+  box-shadow: 0 10px 22px rgba(45, 36, 34, 0.2);
+  transform: translateY(-2px);
 }
 
 .landing-plan-featured > a {
@@ -1666,8 +1730,9 @@ main { width: 100%; }
 }
 
 @keyframes landing-section-enter {
-  from { opacity: 0; transform: translate3d(0, 24px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
+  0% { opacity: 0; transform: translate3d(0, 30px, 0); }
+  18%, 82% { opacity: 1; transform: translate3d(0, 0, 0); }
+  100% { opacity: 0; transform: translate3d(0, -30px, 0); }
 }
 
 @supports (animation-timeline: view()) {
@@ -1678,13 +1743,8 @@ main { width: 100%; }
   .landing-footer-bottom {
     animation: landing-section-enter linear both;
     animation-timeline: view();
-    animation-range: entry 5% cover 28%;
+    animation-range: entry 0% exit 100%;
   }
-
-  .landing-plan:nth-child(2) { animation-range: entry 10% cover 32%; }
-  .landing-plan:nth-child(3) { animation-range: entry 15% cover 36%; }
-  .landing-footer-art { animation-range: entry 10% cover 38%; }
-  .landing-footer-bottom { animation-range: entry 15% cover 42%; }
 }
 
 @media (max-width: 860px) {
