@@ -390,7 +390,7 @@ function normalizeThread(payload: { id: string; title: string; updated_at: strin
   const currentMessageId = payload.current_message_id ?? messages.at(-1)?.id ?? null;
   return {
     id: payload.id,
-    title: payload.title,
+    title: payload.title === "New thread" ? "New chat" : payload.title,
     updatedAt: payload.updated_at,
     messages,
     turns: activeBranch(messages, currentMessageId),
@@ -531,7 +531,7 @@ export function SearchContent({
     window.localStorage.removeItem("vivadeo.chat-threads");
     void fetch("/api/proxy/v1/chat/threads", { cache: "no-store" })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Could not load chat threads");
+        if (!response.ok) throw new Error("Could not load chats");
         const payload = (await response.json()) as Array<Parameters<typeof normalizeThread>[0]>;
         const loadedThreads = payload.map(normalizeThread);
         if (loadedThreads.length) {
@@ -568,7 +568,7 @@ export function SearchContent({
     if (creatingThreadRef.current) return creatingThreadRef.current;
     const creation = fetch("/api/proxy/v1/chat/threads", { method: "POST" })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Could not create a chat thread");
+        if (!response.ok) throw new Error("Could not create a chat");
         const thread = (await response.json()) as Parameters<typeof normalizeThread>[0];
         const nextThread = normalizeThread(thread);
         setThreads((current) => current.some((item) => item.id === nextThread.id) ? current : [nextThread, ...current]);
@@ -577,7 +577,7 @@ export function SearchContent({
         return nextThread.id;
       })
       .catch((cause) => {
-        setStatus(cause instanceof Error ? cause.message : "Could not create a chat thread");
+        setStatus(cause instanceof Error ? cause.message : "Could not create a chat");
         return null;
       })
       .finally(() => { creatingThreadRef.current = null; });
@@ -601,7 +601,7 @@ export function SearchContent({
 
   async function refreshThread(threadId: string) {
     const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}`, { cache: "no-store" });
-    if (!response.ok) throw new Error("Could not refresh chat thread");
+    if (!response.ok) throw new Error("Could not refresh chat");
     const thread = normalizeThread(await response.json() as Parameters<typeof normalizeThread>[0]);
     setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
     if (thread.id === activeThreadId) setTurns(thread.turns);
@@ -759,12 +759,12 @@ export function SearchContent({
       body: JSON.stringify({ video_ids: [videoIdToAttach] }),
     });
     if (!response.ok) {
-      setStatus("Could not attach that video to this thread.");
+      setStatus("Could not attach that video to this chat.");
       return;
     }
     await refreshThreadSources(threadId);
     setBrowseOpen(false);
-    setStatus("Video added to this thread.");
+    setStatus("Video added to this chat.");
   }
 
   async function uploadVideos(files: FileList | File[]) {
@@ -922,7 +922,7 @@ export function SearchContent({
     const editIndex = editMessageId ? turns.findIndex((turn) => turn.id === editMessageId) : -1;
     const nextTurns: ChatTurn[] = [...(editIndex >= 0 ? turns.slice(0, editIndex) : turns), userTurn];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New thread" || editIndex === 0 ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New chat" || editIndex === 0 ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
@@ -1071,7 +1071,7 @@ export function SearchContent({
       body: JSON.stringify({ title }),
     });
     if (!response.ok) {
-      setStatus("Could not rename this thread.");
+      setStatus("Could not rename this chat.");
       return;
     }
     setThreads((current) => current.map((item) => item.id === thread.id ? { ...item, title } : item));
@@ -1320,7 +1320,7 @@ export function SearchContent({
               <div className="chat-tool-panel" role="dialog" aria-label="Browse workspace videos">
                 <div>
                   <strong>Browse workspace videos</strong>
-                  <p className="muted">Choose an existing video to add to this thread.</p>
+                  <p className="muted">Choose an existing video to add to this chat.</p>
                 </div>
                 {videos.length ? (
                   <div className="chat-video-picker">
@@ -1339,8 +1339,8 @@ export function SearchContent({
             <section className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
               {turns.length === 0 ? (
                 <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
-                  <h3 className="chat-greeting">{showGreeting ? `${greeting}, ${firstName}` : "New thread"}</h3>
-                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this thread."}</p>
+                  <h3 className="chat-greeting">{showGreeting ? `${greeting}, ${firstName}` : "New chat"}</h3>
+                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this chat."}</p>
                   {showOnboarding ? <div className="chat-starters">
                     {[
                       ["Find a moment", "When did we talk about the launch?", "moment"],
@@ -1505,12 +1505,12 @@ export function SearchContent({
               <div className="chat-history-head">
                 <div>
                   <h2>History ({visibleThreads.length})</h2>
-                  <p className="muted">Recent threads</p>
+                  <p className="muted">Recent chats</p>
                 </div>
                 <button type="button" className="history-toggle" onClick={() => setHistoryOpen(false)} aria-label="Close history">×</button>
               </div>
-              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New thread</button>
-              <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search threads" aria-label="Search threads" />
+              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New chat</button>
+              <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
               {savedSearches.filter((saved) => !saved.archived).length ? <section className="chat-saved-searches" aria-label="Saved searches">
                 <h3>Saved searches</h3>
                 {savedSearches.filter((saved) => !saved.archived).slice(0, 8).map((saved) => <button key={saved.id} type="button" onClick={() => useSavedSearch(saved)}><span>{saved.name}</span><small>{saved.output_format === "rows" ? "Rows" : saved.output_format === "comparison" ? "Compare" : "Answer"} · Run</small></button>)}
@@ -1524,31 +1524,31 @@ export function SearchContent({
                       <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === thread.id ? "menu-open" : ""}`}>
                     {renamingThreadId === thread.id ? (
                       <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
-                        <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Thread name" />
-                        <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save thread name">✓</button>
+                        <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
+                        <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
                       </div>
                     ) : (
                       <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
-                        <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
+                        <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current chat" : thread.turns.length ? `${thread.turns.length} messages` : "Empty chat"}{thread.read === false ? " · Unread" : ""}</small>
                       </button>
                     )}
-                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage thread">•••</button>
-                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete thread">×</button>
+                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage chat">•••</button>
+                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete chat">×</button>
                     {threadMenuId === thread.id ? (
                       <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
-                        <button type="button" onClick={() => openThread(thread)}>Open thread</button>
-                        <button type="button" onClick={() => beginRenameThread(thread)}>Rename thread</button>
-                        <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin thread" : "Pin thread"}</button>
+                        <button type="button" onClick={() => openThread(thread)}>Open chat</button>
+                        <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
+                        <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { read: thread.read === false })}>{thread.read === false ? "Mark read" : "Mark unread"}</button>
-                        <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive thread</button>
-                        <button type="button" onClick={() => void deleteThread(thread)}>Delete thread</button>
+                        <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
+                        <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
                       </div>
                     ) : null}
                       </div>
                     ))}
                     </div>
                   </section>
-                )) : <p className="muted chat-history-empty">Start a new thread to begin.</p>}
+                )) : <p className="muted chat-history-empty">Start a new chat to begin.</p>}
               </div>
             </aside>
         {!historyOpen ? <button type="button" className="history-open-button" onClick={() => setHistoryOpen(true)} aria-label="Manage chat history" data-tooltip="Manage chat history">•••</button> : null}
