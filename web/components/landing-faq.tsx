@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
+import { ScrollAnimation } from '@/components/ui/scroll-animation';
 
 const questions = [
   {
@@ -31,18 +32,18 @@ export function LandingFaq() {
 
   return (
     <section className="landing-faq" id="faq" aria-labelledby="landing-faq-title">
-      <div className="landing-faq-heading">
+      <ScrollAnimation className="landing-faq-heading">
         <p>FAQ</p>
         <h2 id="landing-faq-title">Questions, answered.</h2>
         <span>Everything you need to begin searching your archive.</span>
-      </div>
+      </ScrollAnimation>
       <div className="landing-faq-list">
         {questions.map((item, index) => {
           const isOpen = openIndex === index;
           const answerId = `faq-answer-${index}`;
 
           return (
-            <div className="landing-faq-item" key={item.question}>
+            <ScrollAnimation className="landing-faq-item" delay={index * 70} key={item.question}>
               <button
                 type="button"
                 aria-expanded={isOpen}
@@ -66,7 +67,7 @@ export function LandingFaq() {
                   </motion.div>
                 ) : null}
               </AnimatePresence>
-            </div>
+            </ScrollAnimation>
           );
         })}
       </div>

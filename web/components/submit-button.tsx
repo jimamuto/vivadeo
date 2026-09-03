@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
-import type { ReactNode } from "react";
 
 type SubmitButtonProps = {
   children: ReactNode;
@@ -11,11 +11,22 @@ type SubmitButtonProps = {
 
 export function SubmitButton({ children, pendingLabel, className = "button" }: SubmitButtonProps) {
   const { pending } = useFormStatus();
+  const [nativePending, setNativePending] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const form = buttonRef.current?.form;
+    const handleSubmit = () => setNativePending(true);
+    form?.addEventListener("submit", handleSubmit);
+    return () => form?.removeEventListener("submit", handleSubmit);
+  }, []);
+
+  const isPending = pending || nativePending;
   return (
-    <button className={className} type="submit" disabled={pending} aria-busy={pending}>
+    <button ref={buttonRef} className={className} type="submit" disabled={isPending} aria-busy={isPending}>
       <span className="submit-button-content" aria-live="polite">
-        {pending ? <span className="submit-button-spinner" aria-hidden="true" /> : null}
-        {pending ? pendingLabel : children}
+        {isPending ? <span className="submit-button-spinner" aria-hidden="true" /> : null}
+        {isPending ? pendingLabel : children}
       </span>
     </button>
   );
