@@ -886,13 +886,13 @@ main { width: 100%; }
 }
 
 /* Keep the navbar and hero intact while later sections await their redesign. */
-.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing),
-.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing) * {
+.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing):not(.landing-faq),
+.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing):not(.landing-faq) * {
   all: revert !important;
 }
 
-.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing) ::before,
-.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing) ::after {
+.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing):not(.landing-faq) ::before,
+.landing-page > section:not(.landing-hero):not(.landing-solutions):not(.landing-connections):not(.landing-stories):not(.landing-pricing):not(.landing-faq) ::after {
   all: revert !important;
   content: none !important;
 }
