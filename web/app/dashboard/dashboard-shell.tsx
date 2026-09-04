@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-type NavIcon = "chat" | "ingest" | "library" | "jobs" | "settings";
+type NavIcon = "chat" | "ingest" | "library" | "jobs";
 
 function NavGlyph({ icon }: { icon: NavIcon }) {
   const paths: Record<NavIcon, string> = {
@@ -13,7 +13,6 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
-    settings: "M9.4 3.8 10 2h4l.6 1.8 1.7.8 1.8-.6 2.8 2.8-.6 1.8.8 1.7L23 11v4l-1.9.7-.8 1.7.6 1.8-2.8 2.8-1.8-.6-1.7.8L14 23h-4l-.7-1.9-1.7-.8-1.8.6L3 18.1l.6-1.8-.8-1.7L1 15v-4l1.8-.6.8-1.7L3 6.9l2.8-2.8 1.8.6 1.8-.9ZM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
   };
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -33,16 +32,17 @@ export function DashboardShell({
   profileInitial,
   profileName,
   profileImage,
+  sidebarContent,
   children,
 }: Readonly<{
   workspace: string;
   profileInitial: string;
   profileName?: string;
   profileImage?: string | null;
+  sidebarContent?: ReactNode;
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
@@ -75,32 +75,38 @@ export function DashboardShell({
             </>
           )}
         </div>
-        <form className="dashboard-sidebar-search" action="/chat" method="get" role="search" data-tooltip="Search archive">
+        <form id="dashboard-sidebar-search" className="dashboard-sidebar-search" action="/chat" method="get" role="search" data-tooltip="Search archive">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
           <input name="q" type="search" placeholder="Search" aria-label="Search videos" />
         </form>
         <nav className="dashboard-nav" aria-label="Main navigation">
+          <span className="dashboard-nav-label">General</span>
           <NavItem href="/chat" label="Chat" icon="chat" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
-          <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="Jobs" icon="jobs" />
-          <div className="dashboard-nav-divider" aria-hidden="true" />
-          <NavItem href="/settings" label="Settings" icon="settings" />
+          <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>
-        <div className="dashboard-account">
-          {accountMenuOpen ? (
-            <div className="dashboard-account-menu">
-              <Link href="/settings#help"><span>?</span> Help &amp; Feedback</Link>
-              <form action="/api/auth/sign-out" method="post"><button type="submit"><span>↪</span> Log out</button></form>
-            </div>
-          ) : null}
-          <button className="dashboard-account-trigger" type="button" onClick={() => setAccountMenuOpen((open) => !open)} aria-expanded={accountMenuOpen}>
-            <span className="dashboard-account-avatar">{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
-            <span className="dashboard-account-name">{profileName || profileInitial}</span>
-            <strong aria-hidden="true">•••</strong>
-          </button>
-        </div>
+        {sidebarContent ? <div className="dashboard-sidebar-content">{sidebarContent}</div> : null}
       </aside>
       <div className="dashboard-frame">
+        <header className="dashboard-command-bar">
+          <nav aria-label="Workspace actions">
+            <Link href="/dashboard/jobs" aria-label="View activity">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+            </Link>
+            <details className="dashboard-command-account">
+              <summary className="dashboard-command-profile" aria-label="Open account menu">
+                <span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
+                <strong>{profileName || profileInitial}</strong>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+              </summary>
+              <div className="dashboard-command-menu">
+                <Link href="/settings">Settings</Link>
+                <Link href="/settings#help">Help &amp; Feedback</Link>
+                <form action="/api/auth/sign-out" method="post"><button type="submit">Log out</button></form>
+              </div>
+            </details>
+          </nav>
+        </header>
         <main className="dashboard-stage">{children}</main>
       </div>
     </div>

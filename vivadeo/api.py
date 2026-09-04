@@ -1672,6 +1672,7 @@ def _complete_chat_message(
                 focus_start_time=request.focus_start_time,
                 focus_end_time=request.focus_end_time,
                 focus_window_seconds=request.focus_window_seconds,
+                conversation_only=not source_ids,
             ),
             session=session,
             organization_id=organization_id,
@@ -1706,7 +1707,15 @@ def _complete_chat_message(
     assistant.error = None
     assistant.updated_at = utcnow()
     if thread.title == "New thread":
-        thread.title = " ".join(parent.content.split())[:255] or "New thread"
+        try:
+            settings = get_runtime_settings()
+            thread.title = ModalGemmaChat(
+                app_name=settings.modal_gemma_app,
+                function_name=settings.modal_gemma_function,
+                timeout=settings.modal_timeout,
+            ).title(parent.content)
+        except Exception:
+            thread.title = " ".join(parent.content.split())[:255] or "New thread"
     thread.current_message_id = assistant.id
     thread.updated_at = utcnow()
     session.commit()
@@ -2143,6 +2152,26 @@ def delete_chat_thread(
     session.commit()
 
 
+def _general_chat_answer(request: ChatRequest, session: Session, organization_id: str) -> ChatResponse:
+    settings = get_runtime_settings()
+    messages = [message.model_dump() for message in request.messages[-10:]]
+    try:
+        plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
+    except Exception:
+        plan = "starter"
+    if request.provider == "ollama":
+        generator = OllamaChat(base_url=request.custom_base_url or "", model=request.custom_model or "", timeout=settings.pro_llm_timeout)
+    elif request.provider == "anthropic":
+        generator = AnthropicChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.pro_llm_timeout)
+    elif request.provider in {"custom", "openai", "gemini", "nvidia"}:
+        generator = OpenAICompatibleChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.pro_llm_timeout)
+    elif plan in {"pro", "enterprise"} and settings.pro_llm_api_key and settings.pro_llm_base_url:
+        generator = OpenAICompatibleChat(base_url=settings.pro_llm_base_url, api_key=settings.pro_llm_api_key, model=settings.pro_llm_model, timeout=settings.pro_llm_timeout)
+    else:
+        generator = ModalGemmaChat(app_name=settings.modal_gemma_app, function_name=settings.modal_gemma_function, timeout=settings.modal_timeout)
+    return ChatResponse(answer=generator.answer(messages, []), citations=[])
+
+
 @app.post(
     "/v1/search/chat",
     response_model=ChatResponse,
@@ -2160,6 +2189,10 @@ def search_chat(
     )
     if not question:
         raise HTTPException(status_code=400, detail="Question is required")
+    if request.conversation_only:
+        if request.output_format != "answer":
+            raise HTTPException(status_code=422, detail="Attach video evidence for structured searches")
+        return _general_chat_answer(request, session, organization_id)
 
     thread = None
     if request.thread_id:

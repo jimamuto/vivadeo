@@ -412,9 +412,13 @@ class GemmaAnswerer:
             if msg.get("content")
         ]
         system = (
-            "You are Vivadeo, a transcript-grounded video archive assistant. "
-            "Answer only from the transcript evidence. If evidence is insufficient, say so. "
-            "Cite evidence with bracket numbers like [1]. Be concise and specific."
+            "You are a helpful assistant. Respond naturally and do not claim to have searched video evidence."
+            if not context
+            else (
+                "You are Vivadeo, a transcript-grounded video archive assistant. "
+                "Answer only from the transcript evidence. If evidence is insufficient, say so. "
+                "Cite evidence with bracket numbers like [1]. Be concise and specific."
+            )
         )
         prompt_messages = [
             {"role": "system", "content": system},
@@ -422,8 +426,9 @@ class GemmaAnswerer:
             {
                 "role": "user",
                 "content": (
-                    f"Transcript evidence:\n{_format_context(context[:6])}\n\n"
-                    f"Question: {history[-1]['content'] if history else ''}"
+                    f"Transcript evidence:\n{_format_context(context[:6])}\n\nQuestion: {history[-1]['content'] if history else ''}"
+                    if context
+                    else (history[-1]["content"] if history else "")
                 ),
             },
         ]

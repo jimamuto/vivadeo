@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import vivadeo.api as api
 from vivadeo.api import app
+from vivadeo.schemas import ChatMessage, ChatRequest
 
 
 class _FakeConn:
@@ -610,6 +611,39 @@ def test_retry_canceled_upload_job(monkeypatch):
     assert response.status == "queued"
     assert response.message == "Retry queued"
     assert called["args"] == ("job-1", "video-1", "default-workspace")
+
+
+def test_conversation_only_chat_skips_video_retrieval(monkeypatch):
+    class FakeChat:
+        def __init__(self, **_kwargs):
+            pass
+
+        def answer(self, messages, context):
+            assert messages[-1]["content"] == "Hello"
+            assert context == []
+            return "Hello! How can I help?"
+
+    settings = SimpleNamespace(
+        modal_gemma_app="app",
+        modal_gemma_function="answer",
+        modal_timeout=30,
+        pro_llm_api_key=None,
+        pro_llm_base_url=None,
+        pro_llm_model="",
+        pro_llm_timeout=30,
+    )
+    monkeypatch.setattr(api, "get_runtime_settings", lambda: settings)
+    monkeypatch.setattr(api, "ModalGemmaChat", FakeChat)
+    session = SimpleNamespace(scalar=lambda _query: "starter")
+
+    response = api.search_chat(
+        ChatRequest(messages=[ChatMessage(role="user", content="Hello")], conversation_only=True),
+        session=session,
+        organization_id="workspace-1",
+    )
+
+    assert response.answer == "Hello! How can I help?"
+    assert response.citations == []
 
 
 def test_dead_letter_response_includes_error_window():

@@ -11,6 +11,27 @@ const DEFAULT_CHAT_PROMPT = "What did the speaker say about the launch timeline?
 const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
+function TypedGreeting({ text }: { text: string }) {
+  const [visible, setVisible] = useState("");
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVisible(text);
+      return;
+    }
+    setVisible("");
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setVisible(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(timer);
+    }, 55);
+    return () => window.clearInterval(timer);
+  }, [text]);
+
+  return <span className="chat-greeting-typed" aria-label={text}><span aria-hidden="true">{visible}</span></span>;
+}
+
 type ComposerSelectOption = {
   value: string;
   label: string;
@@ -390,7 +411,7 @@ function normalizeThread(payload: { id: string; title: string; updated_at: strin
   const currentMessageId = payload.current_message_id ?? messages.at(-1)?.id ?? null;
   return {
     id: payload.id,
-    title: payload.title,
+    title: payload.title === "New thread" ? "New chat" : payload.title,
     updatedAt: payload.updated_at,
     messages,
     turns: activeBranch(messages, currentMessageId),
@@ -449,10 +470,10 @@ export function SearchContent({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [chatProgress, setChatProgress] = useState(0);
+  const [streamedAnswer, setStreamedAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [activeChatJobId, setActiveChatJobId] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(true);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
   const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
@@ -531,9 +552,9 @@ export function SearchContent({
     window.localStorage.removeItem("vivadeo.chat-threads");
     void fetch("/api/proxy/v1/chat/threads", { cache: "no-store" })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Could not load chat threads");
+        if (!response.ok) throw new Error("Could not load chats");
         const payload = (await response.json()) as Array<Parameters<typeof normalizeThread>[0]>;
-        const loadedThreads = payload.map(normalizeThread);
+        const loadedThreads = payload.map(normalizeThread).filter((thread) => thread.turns.length > 0);
         if (loadedThreads.length) {
           setThreads(loadedThreads);
           const selectedId = loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
@@ -542,7 +563,8 @@ export function SearchContent({
           return;
         }
         if (threads.length) return;
-        await ensureActiveThread();
+        setActiveThreadId("");
+        setTurns([]);
       })
       .catch(() => undefined);
   }, []);
@@ -552,7 +574,7 @@ export function SearchContent({
   }, [recentSearches]);
 
   useEffect(() => {
-    if (!initialQuery.trim() || !activeThreadId || initialQuerySubmitted.current) return;
+    if (!initialQuery.trim() || initialQuerySubmitted.current) return;
     initialQuerySubmitted.current = true;
     window.setTimeout(() => document.querySelector<HTMLFormElement>(".chat-composer")?.requestSubmit(), 0);
   }, [initialQuery, activeThreadId]);
@@ -568,7 +590,7 @@ export function SearchContent({
     if (creatingThreadRef.current) return creatingThreadRef.current;
     const creation = fetch("/api/proxy/v1/chat/threads", { method: "POST" })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Could not create a chat thread");
+        if (!response.ok) throw new Error("Could not create a chat");
         const thread = (await response.json()) as Parameters<typeof normalizeThread>[0];
         const nextThread = normalizeThread(thread);
         setThreads((current) => current.some((item) => item.id === nextThread.id) ? current : [nextThread, ...current]);
@@ -577,7 +599,7 @@ export function SearchContent({
         return nextThread.id;
       })
       .catch((cause) => {
-        setStatus(cause instanceof Error ? cause.message : "Could not create a chat thread");
+        setStatus(cause instanceof Error ? cause.message : "Could not create a chat");
         return null;
       })
       .finally(() => { creatingThreadRef.current = null; });
@@ -601,7 +623,7 @@ export function SearchContent({
 
   async function refreshThread(threadId: string) {
     const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}`, { cache: "no-store" });
-    if (!response.ok) throw new Error("Could not refresh chat thread");
+    if (!response.ok) throw new Error("Could not refresh chat");
     const thread = normalizeThread(await response.json() as Parameters<typeof normalizeThread>[0]);
     setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
     if (thread.id === activeThreadId) setTurns(thread.turns);
@@ -639,9 +661,10 @@ export function SearchContent({
       };
       stream.addEventListener("job", (event) => {
         try {
-          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null };
+          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null; content_delta?: string };
           setChatProgress(payload.progress ?? 0);
           setStatus(payload.message || "Preparing answer...");
+          if (payload.content_delta) setStreamedAnswer((current) => current + payload.content_delta);
           if (["succeeded", "failed", "canceled"].includes(payload.status)) finish(payload);
         } catch { recover(); }
       });
@@ -759,12 +782,12 @@ export function SearchContent({
       body: JSON.stringify({ video_ids: [videoIdToAttach] }),
     });
     if (!response.ok) {
-      setStatus("Could not attach that video to this thread.");
+      setStatus("Could not attach that video to this chat.");
       return;
     }
     await refreshThreadSources(threadId);
     setBrowseOpen(false);
-    setStatus("Video added to this thread.");
+    setStatus("Video added to this chat.");
   }
 
   async function uploadVideos(files: FileList | File[]) {
@@ -922,7 +945,7 @@ export function SearchContent({
     const editIndex = editMessageId ? turns.findIndex((turn) => turn.id === editMessageId) : -1;
     const nextTurns: ChatTurn[] = [...(editIndex >= 0 ? turns.slice(0, editIndex) : turns), userTurn];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New thread" || editIndex === 0 ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New chat" || editIndex === 0 ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
@@ -931,7 +954,8 @@ export function SearchContent({
     setEditingPrompt("");
     const requestStartedAt = Date.now();
     setLoading(true);
-    setStatus("Starting search...");
+    setStreamedAnswer("");
+    setStatus("Preparing a reply...");
     setChatProgress(0);
 
     try {
@@ -939,7 +963,7 @@ export function SearchContent({
       if (linkedUrl) setStatus("Preparing the linked video…");
       const linkedVideoId = linkedUrl ? await ingestVideoUrl(linkedUrl) : null;
       if (linkedUrl && !linkedVideoId) throw new Error("Vivadeo could not prepare the linked video.");
-      setStatus("Starting search...");
+      setStatus("Preparing a reply...");
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1030,13 +1054,8 @@ export function SearchContent({
     setStatus("Conversation branch selected.");
   }
 
-  async function startNewThread() {
-    const response = await fetch("/api/proxy/v1/chat/threads", { method: "POST" });
-    if (!response.ok) return;
-    const thread = (await response.json()) as Parameters<typeof normalizeThread>[0];
-    const nextThread = normalizeThread(thread);
-    setThreads((current) => [nextThread, ...current]);
-    setActiveThreadId(nextThread.id);
+  function startNewThread() {
+    setActiveThreadId("");
     setTurns([]);
     setQuestion("");
     setStatus(null);
@@ -1071,7 +1090,7 @@ export function SearchContent({
       body: JSON.stringify({ title }),
     });
     if (!response.ok) {
-      setStatus("Could not rename this thread.");
+      setStatus("Could not rename this chat.");
       return;
     }
     setThreads((current) => current.map((item) => item.id === thread.id ? { ...item, title } : item));
@@ -1093,7 +1112,7 @@ export function SearchContent({
     if (updated.archived && updated.id === activeThreadId) {
       const next = threads.find((item) => item.id !== updated.id && !item.archived);
       if (next) openThread(next);
-      else await startNewThread();
+      else startNewThread();
     }
   }
 
@@ -1104,7 +1123,7 @@ export function SearchContent({
     setThreads(remaining);
     if (thread.id === activeThreadId) {
       if (remaining[0]) openThread(remaining[0]);
-      else await startNewThread();
+      else startNewThread();
     }
     setThreadMenuId(null);
   }
@@ -1113,7 +1132,7 @@ export function SearchContent({
   const greetingSeed = Array.from(profileName || "there").reduce((sum, character) => sum + character.charCodeAt(0), 0);
   const greeting = GREETINGS[greetingSeed % GREETINGS.length];
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
-  const visibleThreads = threads.filter((thread) => !thread.archived);
+  const visibleThreads = threads.filter((thread) => !thread.archived && thread.turns.length > 0);
   const filteredThreads = visibleThreads.filter((thread) => !threadSearch.trim() || `${thread.title} ${thread.turns.map((turn) => turn.content).join(" ")}`.toLowerCase().includes(threadSearch.trim().toLowerCase()));
   const groupedThreads = filteredThreads.reduce<Array<{ label: string; threads: ChatThread[] }>>((groups, thread) => {
     const label = threadDateGroup(thread.updatedAt, hydrated);
@@ -1129,8 +1148,20 @@ export function SearchContent({
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
 
   return (
-    <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={profileName}>
-      <section className={`search-shell chat-shell ${historyOpen ? "history-open" : "history-closed"} fade-in`}>
+    <DashboardShell
+      workspace={activeWorkspace}
+      profileInitial={profileInitial}
+      profileName={profileName}
+      sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recent chats">
+        <div className="sidebar-recent-chats-head"><span>Recent chats</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
+        <div className="sidebar-recent-chats-list">
+          {visibleThreads.slice(0, 8).map((thread) => <button key={thread.id} type="button" className={thread.id === activeThreadId ? "is-active" : ""} onClick={() => openThread(thread)} title={thread.title}>
+            <TypedGreeting text={thread.title} />
+          </button>)}
+        </div>
+      </section> : null}
+    >
+      <section className="search-shell chat-shell fade-in">
         <aside className="search-filters surface-section">
           <h1>Ask Vivadeo</h1>
           <p className="muted">Search across your video moments, then ask follow-up questions.</p>
@@ -1320,7 +1351,7 @@ export function SearchContent({
               <div className="chat-tool-panel" role="dialog" aria-label="Browse workspace videos">
                 <div>
                   <strong>Browse workspace videos</strong>
-                  <p className="muted">Choose an existing video to add to this thread.</p>
+                  <p className="muted">Choose an existing video to add to this chat.</p>
                 </div>
                 {videos.length ? (
                   <div className="chat-video-picker">
@@ -1339,8 +1370,8 @@ export function SearchContent({
             <section className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
               {turns.length === 0 ? (
                 <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
-                  <h3 className="chat-greeting">{showGreeting ? `${greeting}, ${firstName}` : "New thread"}</h3>
-                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this thread."}</p>
+                  <h3 className="chat-greeting">{showGreeting ? <TypedGreeting text={`${greeting}, ${firstName}`} /> : "New chat"}</h3>
+                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this chat."}</p>
                   {showOnboarding ? <div className="chat-starters">
                     {[
                       ["Find a moment", "When did we talk about the launch?", "moment"],
@@ -1372,7 +1403,6 @@ export function SearchContent({
                         <div className="search-meta">
                           {turn.role === "assistant" ? (
                             <>
-                              <div className="chat-message-author">Vivadeo</div>
                               {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <div className="search-answer-text">{turn.content}</div> : null}
                               {turn.intent?.modality ? <div className="chat-evidence-summary">{turn.intent.modality === "visual" ? "Visual evidence" : turn.intent.modality === "hybrid" ? "Visual + spoken evidence" : "Transcript evidence"}{turn.verification_summary?.verified ? ` · ${turn.verification_summary.verified} verified` : ""}{turn.verification_summary?.possible ? ` · ${turn.verification_summary.possible} possible` : ""}</div> : null}
                               {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
@@ -1386,7 +1416,6 @@ export function SearchContent({
                             </>
                           ) : (
                             <>
-                              <div className="chat-message-author">You</div>
                               {editingMessageId === turn.id ? <form className="chat-prompt-editor" onSubmit={(event) => void submitEditedPrompt(event, turn.id!)}>
                                 <textarea autoFocus rows={2} maxLength={3000} value={editingPrompt} onChange={(event) => setEditingPrompt(event.target.value)} aria-label="Edit prompt" />
                                 <div>
@@ -1488,12 +1517,11 @@ export function SearchContent({
               {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label={status || "Vivadeo is preparing an answer"}>
                 <div className="search-top">
                   <div className="search-meta">
-                    <div className="chat-message-author">Vivadeo</div>
-                    <div className="chat-pending-status" aria-live="polite" aria-busy="true">
+                    {streamedAnswer ? <div className="search-answer-text" aria-live="polite">{streamedAnswer}</div> : <div className="chat-pending-status" aria-live="polite" aria-busy="true">
                       <span className="chat-typing" aria-hidden="true"><span /><span /><span /></span>
                       <span className="chat-progress-copy">{status || "Preparing answer..."}</span>
                       <span className="chat-progress-percent">{Math.round(chatProgress * 100)}%</span>
-                    </div>
+                    </div>}
                   </div>
                 </div>
               </article> : null}
@@ -1501,16 +1529,16 @@ export function SearchContent({
           </section>
         </div>
 
-        <aside className="surface-section search-preview chat-history">
+        {false ? <aside className="surface-section search-preview chat-history">
               <div className="chat-history-head">
                 <div>
                   <h2>History ({visibleThreads.length})</h2>
-                  <p className="muted">Recent threads</p>
+                  <p className="muted">Recent chats</p>
                 </div>
-                <button type="button" className="history-toggle" onClick={() => setHistoryOpen(false)} aria-label="Close history">×</button>
+                <button type="button" className="history-toggle" aria-label="Close history">×</button>
               </div>
-              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New thread</button>
-              <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search threads" aria-label="Search threads" />
+              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New chat</button>
+              <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
               {savedSearches.filter((saved) => !saved.archived).length ? <section className="chat-saved-searches" aria-label="Saved searches">
                 <h3>Saved searches</h3>
                 {savedSearches.filter((saved) => !saved.archived).slice(0, 8).map((saved) => <button key={saved.id} type="button" onClick={() => useSavedSearch(saved)}><span>{saved.name}</span><small>{saved.output_format === "rows" ? "Rows" : saved.output_format === "comparison" ? "Compare" : "Answer"} · Run</small></button>)}
@@ -1524,34 +1552,33 @@ export function SearchContent({
                       <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === thread.id ? "menu-open" : ""}`}>
                     {renamingThreadId === thread.id ? (
                       <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
-                        <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Thread name" />
-                        <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save thread name">✓</button>
+                        <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
+                        <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
                       </div>
                     ) : (
                       <button type="button" className={`chat-history-item ${thread.id === activeThreadId ? "is-active" : ""}`} onClick={() => openThread(thread)}>
-                        <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current thread" : thread.turns.length ? `${thread.turns.length} messages` : "Empty thread"}{thread.read === false ? " · Unread" : ""}</small>
+                        <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current chat" : thread.turns.length ? `${thread.turns.length} messages` : "Empty chat"}{thread.read === false ? " · Unread" : ""}</small>
                       </button>
                     )}
-                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage thread">•••</button>
-                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete thread">×</button>
+                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage chat">•••</button>
+                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete chat">×</button>
                     {threadMenuId === thread.id ? (
                       <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
-                        <button type="button" onClick={() => openThread(thread)}>Open thread</button>
-                        <button type="button" onClick={() => beginRenameThread(thread)}>Rename thread</button>
-                        <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin thread" : "Pin thread"}</button>
+                        <button type="button" onClick={() => openThread(thread)}>Open chat</button>
+                        <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
+                        <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { read: thread.read === false })}>{thread.read === false ? "Mark read" : "Mark unread"}</button>
-                        <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive thread</button>
-                        <button type="button" onClick={() => void deleteThread(thread)}>Delete thread</button>
+                        <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
+                        <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
                       </div>
                     ) : null}
                       </div>
                     ))}
                     </div>
                   </section>
-                )) : <p className="muted chat-history-empty">Start a new thread to begin.</p>}
+                )) : <p className="muted chat-history-empty">Start a new chat to begin.</p>}
               </div>
-            </aside>
-        {!historyOpen ? <button type="button" className="history-open-button" onClick={() => setHistoryOpen(true)} aria-label="Manage chat history" data-tooltip="Manage chat history">•••</button> : null}
+            </aside> : null}
       </section>
     </DashboardShell>
   );

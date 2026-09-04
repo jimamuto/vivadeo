@@ -196,6 +196,9 @@ class ChatRequest(BaseModel):
     focus_window_seconds: float | None = Field(default=None, gt=0, le=120)
 
 
+    conversation_only: bool = False
+
+
 class ChatCitation(BaseModel):
     segment_id: str | None = None
     video_id: str
@@ -232,6 +235,7 @@ class ChatMessageRequest(BaseModel):
     focus_start_time: float | None = Field(default=None, ge=0)
     focus_end_time: float | None = Field(default=None, ge=0)
     focus_window_seconds: float | None = Field(default=None, gt=0, le=120)
+    conversation_only: bool = False
 
 
 class ChatExtractionRow(BaseModel):
