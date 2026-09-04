@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     chat_context_segments: int = Field(8, alias="VIVADEO_CHAT_CONTEXT_SEGMENTS")
     pro_llm_api_key: str | None = Field(None, alias="VIVADEO_PRO_LLM_API_KEY")
     pro_llm_base_url: str | None = Field(None, alias="VIVADEO_PRO_LLM_BASE_URL")
-    pro_llm_model: str = Field("claude-haiku-4-5", alias="VIVADEO_PRO_LLM_MODEL")
+    pro_llm_model: str = Field("gpt-5.6-luna", alias="VIVADEO_PRO_LLM_MODEL")
     pro_llm_timeout: int = Field(120, alias="VIVADEO_PRO_LLM_TIMEOUT")
     pro_embedding_api_key: str | None = Field(None, alias="VIVADEO_PRO_EMBEDDING_API_KEY")
     pro_embedding_base_url: str = Field("https://integrate.api.nvidia.com/v1", alias="VIVADEO_PRO_EMBEDDING_BASE_URL")

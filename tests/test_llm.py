@@ -26,10 +26,13 @@ def test_validate_base_url_requires_secure_remote_endpoint():
 
 
 def test_openai_compatible_chat_normalizes_answer(monkeypatch):
-    monkeypatch.setattr(
-        "vivadeo.llm.urlopen",
-        lambda request, timeout: _Response({"choices": [{"message": {"content": " grounded answer "}}]}),
-    )
+    captured = {}
+
+    def respond(request, timeout):
+        captured.update(json.loads(request.data))
+        return _Response({"choices": [{"message": {"content": " grounded answer "}}]})
+
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
 
     answer = OpenAICompatibleChat(
         base_url="https://api.example.com/v1",
@@ -38,3 +41,4 @@ def test_openai_compatible_chat_normalizes_answer(monkeypatch):
     ).answer([{"role": "user", "content": "Question"}], [{"filename": "clip.mp4", "start_time": 1, "end_time": 2, "text": "Evidence"}])
 
     assert answer == "grounded answer"
+    assert "temperature" not in captured

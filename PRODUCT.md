@@ -34,7 +34,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Search chat retrieves relevant video chunks, attaches overlapping transcript segments, and asks Modal-hosted Gemma E4B through Modal remote functions, not HTTP model endpoints.
 - Search answers return transcript citations with video filename, source URI, and timestamp ranges.
 - Chat messages persist as a selected conversation branch; assistant answers can be regenerated or retried without overwriting earlier answers.
-- Chat generation supports Vivadeo Auto (Modal Gemma fallback), Pro workspaces using the server-side OpenAI-compatible gateway, and user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints.
+- Chat generation supports Vivadeo Auto through Modal Gemma, Pro workspaces through server-side Azure OpenAI GPT-5.6 Luna, and user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints.
 - BYOK provider keys are encrypted in PostgreSQL when configured in Settings; transient chat keys are held only in Redis while a generation job runs.
 - Free workspaces retain the Modal Qwen video embedding path. Pro workspaces use NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions, with Qwen fallback for legacy rows until reindexing populates NVIDIA vectors.
 - Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
