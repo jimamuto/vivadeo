@@ -177,7 +177,7 @@ class OpenAICompatibleChat:
             else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
         )
         grounded_messages = [{"role": "system", "content": instruction}, *messages]
-        payload = json.dumps({"model": self.model, "messages": grounded_messages, "temperature": 0.2}).encode("utf-8")
+        payload = json.dumps({"model": self.model, "messages": grounded_messages}).encode("utf-8")
         request = Request(
             f"{self.base_url}/chat/completions",
             data=payload,

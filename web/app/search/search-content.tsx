@@ -945,7 +945,7 @@ export function SearchContent({
     const editIndex = editMessageId ? turns.findIndex((turn) => turn.id === editMessageId) : -1;
     const nextTurns: ChatTurn[] = [...(editIndex >= 0 ? turns.slice(0, editIndex) : turns), userTurn];
     setTurns(nextTurns);
-    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, title: thread.title === "New chat" || editIndex === 0 ? nextQuestion.slice(0, 255) : thread.title, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
+    setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, turns: nextTurns, messages: [...thread.messages, userTurn], updatedAt: new Date().toISOString() } : thread));
     setOnboardingSeen(true);
     window.localStorage.setItem(CHAT_ONBOARDING_KEY, "true");
     void fetch("/api/proxy/v1/chat/onboarding/complete", { method: "POST" });
@@ -1155,9 +1155,23 @@ export function SearchContent({
       sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recent chats">
         <div className="sidebar-recent-chats-head"><span>Recent chats</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
         <div className="sidebar-recent-chats-list">
-          {visibleThreads.slice(0, 8).map((thread) => <button key={thread.id} type="button" className={thread.id === activeThreadId ? "is-active" : ""} onClick={() => openThread(thread)} title={thread.title}>
-            <TypedGreeting text={thread.title} />
-          </button>)}
+          {visibleThreads.slice(0, 8).map((thread) => (
+            <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === thread.id ? "menu-open" : ""}`}>
+              {renamingThreadId === thread.id ? (
+                <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
+                  <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
+                  <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
+                </div>
+              ) : <button type="button" className="sidebar-recent-chat-open" onClick={() => openThread(thread)} title={thread.title}><TypedGreeting text={thread.title} /></button>}
+              <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} aria-expanded={threadMenuId === thread.id}>•••</button>
+              {threadMenuId === thread.id ? <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
+                <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
+                <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
+                <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
+                <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
+              </div> : null}
+            </div>
+          ))}
         </div>
       </section> : null}
     >
