@@ -43,6 +43,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Ingest And Jobs
 
+- Ingest transcription uses Azure OpenAI Whisper; Modal remains responsible for Vivadeo Auto embeddings and answer generation.
 - Failed ingest and clip jobs have a retry path at `/v1/jobs/{job_id}/retry` for supported job kinds.
 - Retry accepts canceled ingest jobs as well as failed ones.
 - Ingest page surfaces recent interrupted ingest jobs, including failed and canceled jobs, and can requeue them through `/v1/jobs/{job_id}/retry`.
