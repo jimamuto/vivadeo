@@ -32,16 +32,17 @@ export function DashboardShell({
   profileInitial,
   profileName,
   profileImage,
+  sidebarContent,
   children,
 }: Readonly<{
   workspace: string;
   profileInitial: string;
   profileName?: string;
   profileImage?: string | null;
+  sidebarContent?: ReactNode;
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
@@ -74,31 +75,41 @@ export function DashboardShell({
             </>
           )}
         </div>
-        <form className="dashboard-sidebar-search" action="/chat" method="get" role="search" data-tooltip="Search archive">
+        <form id="dashboard-sidebar-search" className="dashboard-sidebar-search" action="/chat" method="get" role="search" data-tooltip="Search archive">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
           <input name="q" type="search" placeholder="Search" aria-label="Search videos" />
         </form>
         <nav className="dashboard-nav" aria-label="Main navigation">
+          <span className="dashboard-nav-label">General</span>
           <NavItem href="/chat" label="Chat" icon="chat" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>
-        <div className="dashboard-account">
-          {accountMenuOpen ? (
-            <div className="dashboard-account-menu">
-              <Link href="/settings"><span>⚙</span> Settings</Link>
-              <Link href="/settings#help"><span>?</span> Help &amp; Feedback</Link>
-              <form action="/api/auth/sign-out" method="post"><button type="submit"><span>↪</span> Log out</button></form>
-            </div>
-          ) : null}
-          <button className="dashboard-account-trigger" type="button" onClick={() => setAccountMenuOpen((open) => !open)} aria-expanded={accountMenuOpen}>
-            <span className="dashboard-account-avatar">{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
-            <span className="dashboard-account-name">{profileName || profileInitial}</span>
-            <strong aria-hidden="true">•••</strong>
-          </button>
-        </div>
+        {sidebarContent ? <div className="dashboard-sidebar-content">{sidebarContent}</div> : null}
       </aside>
       <div className="dashboard-frame">
+        <header className="dashboard-command-bar">
+          <nav aria-label="Workspace actions">
+            <button type="button" onClick={() => document.querySelector<HTMLInputElement>("#dashboard-sidebar-search input")?.focus()} aria-label="Search archive">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>
+            </button>
+            <Link href="/dashboard/jobs" aria-label="View activity">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+            </Link>
+            <details className="dashboard-command-account">
+              <summary className="dashboard-command-profile" aria-label="Open account menu">
+                <span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
+                <strong>{profileName || profileInitial}</strong>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+              </summary>
+              <div className="dashboard-command-menu">
+                <Link href="/settings">Settings</Link>
+                <Link href="/settings#help">Help &amp; Feedback</Link>
+                <form action="/api/auth/sign-out" method="post"><button type="submit">Log out</button></form>
+              </div>
+            </details>
+          </nav>
+        </header>
         <main className="dashboard-stage">{children}</main>
       </div>
     </div>

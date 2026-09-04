@@ -89,6 +89,18 @@ def _update_job(job_id: str, **values) -> None:
         logger.exception("job_progress_publish_failed job_id=%s", job_id)
 
 
+def _stream_chat_answer(job_id: str, content: str) -> None:
+    for start in range(0, len(content), 24):
+        payload = {
+            "id": job_id,
+            "status": "running",
+            "progress": 0.95,
+            "message": "Writing response",
+            "content_delta": content[start:start + 24],
+        }
+        progress_bus.publish(f"vivadeo:job:{job_id}", json.dumps(payload, separators=(",", ":")))
+
+
 def _mark_video(video_id: str, **values) -> None:
     with session_scope() as session:
         video = session.get(Video, video_id)
@@ -518,7 +530,7 @@ def generate_chat_task(
 ) -> None:
     try:
         _raise_if_canceled(job_id)
-        _update_job(job_id, status="running", progress=0.1, message="Retrieving relevant video moments")
+        _update_job(job_id, status="running", progress=0.1, message="Preparing a reply")
         from .api import _complete_chat_message
         from .schemas import ChatMessageRequest
 
@@ -535,7 +547,7 @@ def generate_chat_task(
             request_payload["custom_api_key"] = progress_bus.get(f"vivadeo:chat-key:{job_id}")
             progress_bus.delete(f"vivadeo:chat-key:{job_id}")
         with session_scope() as session:
-            _complete_chat_message(
+            thread = _complete_chat_message(
                 session=session,
                 organization_id=organization_id,
                 thread_id=thread_id,
@@ -543,6 +555,9 @@ def generate_chat_task(
                 request=ChatMessageRequest.model_validate(request_payload),
                 progress_callback=report_progress,
             )
+            completed_message = next((item for item in thread.messages if item.id == message_id), None)
+            completed_content = completed_message.content if completed_message else ""
+        _stream_chat_answer(job_id, completed_content)
         if _job_canceled(job_id):
             with session_scope() as session:
                 message = session.get(ChatThreadMessage, message_id)

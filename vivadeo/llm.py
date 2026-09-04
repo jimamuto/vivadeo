@@ -35,13 +35,15 @@ class OllamaChat:
             f"[{item.get('filename', 'video')} {item.get('start_time', 0):.2f}-{item.get('end_time', 0):.2f}] {item.get('text', '')}"
             for item in context
         )
+        instruction = (
+            "Answer only from this transcript evidence:\n" + evidence
+            if context
+            else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
+        )
         payload = json.dumps({
             "model": self.model,
             "stream": False,
-            "messages": [
-                {"role": "system", "content": "Answer only from this transcript evidence:\n" + evidence},
-                *messages,
-            ],
+            "messages": [{"role": "system", "content": instruction}, *messages],
         }).encode("utf-8")
         request = Request(f"{self.base_url}/api/chat", data=payload, headers={"Content-Type": "application/json"}, method="POST")
         try:
@@ -69,10 +71,15 @@ class AnthropicChat:
             f"[{item.get('filename', 'video')} {item.get('start_time', 0):.2f}-{item.get('end_time', 0):.2f}] {item.get('text', '')}"
             for item in context
         )
+        instruction = (
+            "Answer only from this transcript evidence:\n" + evidence
+            if context
+            else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
+        )
         payload = json.dumps({
             "model": self.model,
             "max_tokens": 2048,
-            "system": "Answer only from this transcript evidence:\n" + evidence,
+            "system": instruction,
             "messages": messages,
         }).encode("utf-8")
         request = Request(
@@ -164,13 +171,12 @@ class OpenAICompatibleChat:
             for item in context
         )
         visual_note = " Visual evidence entries were checked against the actual frames; for a visual question, report those timestamp ranges and do not call the evidence insufficient merely because the transcript is unrelated." if any(item.get("visual_verified") for item in context) else ""
-        grounded_messages = [
-            {
-                "role": "system",
-                "content": "Answer using only the supplied video evidence." + visual_note + " Give the direct answer in 1-2 short sentences. Do not include evidence lists, repeat transcript excerpts, raw links, or chain-of-thought; the interface presents the relevant moments separately. If the evidence is insufficient, say so plainly.\n\nEvidence:\n" + evidence,
-            },
-            *messages,
-        ]
+        instruction = (
+            "Answer using only the supplied video evidence." + visual_note + " Give the direct answer in 1-2 short sentences. Do not include evidence lists, repeat transcript excerpts, raw links, or chain-of-thought; the interface presents the relevant moments separately. If the evidence is insufficient, say so plainly.\n\nEvidence:\n" + evidence
+            if context
+            else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
+        )
+        grounded_messages = [{"role": "system", "content": instruction}, *messages]
         payload = json.dumps({"model": self.model, "messages": grounded_messages, "temperature": 0.2}).encode("utf-8")
         request = Request(
             f"{self.base_url}/chat/completions",
