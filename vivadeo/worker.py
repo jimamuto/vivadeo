@@ -18,7 +18,7 @@ from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Or
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
 from .frame_extractor import extract_frame
-from .modal_whisper import ModalWhisperTranscriber
+from .azure_whisper import AzureWhisperTranscriber
 from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key, visual_keyframe_object_key
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
@@ -152,13 +152,15 @@ def _transcript_object_key(video_id: str) -> str:
 def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
     settings = get_settings()
     _update_job(job_id, status="running", progress=0.08, message="Transcribing audio")
-    logger.info("modal_transcription_start job_id=%s video_id=%s", job_id, video_id)
-    segments = ModalWhisperTranscriber(
-        app_name=settings.modal_whisper_app,
-        function_name=settings.modal_whisper_function,
-        timeout=settings.modal_timeout,
+    logger.info("azure_transcription_start job_id=%s video_id=%s", job_id, video_id)
+    segments = AzureWhisperTranscriber(
+        endpoint=settings.azure_openai_endpoint,
+        api_key=settings.azure_openai_api_key,
+        deployment=settings.azure_openai_whisper_deployment,
+        api_version=settings.azure_openai_api_version,
+        timeout=settings.azure_openai_whisper_timeout,
     ).transcribe(file_path)
-    logger.info("modal_transcription_complete job_id=%s video_id=%s segments=%s", job_id, video_id, len(segments))
+    logger.info("azure_transcription_complete job_id=%s video_id=%s segments=%s", job_id, video_id, len(segments))
     store = ObjectStore()
     tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
     try:

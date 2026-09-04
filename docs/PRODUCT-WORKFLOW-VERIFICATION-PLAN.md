@@ -204,7 +204,7 @@ validation and later media tests.
 - Video reaches `ready`.
 - Source object key exists in the configured private store.
 - Chunk rows exist in PostgreSQL.
-- Transcript data exists where Modal transcription is enabled.
+- Transcript data exists where Azure Whisper transcription is enabled.
 - Embedding/vector data exists.
 - No job dead-letter entry is created.
 
@@ -515,8 +515,8 @@ stack, excluding browser E2E by request.
 - Compose API, worker, web, PostgreSQL, and Redis services were running.
 - Private fixture read, range, and metadata checks passed.
 - All 99 existing backend tests passed in 38.75 seconds.
-- Multipart upload reached `ready` through Celery, transcription, and Modal
-  embedding.
+- Multipart upload reached `ready` through Celery, Azure Whisper transcription,
+  and Modal embedding.
 - URL ingest reached `succeeded` in approximately 258 seconds.
 - Mounted local-path ingest reached `succeeded` in approximately 219 seconds.
 - Search and transcript-grounded chat returned workspace-scoped results and

@@ -2,7 +2,6 @@
 
 Includes:
 - Qwen/Qwen3-VL-Embedding-2B embeddings
-- faster-whisper transcription
 - Gemma answer generation
 
 Deploy all:
@@ -18,12 +17,10 @@ import modal
 
 MODEL_ID = "Qwen/Qwen3-VL-Embedding-2B"
 GEMMA_MODEL_ID = "google/gemma-4-E4B-it"
-WHISPER_MODEL_SIZE = "small"
 DIMENSIONS = 768
 
 app = modal.App("vivadeo-qwen3-vl-embedding-2b")
 model_volume = modal.Volume.from_name("qwen3-vl-embedding-2b-cache", create_if_missing=True)
-whisper_volume = modal.Volume.from_name("vivadeo-faster-whisper-cache", create_if_missing=True)
 gemma_volume = modal.Volume.from_name("vivadeo-gemma-e4b-cache", create_if_missing=True)
 
 image = (
@@ -301,64 +298,6 @@ class QwenEmbedder:
             else:
                 results.append({"pose": "unknown", "facing_camera": None, "confidence": 0.0, "faces": 0})
         return results
-
-
-whisper_image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .apt_install("ffmpeg")
-    .uv_pip_install(
-        "faster-whisper>=1.1.0",
-        "huggingface_hub",
-        "nvidia-cublas-cu12",
-        "nvidia-cudnn-cu12",
-    )
-    .env({
-        "LD_LIBRARY_PATH": "/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH",
-    })
-)
-
-
-@app.function(
-    image=whisper_image,
-    gpu="L4",
-    memory=16384,
-    timeout=1800,
-    scaledown_window=300,
-    volumes={"/models": whisper_volume},
-    secrets=[modal.Secret.from_name("huggingface-secret")],
-)
-def transcribe(media_bytes: bytes, filename: str = "video.mp4") -> list[dict]:
-    from faster_whisper import WhisperModel
-
-    os.environ["HF_HOME"] = "/models/huggingface"
-    suffix = Path(filename).suffix or ".mp4"
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(media_bytes)
-        path = tmp.name
-    try:
-        model = WhisperModel(
-            WHISPER_MODEL_SIZE,
-            device="cuda",
-            compute_type="float16",
-            download_root="/models/faster-whisper",
-        )
-        segments, _info = model.transcribe(
-            path,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 500},
-            condition_on_previous_text=False,
-        )
-        return [
-            {"start_time": float(segment.start), "end_time": float(segment.end), "text": segment.text.strip()}
-            for segment in segments
-            if segment.text and segment.text.strip()
-        ]
-    finally:
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
 
 
 gemma_image = (
