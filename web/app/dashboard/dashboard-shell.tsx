@@ -90,9 +90,6 @@ export function DashboardShell({
       <div className="dashboard-frame">
         <header className="dashboard-command-bar">
           <nav aria-label="Workspace actions">
-            <button type="button" onClick={() => document.querySelector<HTMLInputElement>("#dashboard-sidebar-search input")?.focus()} aria-label="Search archive">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>
-            </button>
             <Link href="/dashboard/jobs" aria-label="View activity">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
             </Link>
