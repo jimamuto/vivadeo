@@ -11,25 +11,24 @@ const DEFAULT_CHAT_PROMPT = "What did the speaker say about the launch timeline?
 const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-function TypedGreeting({ text }: { text: string }) {
+function TypedText({ text, interval = 55, className }: { text: string; interval?: number; className?: string }) {
+  const target = useRef(text);
   const [visible, setVisible] = useState("");
+
+  target.current = text;
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setVisible(text);
+      setVisible(target.current);
       return;
     }
-    setVisible("");
-    let index = 0;
     const timer = window.setInterval(() => {
-      index += 1;
-      setVisible(text.slice(0, index));
-      if (index >= text.length) window.clearInterval(timer);
-    }, 55);
+      setVisible((current) => target.current.startsWith(current) ? target.current.slice(0, current.length + 1) : "");
+    }, interval);
     return () => window.clearInterval(timer);
-  }, [text]);
+  }, [interval]);
 
-  return <span className="chat-greeting-typed" aria-label={text}><span aria-hidden="true">{visible}</span></span>;
+  return <span className={className} aria-label={text}><span aria-hidden="true">{visible}</span></span>;
 }
 
 type ComposerSelectOption = {
@@ -471,7 +470,6 @@ export function SearchContent({
   const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
-  const [chatProgress, setChatProgress] = useState(0);
   const [streamedAnswer, setStreamedAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
@@ -641,11 +639,11 @@ export function SearchContent({
   }
 
   function watchChatJob(jobId: string) {
-    return new Promise<{ status: string; message?: string | null; error?: string | null }>((resolve) => {
+    return new Promise<{ status: string; message?: string | null; error?: string | null; content?: string | null }>((resolve) => {
       let polling = false;
       let settled = false;
       const stream = new EventSource(`/api/chat-events/${jobId}`);
-      const finish = (payload: { status: string; message?: string | null; error?: string | null }) => {
+      const finish = (payload: { status: string; message?: string | null; error?: string | null; content?: string | null }) => {
         if (settled) return;
         settled = true;
         stream.close();
@@ -657,7 +655,6 @@ export function SearchContent({
           const response = await fetch(`/api/proxy/v1/jobs/${jobId}`, { cache: "no-store" });
           if (response.ok) {
             const payload = await response.json() as { status: string; progress?: number; message?: string | null; error?: string | null; content?: string | null };
-            setChatProgress(payload.progress ?? 0);
             setStatus(payload.message || "Preparing answer...");
             if (payload.content != null) setStreamedAnswer(payload.content);
             if (["succeeded", "failed", "canceled"].includes(payload.status)) return finish(payload);
@@ -673,7 +670,6 @@ export function SearchContent({
       stream.addEventListener("job", (event) => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null; content?: string | null };
-          setChatProgress(payload.progress ?? 0);
           setStatus(payload.message || "Preparing answer...");
           if (payload.content != null) setStreamedAnswer(payload.content);
           if (["succeeded", "failed", "canceled"].includes(payload.status)) finish(payload);
@@ -972,7 +968,6 @@ export function SearchContent({
     setLoading(true);
     setStreamedAnswer("");
     setStatus("Preparing a reply...");
-    setChatProgress(0);
 
     try {
       // Wait for transfer/attachment registration, never for full indexing.
@@ -1018,8 +1013,10 @@ export function SearchContent({
       const job = (await response.json()) as { id: string };
       setActiveChatJobId(job.id);
       const outcome = await watchChatJob(job.id);
-      const refreshed = await refreshThread(threadId);
       if (outcome.status !== "succeeded") throw new Error(outcome.error || `Chat ${outcome.status}`);
+      const revealDelay = outcome.content ? Math.min(outcome.content.length * 18, 800) : 0;
+      if (revealDelay) await new Promise((resolve) => window.setTimeout(resolve, revealDelay));
+      const refreshed = await refreshThread(threadId);
       const assistantTurn = refreshed.turns.at(-1);
       const citations = assistantTurn?.citations || [];
       const seconds = Math.max(1, Math.round((Date.now() - requestStartedAt) / 1000));
@@ -1036,7 +1033,6 @@ export function SearchContent({
     } finally {
       setLoading(false);
       setActiveChatJobId(null);
-      setChatProgress(0);
     }
   }
 
@@ -1184,7 +1180,7 @@ export function SearchContent({
                   <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
                   <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
                 </div>
-              ) : <button type="button" className="sidebar-recent-chat-open" onClick={() => openThread(thread)} title={thread.title}><TypedGreeting text={thread.title} /></button>}
+              ) : <button type="button" className="sidebar-recent-chat-open" onClick={() => openThread(thread)} title={thread.title}><TypedText text={thread.title} className="chat-greeting-typed" /></button>}
               <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} aria-expanded={threadMenuId === thread.id}>•••</button>
               {threadMenuId === thread.id ? <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
                 <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
@@ -1414,7 +1410,7 @@ export function SearchContent({
             <section ref={chatFeedRef} className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
               {turns.length === 0 ? (
                 <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
-                  <h3 className="chat-greeting">{showGreeting ? <TypedGreeting text={`${greeting}, ${firstName}`} /> : "New chat"}</h3>
+                  <h3 className="chat-greeting">{showGreeting ? <TypedText text={`${greeting}, ${firstName}`} className="chat-greeting-typed" /> : "New chat"}</h3>
                   <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this chat."}</p>
                   {showOnboarding ? <div className="chat-starters">
                     {[
@@ -1561,10 +1557,9 @@ export function SearchContent({
               {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label={status || "Vivadeo is preparing an answer"}>
                 <div className="search-top">
                   <div className="search-meta">
-                    {streamedAnswer ? <div className="search-answer-text" aria-live="polite">{streamedAnswer}</div> : <div className="chat-pending-status" aria-live="polite" aria-busy="true">
+                    {streamedAnswer ? <div className="search-answer-text" aria-live="polite"><TypedText text={streamedAnswer} interval={18} /></div> : <div className="chat-pending-status" aria-live="polite" aria-busy="true">
                       <span className="chat-typing" aria-hidden="true"><span /><span /><span /></span>
                       <span className="chat-progress-copy">{status || "Preparing answer..."}</span>
-                      <span className="chat-progress-percent">{Math.round(chatProgress * 100)}%</span>
                     </div>}
                   </div>
                 </div>
