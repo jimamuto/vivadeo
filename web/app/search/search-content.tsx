@@ -487,8 +487,14 @@ export function SearchContent({
   const [editingPrompt, setEditingPrompt] = useState("");
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatFeedRef = useRef<HTMLElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
+
+  useClientLayoutEffect(() => {
+    const feed = chatFeedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [turns, loading, streamedAnswer]);
 
   useEffect(() => {
     if (!threadMenuId) return;
@@ -1381,7 +1387,7 @@ export function SearchContent({
           </section>
 
           <section className="search-layout">
-            <section className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
+            <section ref={chatFeedRef} className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
               {turns.length === 0 ? (
                 <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
                   <h3 className="chat-greeting">{showGreeting ? <TypedGreeting text={`${greeting}, ${firstName}`} /> : "New chat"}</h3>
