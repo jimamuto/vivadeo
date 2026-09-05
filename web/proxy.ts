@@ -8,7 +8,7 @@ function isProtectedPath(pathname: string): boolean {
   return pathname.startsWith("/api/auth") || pathname.startsWith("/api/proxy");
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!isProtectedPath(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
@@ -35,7 +35,7 @@ export const config = {
   matcher: [
     // Apply rate-limiting to all API routes EXCEPT the video upload endpoint.
     // Excluding it prevents Next.js from buffering the entire request body in
-    // memory (the body-clone it creates for middleware is limited to 10MB),
+    // memory before streaming it to the backend,
     // which lets the proxy route stream large files directly to the backend.
     "/api/((?!proxy/v1/videos/upload).*)",
   ],

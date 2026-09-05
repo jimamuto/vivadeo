@@ -2,6 +2,7 @@
 const nextConfig = {
   output: "standalone",
   typedRoutes: true,
+  turbopack: { root: process.cwd() },
   experimental: {
     // Raise the body buffer limit so large video uploads aren't truncated
     // before they reach the /api/proxy route handler.

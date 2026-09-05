@@ -10,23 +10,23 @@
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",
-    "@better-auth/drizzle-adapter": "^1.6.11",
+    "@better-auth/drizzle-adapter": "1.6.22",
     "@motionone/utils": "^10.18.0",
     "@radix-ui/react-hover-card": "^1.1.23",
-    "better-auth": "^1.6.11",
+    "better-auth": "1.6.22",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.39.0",
     "motion": "^13.2.0",
-    "next": "^15.4.0",
+    "next": "^16.3.4",
     "postgres": "^3.4.9",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "typescript": "^5.8.3"
   }
 }
