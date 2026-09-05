@@ -636,7 +636,7 @@ export function SearchContent({
     if (!response.ok) throw new Error("Could not refresh chat");
     const thread = normalizeThread(await response.json() as Parameters<typeof normalizeThread>[0]);
     setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
-    if (thread.id === activeThreadId) setTurns(thread.turns);
+    setTurns(thread.turns);
     return thread;
   }
 
@@ -981,7 +981,9 @@ export function SearchContent({
       if (linkedUrl) setStatus("Preparing the linked video…");
       const linkedVideoId = linkedUrl ? await ingestVideoUrl(linkedUrl) : null;
       if (linkedUrl && !linkedVideoId) throw new Error("Vivadeo could not prepare the linked video.");
-      const currentSources = await refreshThreadSources(threadId);
+      const knownSources = threads.find((thread) => thread.id === threadId)?.sources || [];
+      const shouldRefreshSources = Boolean(linkedVideoId || uploadItems.length || knownSources.length);
+      const currentSources = shouldRefreshSources ? await refreshThreadSources(threadId) : [];
       if (!currentSources) throw new Error("Could not check the attached videos. Please try again.");
       setStatus("Preparing a reply...");
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {

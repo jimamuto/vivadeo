@@ -620,7 +620,12 @@ def generate_chat_task(
         elif request_payload.get("output_format") in {"rows", "comparison"}:
             _update_job(job_id, status="running", progress=0.12, message="Preparing structured evidence")
         else:
-            _update_job(job_id, status="running", progress=0.12, message="Starting search")
+            _update_job(
+                job_id,
+                status="running",
+                progress=0.12,
+                message="Writing a reply" if request_payload.get("conversation_only") else "Starting search",
+            )
         report_progress = lambda progress, message: _update_job(job_id, status="running", progress=progress, message=message)
         request_payload = dict(request_payload)
         if request_payload.get("provider") in {"custom", "openai", "anthropic", "gemini", "nvidia"}:

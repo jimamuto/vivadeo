@@ -362,8 +362,9 @@ def test_editing_chat_prompt_branches_before_the_edited_message(monkeypatch):
 
     monkeypatch.setattr(api, "_get_chat_thread", lambda *args: thread)
     monkeypatch.setattr(api, "_append_chat_message", append_message)
+    queued = []
     monkeypatch.setattr(api, "_job_response", lambda job: job)
-    monkeypatch.setattr(api.generate_chat_task, "delay", lambda *args: None)
+    monkeypatch.setattr(api.generate_chat_task, "delay", lambda *args: queued.append(args))
 
     api.create_chat_message(
         "thread-1",
@@ -373,6 +374,7 @@ def test_editing_chat_prompt_branches_before_the_edited_message(monkeypatch):
     )
 
     assert parent_ids == ["answer-before", "user-new"]
+    assert queued[0][-1]["conversation_only"] is True
 
 
 def test_search_by_image_returns_search_results(monkeypatch):
@@ -619,37 +621,20 @@ def test_retry_canceled_upload_job(monkeypatch):
     assert called["args"] == ("job-1", "video-1", "default-workspace")
 
 
-def test_conversation_only_chat_skips_video_retrieval(monkeypatch):
-    class FakeChat:
-        def __init__(self, **_kwargs):
-            pass
-
-        def answer(self, messages, context):
-            assert messages[-1]["content"] == "Hello"
-            assert context == []
-            return "Hello! How can I help?"
-
-    settings = SimpleNamespace(
-        modal_gemma_app="app",
-        modal_gemma_function="answer",
-        modal_timeout=30,
-        pro_llm_api_key=None,
-        pro_llm_base_url=None,
-        pro_llm_model="",
-        pro_llm_timeout=30,
-    )
-    monkeypatch.setattr(api, "get_runtime_settings", lambda: settings)
-    monkeypatch.setattr(api, "ModalGemmaChat", FakeChat)
-    session = SimpleNamespace(scalar=lambda _query: "starter")
+def test_conversation_only_greeting_skips_video_retrieval_and_model(monkeypatch):
+    monkeypatch.setattr(api, "_chat_generator", lambda *args: (_ for _ in ()).throw(AssertionError("model should not run")))
+    streamed = []
 
     response = api.search_chat(
         ChatRequest(messages=[ChatMessage(role="user", content="Hello")], conversation_only=True),
-        session=session,
+        session=SimpleNamespace(),
         organization_id="workspace-1",
+        on_delta=streamed.append,
     )
 
     assert response.answer == "Hello! How can I help?"
     assert response.citations == []
+    assert streamed == [response.answer]
 
 
 def test_dead_letter_response_includes_error_window():

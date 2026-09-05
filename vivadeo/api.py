@@ -1993,7 +1993,10 @@ def create_chat_message(
         parent_id=user_message.id,
         status="pending",
     )
-    safe_request_payload = request.model_dump(exclude={"custom_api_key"})
+    safe_request_payload = {
+        **request.model_dump(exclude={"custom_api_key"}),
+        "conversation_only": not message_video_ids,
+    }
     job = Job(
         id=new_id(),
         organization_id=organization_id,
@@ -2007,7 +2010,18 @@ def create_chat_message(
         message="Queued chat generation",
     )
     session.add(job)
+    greeting = _simple_greeting(question)
+    if greeting:
+        assistant_message.content = greeting
+        assistant_message.status = "completed"
+        assistant_message.updated_at = utcnow()
+        job.status = "succeeded"
+        job.progress = 1.0
+        job.message = "Answer ready"
+        job.payload = {**job.payload, "streamed_answer": greeting}
     session.commit()
+    if greeting:
+        return _job_response(job)
     if request.provider in {"custom", "openai", "anthropic", "gemini", "nvidia"} and request.custom_api_key:
         Redis.from_url(get_runtime_settings().redis_url, decode_responses=True).setex(
             f"vivadeo:chat-key:{job.id}",
@@ -2217,7 +2231,18 @@ def _chat_generator(request, session: Session, organization_id: str):
     return generator
 
 
+def _simple_greeting(question: str) -> str | None:
+    if re.fullmatch(r"(?:hi|hello|hey|good (?:morning|afternoon|evening))[!. ]*", question.strip(), re.IGNORECASE):
+        return "Hello! How can I help?"
+    return None
+
+
 def _general_chat_answer(request: ChatRequest, session: Session, organization_id: str, on_delta=None) -> ChatResponse:
+    answer = _simple_greeting(request.messages[-1].content)
+    if answer:
+        if on_delta:
+            on_delta(answer)
+        return ChatResponse(answer=answer, citations=[])
     generator = _chat_generator(request, session, organization_id)
     messages = [message.model_dump() for message in request.messages[-10:]]
     return ChatResponse(answer=generator.answer(messages, [], **({"on_delta": on_delta} if on_delta else {})), citations=[])
