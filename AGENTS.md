@@ -28,6 +28,10 @@ Do not expose implementation vendors, model names, hosting platforms, databases,
 - Clip studio UI is removed for the current search-chat phase; do not add new `/dashboard/clip-studio` links unless product direction changes.
 - For `vivadeo/api.py`, prefer targeted `uv run pytest tests/test_api.py::...` cases while iterating, then run broader backend verification when ready.
 
+## Visual Verification
+
+- When a frontend issue needs visual confirmation or browser reproduction, use [`.agents/skills/playwright-visual-verification/SKILL.md`](.agents/skills/playwright-visual-verification/SKILL.md). It covers temporary Playwright setup, real auth flows, screenshots, computed layout measurements, repeated interactions, and checking whether source CSS reached the running app.
+
 ## Common Verification Commands
 
 - Backend tests: `uv sync --group test`, then `uv run pytest --cov --cov-report=term-missing`.
