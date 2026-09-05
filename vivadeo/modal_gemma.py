@@ -61,7 +61,7 @@ class ModalGemmaChat:
             {"role": "user", "content": f"Create a concise 3 to 6 word title for this video archive chat. Return only the title, no quotes or punctuation: {question}"},
         ]
         title = self.answer(prompt, [])
-        return " ".join(title.replace("\n", " ").split())[:255] or "New thread"
+        return " ".join(title.replace("\n", " ").split()).strip(" #*`_")[:255] or "New thread"
 
     def answer(self, messages: list[dict], context: list[dict], verbose: bool = False, on_delta=None) -> str:
         if on_delta is not None:

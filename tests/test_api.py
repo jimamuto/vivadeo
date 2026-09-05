@@ -637,6 +637,21 @@ def test_conversation_only_greeting_skips_video_retrieval_and_model(monkeypatch)
     assert streamed == [response.answer]
 
 
+def test_conversation_only_vivadeo_question_uses_product_context(monkeypatch):
+    monkeypatch.setattr(api, "_chat_generator", lambda *args: (_ for _ in ()).throw(AssertionError("model should not run")))
+
+    response = api.search_chat(
+        ChatRequest(messages=[ChatMessage(role="user", content="What can I do with Vivadeo?")], conversation_only=True),
+        session=SimpleNamespace(),
+        organization_id="workspace-1",
+    )
+
+    assert response.answer.startswith("## Vivadeo")
+    assert "video archive" in response.answer
+    assert "timestamped video evidence" in response.answer
+    assert "VivaVideo" not in response.answer
+
+
 def test_dead_letter_response_includes_error_window():
     now = datetime.now(timezone.utc)
     entry = SimpleNamespace(

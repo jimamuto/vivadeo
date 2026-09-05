@@ -42,3 +42,23 @@ def test_openai_compatible_chat_normalizes_answer(monkeypatch):
 
     assert answer == "grounded answer"
     assert "temperature" not in captured
+
+
+def test_openai_compatible_chat_knows_vivadeo_without_video_evidence(monkeypatch):
+    captured = {}
+
+    def respond(request, timeout):
+        captured.update(json.loads(request.data))
+        return _Response({"choices": [{"message": {"content": "Vivadeo helps teams search their video archive."}}]})
+
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
+
+    OpenAICompatibleChat(
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="test-model",
+    ).answer([{"role": "user", "content": "What is Vivadeo?"}], [])
+
+    system_prompt = captured["messages"][0]["content"]
+    assert "video archive and search product" in system_prompt
+    assert "never confuse Vivadeo with VivaVideo" in system_prompt

@@ -9,6 +9,16 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
+GENERAL_CHAT_INSTRUCTION = (
+    "You are Vivadeo, the assistant inside Vivadeo, a private workspace-based video archive and search product. "
+    "Vivadeo helps teams upload or index videos, search spoken and visual content, inspect answers with timestamped "
+    "video evidence, and manage their video library and processing jobs. Answer questions about Vivadeo using this "
+    "context, and never confuse Vivadeo with VivaVideo or another video editor. For ordinary conversation, respond "
+    "naturally and use concise Markdown when it improves readability. Do not claim to have searched video evidence "
+    "unless evidence was supplied."
+)
+
+
 class OpenAICompatibleError(RuntimeError):
     """Raised when an OpenAI-compatible gateway cannot produce an answer."""
 
@@ -77,7 +87,7 @@ class OllamaChat:
         instruction = (
             "Answer only from this transcript evidence:\n" + evidence
             if context
-            else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
+            else GENERAL_CHAT_INSTRUCTION
         )
         payload = json.dumps({
             "model": self.model,
@@ -115,7 +125,7 @@ class AnthropicChat:
         instruction = (
             "Answer only from this transcript evidence:\n" + evidence
             if context
-            else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
+            else GENERAL_CHAT_INSTRUCTION
         )
         payload = json.dumps({
             "model": self.model,
@@ -218,7 +228,7 @@ class OpenAICompatibleChat:
         instruction = (
             "Answer using only the supplied video evidence." + visual_note + " Give the direct answer in 1-2 short sentences. Do not include evidence lists, repeat transcript excerpts, raw links, or chain-of-thought; the interface presents the relevant moments separately. If the evidence is insufficient, say so plainly.\n\nEvidence:\n" + evidence
             if context
-            else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
+            else GENERAL_CHAT_INSTRUCTION
         )
         grounded_messages = [{"role": "system", "content": instruction}, *messages]
         payload = json.dumps({"model": self.model, "messages": grounded_messages, "stream": on_delta is not None}).encode("utf-8")

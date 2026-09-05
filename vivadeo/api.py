@@ -2238,7 +2238,17 @@ def _simple_greeting(question: str) -> str | None:
 
 
 def _general_chat_answer(request: ChatRequest, session: Session, organization_id: str, on_delta=None) -> ChatResponse:
-    answer = _simple_greeting(request.messages[-1].content)
+    question = request.messages[-1].content
+    answer = _simple_greeting(question)
+    if not answer and "vivadeo" in question.lower():
+        answer = (
+            "## Vivadeo\n\n"
+            "**Vivadeo is a private workspace for finding and working with moments across your video archive.**\n\n"
+            "- Upload or index video sources.\n"
+            "- Search spoken and visual content.\n"
+            "- Review answers with timestamped video evidence.\n"
+            "- Manage your video library and processing jobs."
+        )
     if answer:
         if on_delta:
             on_delta(answer)

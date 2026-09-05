@@ -2,6 +2,8 @@
 
 import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
 
@@ -11,7 +13,11 @@ const DEFAULT_CHAT_PROMPT = "What did the speaker say about the launch timeline?
 const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-function TypedText({ text, interval = 55, className }: { text: string; interval?: number; className?: string }) {
+function MarkdownText({ text }: { text: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>;
+}
+
+function TypedText({ text, interval = 55, className, markdown = false }: { text: string; interval?: number; className?: string; markdown?: boolean }) {
   const target = useRef(text);
   const [visible, setVisible] = useState("");
 
@@ -28,6 +34,7 @@ function TypedText({ text, interval = 55, className }: { text: string; interval?
     return () => window.clearInterval(timer);
   }, [interval]);
 
+  if (markdown) return <div className={className} aria-label={text}><div aria-hidden="true"><MarkdownText text={visible} /></div></div>;
   return <span className={className} aria-label={text}><span aria-hidden="true">{visible}</span></span>;
 }
 
@@ -1443,7 +1450,7 @@ export function SearchContent({
                         <div className="search-meta">
                           {turn.role === "assistant" ? (
                             <>
-                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <div className="search-answer-text">{turn.content}</div> : null}
+                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <div className="search-answer-text"><MarkdownText text={turn.content} /></div> : null}
                               {turn.intent?.modality ? <div className="chat-evidence-summary">{turn.intent.modality === "visual" ? "Visual evidence" : turn.intent.modality === "hybrid" ? "Visual + spoken evidence" : "Transcript evidence"}{turn.verification_summary?.verified ? ` · ${turn.verification_summary.verified} verified` : ""}{turn.verification_summary?.possible ? ` · ${turn.verification_summary.possible} possible` : ""}</div> : null}
                               {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
                               {branchMessages.length > 1 ? <div className="chat-message-actions">
@@ -1557,7 +1564,7 @@ export function SearchContent({
               {loading ? <article className="search-result chat-message chat-message-assistant chat-pending-message" aria-label={status || "Vivadeo is preparing an answer"}>
                 <div className="search-top">
                   <div className="search-meta">
-                    {streamedAnswer ? <div className="search-answer-text" aria-live="polite"><TypedText text={streamedAnswer} interval={18} /></div> : <div className="chat-pending-status" aria-live="polite" aria-busy="true">
+                    {streamedAnswer ? <div className="search-answer-text" aria-live="polite"><TypedText text={streamedAnswer} interval={18} markdown /></div> : <div className="chat-pending-status" aria-live="polite" aria-busy="true">
                       <span className="chat-typing" aria-hidden="true"><span /><span /><span /></span>
                       <span className="chat-progress-copy">{status || "Preparing answer..."}</span>
                     </div>}
