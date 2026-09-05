@@ -113,6 +113,8 @@ def test_video_response_includes_error_and_timestamps():
         duration=12.5,
         object_key="videos/video-1/clip.mp4",
         error="decode failed",
+        transcript_status="failed",
+        visual_status="pending",
         created_at=now,
         updated_at=now,
     )
@@ -183,18 +185,17 @@ def test_search_chat_answers_with_transcript_citations(monkeypatch):
 
     class FakeEmbedder:
         def embed_query(self, query):
-            assert query == "When is launch?"
-            return [0.1, 0.2]
+            raise AssertionError("Transcript questions must not invoke video embeddings")
 
     class FakeStore:
         def __init__(self, session):
             self.session = session
 
-        def search(self, embedding, n_results, organization_id, video_id):
-            assert embedding == [0.1, 0.2]
-            assert n_results == 4
+        def search_transcripts(self, question, limit, organization_id, video_ids, **kwargs):
+            assert question == "When is launch?"
+            assert limit == 4
             assert organization_id == "default-workspace"
-            assert video_id is None
+            assert video_ids == []
             return [
                 {
                     "video_id": "video-1",
@@ -258,8 +259,9 @@ def test_comparison_retrieves_each_video_independently(monkeypatch):
         def __init__(self, session):
             self.session = session
 
-        def search(self, embedding, n_results, organization_id, video_id, **kwargs):
-            searches.append((video_id, n_results))
+        def search_transcripts(self, question, limit, organization_id, video_ids, **kwargs):
+            video_id = video_ids[0]
+            searches.append((video_id, limit))
             index = 0 if video_id == "video-1" else 1
             return [{
                 "video_id": video_id,
@@ -526,7 +528,9 @@ def test_reindex_video_queues_upload_job(monkeypatch):
     response = api.reindex_video("video-1", session=FakeSession(), organization_id="default-workspace")
 
     assert response.status == "queued"
-    assert recorded["jobs"][0].kind == "reindex_upload"
+    assert recorded["jobs"][0].kind == "ingest_uploaded_object"
+    assert video.visual_status == "queued"
+    assert video.transcript_status == "queued"
     assert called["args"] == (recorded["jobs"][0].id, "video-1", "default-workspace")
 
 
@@ -536,6 +540,8 @@ def test_cancel_job_marks_job_and_video_canceled():
         id="video-1",
         organization_id="default-workspace",
         status="indexing",
+        transcript_status="running",
+        visual_status="pending",
         error=None,
     )
     job = SimpleNamespace(
@@ -576,7 +582,7 @@ def test_retry_canceled_upload_job(monkeypatch):
     monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(api_key="test-key", internal_service_key="internal", default_org_id="default-workspace"))
     now = datetime.now(timezone.utc)
 
-    video = SimpleNamespace(id="video-1", source_uri="clip.mp4", object_key="videos/video-1/clip.mp4")
+    video = SimpleNamespace(id="video-1", organization_id="default-workspace", source_uri="clip.mp4", object_key="videos/video-1/clip.mp4", transcript_status="canceled", visual_status="pending")
     job = SimpleNamespace(
         id="job-1",
         organization_id="default-workspace",

@@ -197,6 +197,8 @@ export type ThreadSource = {
   video_id: string;
   filename: string;
   status: string;
+  transcript_status: string;
+  visual_status: string;
   duration: number | null;
   url: string | null;
   created_at: string;
@@ -486,6 +488,7 @@ export function SearchContent({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingPrompt, setEditingPrompt] = useState("");
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const uploadTransfersRef = useRef<Promise<void>>(Promise.resolve());
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const chatFeedRef = useRef<HTMLElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
@@ -625,6 +628,7 @@ export function SearchContent({
       const payload = (await videosResponse.json()) as VideoOption[];
       setVideos(payload.filter((video) => video.status !== "archived"));
     }
+    return sources;
   }
 
   async function refreshThread(threadId: string) {
@@ -652,9 +656,10 @@ export function SearchContent({
         try {
           const response = await fetch(`/api/proxy/v1/jobs/${jobId}`, { cache: "no-store" });
           if (response.ok) {
-            const payload = await response.json() as { status: string; progress?: number; message?: string | null; error?: string | null };
+            const payload = await response.json() as { status: string; progress?: number; message?: string | null; error?: string | null; content?: string | null };
             setChatProgress(payload.progress ?? 0);
             setStatus(payload.message || "Preparing answer...");
+            if (payload.content != null) setStreamedAnswer(payload.content);
             if (["succeeded", "failed", "canceled"].includes(payload.status)) return finish(payload);
           }
         } catch { /* retry while the job continues */ }
@@ -667,10 +672,10 @@ export function SearchContent({
       };
       stream.addEventListener("job", (event) => {
         try {
-          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null; content_delta?: string };
+          const payload = JSON.parse((event as MessageEvent).data) as { status: string; progress?: number; message?: string | null; error?: string | null; content?: string | null };
           setChatProgress(payload.progress ?? 0);
           setStatus(payload.message || "Preparing answer...");
-          if (payload.content_delta) setStreamedAnswer((current) => current + payload.content_delta);
+          if (payload.content != null) setStreamedAnswer(payload.content);
           if (["succeeded", "failed", "canceled"].includes(payload.status)) finish(payload);
         } catch { recover(); }
       });
@@ -767,10 +772,9 @@ export function SearchContent({
       if (!response.ok) throw new Error(`URL ingest failed (${response.status})`);
       const job = (await response.json()) as { id: string; video_id?: string };
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
-      setActiveChatJobId(job.id);
-      const jobStatus = await watchUploadJob(itemId, job.id);
       await refreshThreadSources(threadId);
-      return jobStatus === "succeeded" ? job.video_id || null : null;
+      void watchUploadJob(itemId, job.id).then(() => refreshThreadSources(threadId));
+      return job.video_id || null;
     } catch (cause) {
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "URL ingest failed" } : item));
       return null;
@@ -796,7 +800,13 @@ export function SearchContent({
     setStatus("Video added to this chat.");
   }
 
-  async function uploadVideos(files: FileList | File[]) {
+  function uploadVideos(files: FileList | File[]) {
+    const selected = Array.from(files);
+    uploadTransfersRef.current = uploadTransfersRef.current.then(() => transferVideos(selected));
+    return uploadTransfersRef.current;
+  }
+
+  async function transferVideos(files: File[]) {
     const threadId = await ensureActiveThread();
     if (!threadId) return;
     const selected = Array.from(files);
@@ -839,8 +849,8 @@ export function SearchContent({
           request.send(form);
         });
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
-        await watchUploadJob(itemId, job.id);
         await refreshThreadSources(threadId);
+        void watchUploadJob(itemId, job.id).then(() => refreshThreadSources(threadId));
         setVideosLoaded(true);
       } catch (cause) {
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } : item));
@@ -965,10 +975,14 @@ export function SearchContent({
     setChatProgress(0);
 
     try {
+      // Wait for transfer/attachment registration, never for full indexing.
+      await uploadTransfersRef.current;
       const linkedUrl = nextQuestion.match(/https?:\/\/[^\s<>()]+/i)?.[0].replace(/[),.!?]+$/, "") || null;
       if (linkedUrl) setStatus("Preparing the linked video…");
       const linkedVideoId = linkedUrl ? await ingestVideoUrl(linkedUrl) : null;
       if (linkedUrl && !linkedVideoId) throw new Error("Vivadeo could not prepare the linked video.");
+      const currentSources = await refreshThreadSources(threadId);
+      if (!currentSources) throw new Error("Could not check the attached videos. Please try again.");
       setStatus("Preparing a reply...");
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {
         method: "POST",
@@ -982,14 +996,14 @@ export function SearchContent({
           search_mode: momentContext ? "focused" : searchMode,
           output_format: outputFormat,
           extraction_type: outputFormat === "rows" ? extractionType : null,
-          comparison_video_ids: outputFormat === "comparison" ? (comparisonVideoIds.length ? comparisonVideoIds : threadSources.map((source) => source.video_id)) : [],
+          comparison_video_ids: outputFormat === "comparison" ? (comparisonVideoIds.length ? comparisonVideoIds : currentSources.map((source) => source.video_id)) : [],
           parent_search_run_id: parentSearchRunId,
           focus_window_seconds: momentContext ? Math.max(8, momentContext.endTime - momentContext.startTime) : null,
           custom_base_url: chatModel === "custom" ? customBaseUrl || null : null,
           custom_api_key: chatModel === "custom" ? customApiKey || null : null,
           custom_model: chatModel === "custom" ? customModel || null : null,
           video_id: videoId || null,
-          video_ids: Array.from(new Set([...videoIds, ...threadSources.map((source) => source.video_id), ...(linkedVideoId ? [linkedVideoId] : [])])),
+          video_ids: Array.from(new Set([...videoIds, ...currentSources.map((source) => source.video_id), ...(linkedVideoId ? [linkedVideoId] : [])])),
           focus_video_id: momentContext?.videoId || null,
           focus_start_time: momentContext?.startTime ?? null,
           focus_end_time: momentContext?.endTime ?? null,
@@ -1148,7 +1162,7 @@ export function SearchContent({
     return groups;
   }, []);
   const threadSources = activeThread?.sources || [];
-  const sourceCount = threadSources.length + uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status)).length;
+  const sourceCount = threadSources.length + uploadItems.filter((item) => !["succeeded", "ready", "failed", "canceled", "rejected"].includes(item.status) && !threadSources.some((source) => source.video_id === item.videoId)).length;
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
@@ -1360,6 +1374,14 @@ export function SearchContent({
                   {outputFormat === "comparison" && threadSources.length > 1 ? <select className="chat-comparison-picker" aria-label="Videos to compare" multiple value={comparisonVideoIds} onChange={(event) => setComparisonVideoIds(Array.from(event.target.selectedOptions, (option) => option.value))}>
                     {threadSources.map((source) => <option key={source.video_id} value={source.video_id}>{source.filename}</option>)}
                   </select> : null}
+                </div>
+                <div className="chat-message-attachments" aria-live="polite" aria-label="Attached video preparation">
+                  {threadSources.map((source) => <span key={source.video_id} className="chat-message-attachment">
+                    {source.filename}: {source.transcript_status === "ready" ? "Ready for spoken questions" : source.visual_status === "ready" ? "Visual evidence ready" : ["failed", "canceled"].includes(source.status) ? "Preparation interrupted" : "Preparing spoken content"}
+                  </span>)}
+                  {uploadItems.filter((item) => !threadSources.some((source) => source.video_id === item.videoId)).map((item) => <span key={item.id} className="chat-message-attachment">
+                    {item.filename}: {item.status === "uploading" ? `Uploading ${Math.round((item.progress || 0) * 100)}%` : ["failed", "canceled", "rejected"].includes(item.status) ? "Upload interrupted" : "Preparing spoken content"}
+                  </span>)}
                 </div>
                 <div className="chat-composer-meta">
                   {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "source" : "sources"}</span> : null}

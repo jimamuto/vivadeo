@@ -345,6 +345,16 @@ class GemmaAnswerer:
 
     @modal.method()
     def answer(self, messages: list[dict], context: list[dict]) -> dict:
+        return {"answer": "".join(self._answer_tokens(messages, context)).strip()}
+
+    @modal.method(is_generator=True)
+    def stream_answer(self, messages: list[dict], context: list[dict]):
+        yield from self._answer_tokens(messages, context)
+
+    def _answer_tokens(self, messages: list[dict], context: list[dict]):
+        from threading import Event, Thread
+        from transformers import TextIteratorStreamer, StoppingCriteria, StoppingCriteriaList
+
         history = [
             {"role": msg.get("role", "user"), "content": str(msg.get("content", ""))}
             for msg in messages[-6:]
@@ -365,7 +375,7 @@ class GemmaAnswerer:
             {
                 "role": "user",
                 "content": (
-                    f"Transcript evidence:\n{_format_context(context[:6])}\n\nQuestion: {history[-1]['content'] if history else ''}"
+                    f"Transcript evidence:\n{_format_context(context)}\n\nQuestion: {history[-1]['content'] if history else ''}"
                     if context
                     else (history[-1]["content"] if history else "")
                 ),
@@ -373,13 +383,32 @@ class GemmaAnswerer:
         ]
         prompt = self._tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
         inputs = self._tokenizer(prompt, return_tensors="pt").to(self._model.device)
-        with self._torch.no_grad():
-            output = self._model.generate(
-                **inputs,
-                max_new_tokens=224,
-                do_sample=False,
-                repetition_penalty=1.05,
-            )
-        generated = output[0][inputs["input_ids"].shape[-1]:]
-        text = self._tokenizer.decode(generated, skip_special_tokens=True).strip()
-        return {"answer": text}
+        stopped = Event()
+        errors = []
+        streamer = TextIteratorStreamer(self._tokenizer, skip_prompt=True, skip_special_tokens=True, timeout=120)
+
+        class StopRequested(StoppingCriteria):
+            def __call__(self, input_ids, scores, **kwargs):
+                return stopped.is_set()
+
+        def generate():
+            try:
+                with self._torch.no_grad():
+                    self._model.generate(
+                        **inputs, max_new_tokens=512, do_sample=False,
+                        repetition_penalty=1.05, streamer=streamer,
+                        stopping_criteria=StoppingCriteriaList([StopRequested()]),
+                    )
+            except Exception as exc:
+                errors.append(exc)
+                streamer.end()
+
+        thread = Thread(target=generate, daemon=True)
+        thread.start()
+        try:
+            yield from streamer
+            if errors:
+                raise errors[0]
+        finally:
+            stopped.set()
+            thread.join(timeout=10)

@@ -1,5 +1,7 @@
 """Postgres/pgvector-backed video store for production mode."""
 
+import re
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -84,6 +86,45 @@ class PostgresVideoStore:
             }
             for chunk, video, dist in rows
         ]
+
+    def search_transcripts(
+        self, question: str, *, organization_id: str, video_ids: list[str],
+        limit: int = 6, overview: bool = False,
+        start_time: float | None = None, end_time: float | None = None,
+    ) -> list[dict]:
+        terms = re.findall(r"[\w]+", question, flags=re.UNICODE)
+        query = func.websearch_to_tsquery("english", " OR ".join(terms))
+        document = func.to_tsvector("english", VideoTranscriptSegment.text)
+        rank = func.ts_rank_cd(document, query)
+        stmt = select(VideoTranscriptSegment, Video, rank).join(Video, Video.id == VideoTranscriptSegment.video_id).where(
+            Video.organization_id == organization_id,
+            VideoTranscriptSegment.organization_id == organization_id,
+            Video.status.notin_(["archived", "canceled"]),
+        )
+        if video_ids:
+            stmt = stmt.where(Video.id.in_(video_ids))
+        if start_time is not None:
+            stmt = stmt.where(VideoTranscriptSegment.end_time >= start_time)
+        if end_time is not None:
+            stmt = stmt.where(VideoTranscriptSegment.start_time <= end_time)
+        if overview:
+            stmt = stmt.order_by(Video.id, VideoTranscriptSegment.start_time)
+        else:
+            stmt = stmt.order_by(rank.desc(), VideoTranscriptSegment.start_time).limit(limit)
+        return [{
+            "chunk_id": segment.id, "video_id": video.id,
+            "filename": video.filename, "source_uri": video.source_uri,
+            "object_key": video.object_key, "start_time": segment.start_time,
+            "end_time": segment.end_time, "text": segment.text,
+            "retrieval_modality": "transcript", "similarity_score": float(score),
+        } for segment, video, score in self.session.execute(stmt).all()]
+
+    def transcript_embeddings_ready(self, organization_id: str, video_ids: list[str]) -> bool:
+        stmt = select(func.count(VideoTranscriptSegment.id), func.count(VideoTranscriptSegment.nvidia_embedding)).where(VideoTranscriptSegment.organization_id == organization_id)
+        if video_ids:
+            stmt = stmt.where(VideoTranscriptSegment.video_id.in_(video_ids))
+        total, embedded = self.session.execute(stmt).one()
+        return total > 0 and total == embedded
 
     def search_transcript_embeddings(
         self,

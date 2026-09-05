@@ -63,7 +63,20 @@ class ModalGemmaChat:
         title = self.answer(prompt, [])
         return " ".join(title.replace("\n", " ").split())[:255] or "New thread"
 
-    def answer(self, messages: list[dict], context: list[dict], verbose: bool = False) -> str:
+    def answer(self, messages: list[dict], context: list[dict], verbose: bool = False, on_delta=None) -> str:
+        if on_delta is not None:
+            class_name = self._function_name.split(".", 1)[0] if "." in self._function_name else "GemmaAnswerer"
+            remote = modal.Cls.from_name(self._app_name, class_name)().stream_answer
+            parts = []
+            stream = remote.remote_gen(messages, context)
+            try:
+                for delta in stream:
+                    if delta:
+                        parts.append(delta)
+                        on_delta(delta)
+            finally:
+                stream.close()
+            return self._normalize_answer("".join(parts))
         remote = self._get_remote()
         t0 = time.monotonic()
         try:

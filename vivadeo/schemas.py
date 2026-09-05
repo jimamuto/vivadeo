@@ -57,6 +57,7 @@ class JobResponse(BaseModel):
     updated_at: datetime
     events: list[dict] = Field(default_factory=list)
     transcribe: bool = True
+    content: str | None = None
 
 
 class VideoLibraryUpdateRequest(BaseModel):
@@ -80,6 +81,8 @@ class VideoResponse(BaseModel):
     collection: str | None = None
     labels: list[str] = Field(default_factory=list)
     position: int = 0
+    transcript_status: str = "pending"
+    visual_status: str = "pending"
     created_at: datetime
     updated_at: datetime
 
@@ -165,6 +168,8 @@ class ChatThreadSourceResponse(BaseModel):
     video_id: str
     filename: str
     status: str
+    transcript_status: str = "pending"
+    visual_status: str = "pending"
     duration: float | None = None
     url: str | None = None
     created_at: datetime

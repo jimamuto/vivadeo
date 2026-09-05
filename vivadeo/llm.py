@@ -22,6 +22,45 @@ def validate_base_url(value: str) -> str:
     return value.rstrip("/")
 
 
+def _read_answer_stream(response, on_delta, protocol: str) -> str:
+    parts = []
+    completed = False
+    for raw in response:
+        line = raw.decode("utf-8").strip()
+        if protocol != "ollama":
+            if not line.startswith("data:"):
+                continue
+            line = line[5:].strip()
+            if line == "[DONE]":
+                completed = True
+                break
+        if not line:
+            continue
+        event = json.loads(line)
+        if event.get("error") or event.get("type") == "error":
+            raise OpenAICompatibleError("The answer service interrupted the response.")
+        if protocol == "ollama":
+            delta = event.get("message", {}).get("content", "")
+            completed = bool(event.get("done"))
+        elif protocol == "anthropic":
+            delta = event.get("delta", {}).get("text", "")
+            completed = event.get("type") == "message_stop"
+        else:
+            choices = event.get("choices") or []
+            delta = choices[0].get("delta", {}).get("content", "") if choices else ""
+        if delta:
+            parts.append(delta)
+            on_delta(delta)
+        if completed:
+            break
+    if not completed:
+        raise OpenAICompatibleError("The answer service disconnected before completing the response.")
+    answer = "".join(parts).strip()
+    if not answer:
+        raise OpenAICompatibleError("The answer service returned an empty answer.")
+    return answer
+
+
 class OllamaChat:
     def __init__(self, *, base_url: str, model: str, timeout: int = 120):
         self.base_url = validate_base_url(base_url)
@@ -30,7 +69,7 @@ class OllamaChat:
         if not self.model:
             raise OpenAICompatibleError("An Ollama model is required.")
 
-    def answer(self, messages: list[dict], context: list[dict]) -> str:
+    def answer(self, messages: list[dict], context: list[dict], on_delta=None) -> str:
         evidence = "\n\n".join(
             f"[{item.get('filename', 'video')} {item.get('start_time', 0):.2f}-{item.get('end_time', 0):.2f}] {item.get('text', '')}"
             for item in context
@@ -42,12 +81,14 @@ class OllamaChat:
         )
         payload = json.dumps({
             "model": self.model,
-            "stream": False,
+            "stream": on_delta is not None,
             "messages": [{"role": "system", "content": instruction}, *messages],
         }).encode("utf-8")
         request = Request(f"{self.base_url}/api/chat", data=payload, headers={"Content-Type": "application/json"}, method="POST")
         try:
             with urlopen(request, timeout=self.timeout) as response:
+                if on_delta is not None:
+                    return _read_answer_stream(response, on_delta, "ollama")
                 result = json.load(response)
             answer = str(result["message"]["content"]).strip()
         except (HTTPError, URLError, TimeoutError, OSError, KeyError, TypeError, ValueError) as exc:
@@ -66,7 +107,7 @@ class AnthropicChat:
         if not self.api_key or not self.model:
             raise OpenAICompatibleError("An Anthropic endpoint, API key, and model are required.")
 
-    def answer(self, messages: list[dict], context: list[dict]) -> str:
+    def answer(self, messages: list[dict], context: list[dict], on_delta=None) -> str:
         evidence = "\n\n".join(
             f"[{item.get('filename', 'video')} {item.get('start_time', 0):.2f}-{item.get('end_time', 0):.2f}] {item.get('text', '')}"
             for item in context
@@ -78,6 +119,7 @@ class AnthropicChat:
         )
         payload = json.dumps({
             "model": self.model,
+            "stream": on_delta is not None,
             "max_tokens": 2048,
             "system": instruction,
             "messages": messages,
@@ -95,6 +137,8 @@ class AnthropicChat:
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
+                if on_delta is not None:
+                    return _read_answer_stream(response, on_delta, "anthropic")
                 result = json.load(response)
             answer = "".join(str(part.get("text", "")) for part in result["content"] if isinstance(part, dict)).strip()
         except (HTTPError, URLError, TimeoutError, OSError, KeyError, TypeError, ValueError) as exc:
@@ -164,7 +208,7 @@ class OpenAICompatibleChat:
         except (HTTPError, URLError, TimeoutError, OSError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise OpenAICompatibleError("The configured AI endpoint could not verify visual evidence.") from exc
 
-    def answer(self, messages: list[dict], context: list[dict]) -> str:
+    def answer(self, messages: list[dict], context: list[dict], on_delta=None) -> str:
         evidence = "\n\n".join(
             f"[{item.get('filename', 'video')} {item.get('start_time', 0):.2f}-{item.get('end_time', 0):.2f}] "
             f"{'Visual evidence verified. ' if item.get('visual_verified') else ''}{item.get('text', '')}"
@@ -177,7 +221,7 @@ class OpenAICompatibleChat:
             else "Respond naturally and helpfully. Do not claim to have searched or found video evidence."
         )
         grounded_messages = [{"role": "system", "content": instruction}, *messages]
-        payload = json.dumps({"model": self.model, "messages": grounded_messages}).encode("utf-8")
+        payload = json.dumps({"model": self.model, "messages": grounded_messages, "stream": on_delta is not None}).encode("utf-8")
         request = Request(
             f"{self.base_url}/chat/completions",
             data=payload,
@@ -190,6 +234,8 @@ class OpenAICompatibleChat:
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
+                if on_delta is not None:
+                    return _read_answer_stream(response, on_delta, "openai")
                 result = json.load(response)
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
             raise OpenAICompatibleError("The configured AI endpoint could not generate an answer.") from exc

@@ -90,6 +90,7 @@ from .schemas import (
     WorkspaceSettingsResponse,
 )
 from .worker import (
+    embed_transcript_task,
     extract_evidence_frame_task,
     ingest_local_path,
     ingest_uploaded_object,
@@ -139,9 +140,17 @@ def _visual_rerank_hits(
                         front_keyframes = [frame for frame in keyframes if frame.pose == "front"]
                         if front_keyframes:
                             keyframes = front_keyframes
+                    if not keyframes:
+                        keyframes = list(session.scalars(select(EvidenceFrame).where(
+                            EvidenceFrame.video_id == video_id,
+                            EvidenceFrame.organization_id == hit.get("organization_id"),
+                            EvidenceFrame.status == "ready",
+                            EvidenceFrame.timestamp >= hit["start_time"],
+                            EvidenceFrame.timestamp <= hit["end_time"],
+                        ).order_by(EvidenceFrame.timestamp)).all())
                 if keyframes:
                     frame_items = [
-                        (frame.timestamp, frame.object_key, frame.pose, frame.pose_confidence)
+                        (frame.timestamp, frame.object_key, getattr(frame, "pose", "unknown"), getattr(frame, "pose_confidence", 0.0))
                         for frame in (keyframes if exhaustive else keyframes[:5])
                     ]
                 elif object_key:
@@ -156,6 +165,8 @@ def _visual_rerank_hits(
                     ]
                 else:
                     continue
+                if len(candidates) + len(frame_items) > 720:
+                    raise HTTPException(status_code=422, detail="This visual search is too broad. Focus a shorter time range.")
                 for timestamp, cached_key, pose, pose_confidence in frame_items:
                     frame_path = str(Path(tmp_dir) / f"{video_id}-{timestamp:.3f}.jpg")
                     if cached_key:
@@ -209,6 +220,8 @@ def _visual_rerank_hits(
                     for candidate in ranked
                     if (candidate["video_id"], candidate["timestamp"]) in verified_keys
                 ]
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("visual_frame_rerank_failed")
         return []
@@ -336,6 +349,7 @@ def _job_response(job: Job) -> JobResponse:
         clip_id=job.clip_id,
         events=(getattr(job, "payload", None) or {}).get("progress_events", []),
         transcribe=bool((getattr(job, "payload", None) or {}).get("transcribe", True)),
+        content=(getattr(job, "payload", None) or {}).get("streamed_answer"),
         created_at=job.created_at,
         updated_at=job.updated_at,
     )
@@ -373,6 +387,8 @@ def _video_response(
         source_uri=video.source_uri,
         filename=video.filename,
         status=video.status,
+        transcript_status=video.transcript_status,
+        visual_status=video.visual_status,
         duration=video.duration,
         object_key=video.object_key,
         url=url,
@@ -746,11 +762,11 @@ async def upload_video(
         kind="ingest_uploaded_object",
         status="queued",
         video_id=video_id,
-        payload={"transcribe": transcribe},
+        payload={"transcribe": transcribe, "prepare_visual": thread is None},
     )
     session.add(job)
     session.commit()
-    ingest_uploaded_object.delay(job_id, video_id, organization_id)
+    ingest_uploaded_object.apply_async(args=(job_id, video_id, organization_id), queue="evidence" if thread else "celery")
     return _job_response(job)
 
 
@@ -786,11 +802,11 @@ def ingest_video_url(
         kind="ingest_url",
         status="queued",
         video_id=video_id,
-        payload={"url": request.url, "max_height": request.max_height, "transcribe": request.transcribe},
+        payload={"url": request.url, "max_height": request.max_height, "transcribe": request.transcribe, "prepare_visual": thread is None},
     )
     session.add(job)
     session.commit()
-    ingest_url.delay(job_id, video_id, organization_id, request.url, request.max_height)
+    ingest_url.apply_async(args=(job_id, video_id, organization_id, request.url, request.max_height), queue="evidence" if thread else "celery")
     return _job_response(job)
 
 
@@ -1057,17 +1073,20 @@ def reindex_video(
     job = Job(
         id=new_id(),
         organization_id=organization_id,
-        kind=f"reindex_{video.source_type}",
+        kind={"upload": "ingest_uploaded_object", "url": "ingest_url", "local_path": "ingest_local_path"}.get(video.source_type, "unsupported"),
         status="queued",
         video_id=video_id,
         progress=0.0,
         message="Reindex queued",
-        payload={"transcribe": transcribe},
+        payload={"transcribe": transcribe, "prepare_visual": True},
         created_at=utcnow(),
         updated_at=utcnow(),
     )
     video.status = "queued"
     video.error = None
+    video.visual_status = "queued"
+    if transcribe:
+        video.transcript_status = "queued"
     session.add(job)
     session.commit()
 
@@ -1380,10 +1399,13 @@ def cancel_job(
     job.status = "canceled"
     job.message = "Canceled by user"
     job.error = None
-    if job.video_id:
+    if job.video_id and job.kind in {"ingest_uploaded_object", "ingest_url", "ingest_local_path"}:
         video = session.get(Video, job.video_id)
         if video and video.organization_id == organization_id and video.status in {"queued", "indexing", "running"}:
-            video.status = "canceled"
+            for stage in ("transcript_status", "visual_status"):
+                if getattr(video, stage) in {"queued", "running"}:
+                    setattr(video, stage, "canceled")
+            video.status = "ready" if "ready" in {video.transcript_status, video.visual_status} else "canceled"
             video.error = "Canceled by user"
     if job.clip_id:
         clip = session.get(Clip, job.clip_id)
@@ -1423,6 +1445,21 @@ def retry_job(
 
     video = session.get(Video, job.video_id) if job.video_id else None
     clip = session.get(Clip, job.clip_id) if job.clip_id else None
+    if job.kind in {"ingest_uploaded_object", "ingest_url", "ingest_local_path"} and video is not None:
+        if video.organization_id != organization_id:
+            raise HTTPException(status_code=404, detail="Video not found for job")
+        video.status = "queued"
+        video.error = None
+        for stage, needed in (("transcript_status", (job.payload or {}).get("transcribe", True)), ("visual_status", (job.payload or {}).get("prepare_visual", True))):
+            if needed and getattr(video, stage) != "ready":
+                setattr(video, stage, "queued")
+    if job.kind == "embed_transcript":
+        if video is None or video.organization_id != organization_id:
+            raise HTTPException(status_code=404, detail="Video not found for job")
+        job.status, job.progress, job.message, job.error = "queued", 0.0, "Retry queued", None
+        session.commit()
+        embed_transcript_task.delay(job.id, video.id, organization_id)
+        return _job_response(job)
     if job.kind == "ingest_uploaded_object":
         if video is None:
             raise HTTPException(status_code=404, detail="Video not found for job")
@@ -1621,6 +1658,7 @@ def _complete_chat_message(
     message_id: str,
     request: ChatMessageRequest,
     progress_callback=None,
+    on_delta=None,
 ) -> ChatThread:
     thread = _get_chat_thread(session, thread_id, organization_id)
     assistant = session.scalar(
@@ -1677,16 +1715,22 @@ def _complete_chat_message(
             session=session,
             organization_id=organization_id,
             progress_callback=progress_callback,
+            on_delta=on_delta,
         )
     except Exception:
-        assistant.status = "failed"
-        assistant.error = "Vivadeo could not prepare an answer."
+        session.refresh(assistant)
+        if assistant.status != "canceled":
+            assistant.status = "failed"
+            assistant.error = "Vivadeo could not prepare an answer."
         assistant.updated_at = utcnow()
         thread.current_message_id = assistant.id
         thread.updated_at = utcnow()
         session.commit()
         raise
 
+    session.refresh(assistant)
+    if assistant.status == "canceled":
+        raise HTTPException(status_code=409, detail="Answer canceled")
     assistant.content = answer.answer
     assistant.citations = [citation.model_dump() for citation in answer.citations]
     assistant.generation_metadata = {
@@ -1738,6 +1782,8 @@ def _chat_thread_response(thread: ChatThread) -> ChatThreadResponse:
                 "video_id": source.video.id,
                 "filename": source.video.filename,
                 "status": source.video.status,
+                "transcript_status": source.video.transcript_status,
+                "visual_status": source.video.visual_status,
                 "duration": source.video.duration,
                 "url": None,
                 "created_at": source.created_at,
@@ -1965,7 +2011,7 @@ def create_chat_message(
     if request.provider in {"custom", "openai", "anthropic", "gemini", "nvidia"} and request.custom_api_key:
         Redis.from_url(get_runtime_settings().redis_url, decode_responses=True).setex(
             f"vivadeo:chat-key:{job.id}",
-            900,
+            7200,
             request.custom_api_key,
         )
     generate_chat_task.delay(
@@ -2152,9 +2198,8 @@ def delete_chat_thread(
     session.commit()
 
 
-def _general_chat_answer(request: ChatRequest, session: Session, organization_id: str) -> ChatResponse:
+def _chat_generator(request, session: Session, organization_id: str):
     settings = get_runtime_settings()
-    messages = [message.model_dump() for message in request.messages[-10:]]
     try:
         plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
     except Exception:
@@ -2169,7 +2214,13 @@ def _general_chat_answer(request: ChatRequest, session: Session, organization_id
         generator = OpenAICompatibleChat(base_url=settings.pro_llm_base_url, api_key=settings.pro_llm_api_key, model=settings.pro_llm_model, timeout=settings.pro_llm_timeout)
     else:
         generator = ModalGemmaChat(app_name=settings.modal_gemma_app, function_name=settings.modal_gemma_function, timeout=settings.modal_timeout)
-    return ChatResponse(answer=generator.answer(messages, []), citations=[])
+    return generator
+
+
+def _general_chat_answer(request: ChatRequest, session: Session, organization_id: str, on_delta=None) -> ChatResponse:
+    generator = _chat_generator(request, session, organization_id)
+    messages = [message.model_dump() for message in request.messages[-10:]]
+    return ChatResponse(answer=generator.answer(messages, [], **({"on_delta": on_delta} if on_delta else {})), citations=[])
 
 
 @app.post(
@@ -2182,6 +2233,7 @@ def search_chat(
     session: Session = Depends(db_dep),
     organization_id: str = Depends(workspace_dep),
     progress_callback=None,
+    on_delta=None,
 ):
     question = next(
         (message.content.strip() for message in reversed(request.messages) if message.role == "user" and message.content.strip()),
@@ -2192,7 +2244,7 @@ def search_chat(
     if request.conversation_only:
         if request.output_format != "answer":
             raise HTTPException(status_code=422, detail="Attach video evidence for structured searches")
-        return _general_chat_answer(request, session, organization_id)
+        return _general_chat_answer(request, session, organization_id, on_delta=on_delta)
 
     thread = None
     if request.thread_id:
@@ -2262,6 +2314,9 @@ def search_chat(
     use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
     visual_verifier = None
     visual_question = intent["modality"] in {"visual", "hybrid"}
+    from .evidence_tools import is_transcript_overview
+    from .evidence_answer import answer_from_evidence
+    overview = not visual_question and is_transcript_overview(question)
     result_limit = 100 if intent["search_mode"] == "all" else request.results
     if (
         visual_question
@@ -2276,11 +2331,9 @@ def search_chat(
             timeout=runtime_settings.pro_llm_timeout,
         )
     try:
-        # Video embeddings choose the relevant moments first. Transcript embeddings only
-        # supplement sparse visual retrieval, while overlapping transcript rows provide
-        # the text context sent to the answer model.
-        embedding_backend = get_embedder()
-        embedding = embedding_backend.embed_query(question)
+        # Spoken-content questions never depend on the visual index.
+        embedding_backend = get_embedder() if visual_question else None
+        embedding = embedding_backend.embed_query(question) if embedding_backend else None
         store = PostgresVideoStore(session)
         source_scopes = comparison_video_ids if request.output_format == "comparison" else [None]
         scope_limit = max(1, (result_limit + len(source_scopes) - 1) // len(source_scopes))
@@ -2295,7 +2348,29 @@ def search_chat(
                 "video_id": source_id or request.focus_video_id or request.video_id,
                 **({"video_ids": scope_video_ids} if source_id is None and scope_video_ids and not request.focus_video_id and not request.video_id else {}),
             }
-            source_hits = store.search(embedding, **search_kwargs)
+            if visual_question and request.focus_video_id and request.focus_start_time is not None:
+                video = session.get(Video, request.focus_video_id)
+                source_hits = [{
+                    "video_id": video.id, "organization_id": organization_id,
+                    "filename": video.filename, "source_uri": video.source_uri,
+                    "object_key": video.object_key, "start_time": request.focus_start_time,
+                    "end_time": min(request.focus_end_time or request.focus_start_time + 15, video.duration) if video.duration is not None else request.focus_end_time or request.focus_start_time + 15,
+                }]
+            elif visual_question:
+                source_hits = store.search(embedding, **search_kwargs)
+            else:
+                transcript_scope = [source_id or request.focus_video_id or request.video_id] if source_id or request.focus_video_id or request.video_id else scope_video_ids
+                if use_nvidia and not overview and request.focus_start_time is None and store.transcript_embeddings_ready(organization_id, transcript_scope):
+                    if transcript_embedding is None:
+                        transcript_embedder = get_embedder(backend="nvidia", api_key=runtime_settings.pro_embedding_api_key, base_url=runtime_settings.pro_embedding_base_url, model=runtime_settings.pro_embedding_model, timeout=runtime_settings.pro_embedding_timeout)
+                        transcript_embedding = transcript_embedder.embed_query(question)
+                    source_hits = store.search_transcript_embeddings(transcript_embedding, n_results=scope_limit, organization_id=organization_id, video_ids=transcript_scope)
+                else:
+                    source_hits = store.search_transcripts(
+                        question, organization_id=organization_id, video_ids=transcript_scope,
+                        limit=scope_limit, overview=overview,
+                        start_time=request.focus_start_time, end_time=request.focus_end_time,
+                    )
             if visual_question:
                 source_hits = _visual_rerank_hits(
                     embedding,
@@ -2307,7 +2382,7 @@ def search_chat(
                     session,
                     exhaustive=intent["search_mode"] == "all",
                 )
-            if use_nvidia and len(source_hits) < scope_limit and intent["modality"] in {"transcript", "hybrid"}:
+            if use_nvidia and visual_question and len(source_hits) < scope_limit and intent["modality"] == "hybrid":
                 if transcript_embedding is None:
                     reset_embedder()
                     transcript_embedder = get_embedder(
@@ -2321,7 +2396,7 @@ def search_chat(
                 transcript_hits = store.search_transcript_embeddings(transcript_embedding, **search_kwargs)
                 seen_hits = {(hit["video_id"], hit["start_time"], hit["end_time"]) for hit in source_hits}
                 source_hits.extend(hit for hit in transcript_hits if (hit["video_id"], hit["start_time"], hit["end_time"]) not in seen_hits)
-            chunk_hits.extend(source_hits[:scope_limit])
+            chunk_hits.extend(source_hits if overview else source_hits[:scope_limit])
     finally:
         reset_embedder()
 
@@ -2343,6 +2418,18 @@ def search_chat(
         evidence_modality = "visual" if hit_modality == "visual" else "transcript"
         status_value, confidence, match_reason = verification_for_hit(hit, evidence_modality)
         if visual_question and hit_modality == "visual" and status_value == "rejected":
+            continue
+        if hit_modality == "transcript" and "text" in hit:
+            if hit["chunk_id"] not in seen_segment_ids:
+                seen_segment_ids.add(hit["chunk_id"])
+                citations.append({
+                    "segment_id": hit["chunk_id"], "video_id": hit["video_id"],
+                    "filename": hit["filename"], "source_uri": hit["source_uri"],
+                    "start_time": hit["start_time"], "end_time": hit["end_time"],
+                    "text": hit["text"], "similarity_score": hit.get("similarity_score"),
+                    "visual_verified": False, "verification_status": status_value,
+                    "modality": "transcript", "confidence": confidence, "match_reason": match_reason,
+                })
             continue
         stmt = (
             select(VideoTranscriptSegment, Video)
@@ -2410,7 +2497,7 @@ def search_chat(
 
     citations = merge_evidence_ranges(
         citations,
-        max_ranges=None if intent["search_mode"] == "all" or request.output_format == "comparison" else 3,
+        max_ranges=None if overview or intent["search_mode"] == "all" or request.output_format == "comparison" else 3,
     )
     verified_citations = [item for item in citations if item["verification_status"] == "verified"]
     verification_summary = {
@@ -2485,50 +2572,7 @@ def search_chat(
     _report_search_stage(session, search_run, progress_callback, "answering", 0.78, "Preparing answer")
     settings = get_runtime_settings()
     messages = [message.model_dump() for message in request.messages[-10:]]
-    try:
-        plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
-    except Exception:
-        plan = "starter"
-    custom_provider = request.provider in {"custom", "openai", "gemini", "nvidia"}
-    if request.provider == "ollama":
-        if not request.custom_base_url or not request.custom_model:
-            raise HTTPException(status_code=400, detail="Ollama endpoint and model are required")
-        generator = OllamaChat(
-            base_url=request.custom_base_url,
-            model=request.custom_model,
-            timeout=getattr(settings, "pro_llm_timeout", 120),
-        )
-    elif request.provider == "anthropic":
-        if not request.custom_base_url or not request.custom_api_key or not request.custom_model:
-            raise HTTPException(status_code=400, detail="Anthropic endpoint, API key, and model are required")
-        generator = AnthropicChat(
-            base_url=request.custom_base_url,
-            api_key=request.custom_api_key,
-            model=request.custom_model,
-            timeout=getattr(settings, "pro_llm_timeout", 120),
-        )
-    elif custom_provider:
-        if not request.custom_base_url or not request.custom_api_key or not request.custom_model:
-            raise HTTPException(status_code=400, detail="AI endpoint, API key, and model are required")
-        generator = OpenAICompatibleChat(
-            base_url=request.custom_base_url,
-            api_key=request.custom_api_key,
-            model=request.custom_model,
-            timeout=getattr(settings, "pro_llm_timeout", 120),
-        )
-    elif plan in {"pro", "enterprise"} and getattr(settings, "pro_llm_api_key", None) and getattr(settings, "pro_llm_base_url", None):
-        generator = OpenAICompatibleChat(
-            base_url=settings.pro_llm_base_url,
-            api_key=settings.pro_llm_api_key,
-            model=settings.pro_llm_model,
-            timeout=settings.pro_llm_timeout,
-        )
-    else:
-        generator = ModalGemmaChat(
-            app_name=settings.modal_gemma_app,
-            function_name=settings.modal_gemma_function,
-            timeout=settings.modal_timeout,
-        )
+    generator = _chat_generator(request, session, organization_id)
     assistant_message: ChatThreadMessage | None = None
     try:
         if thread is not None and thread.title == "New thread":
@@ -2551,8 +2595,8 @@ def search_chat(
             session.flush()
             # Do not hold a database connection while waiting on an external model.
             session.commit()
-        answer_citations = (verified_citations if visual_question else citations)[:12]
-        answer = generator.answer(messages, answer_citations)
+        answer_citations = citations if overview else (verified_citations if visual_question else citations)[:12]
+        answer = answer_from_evidence(generator, messages, answer_citations, on_delta=on_delta)
         if request.output_format == "comparison":
             comparison = comparison_claims(verified_citations, answer)
         elif request.output_format == "rows":

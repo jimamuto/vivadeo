@@ -35,6 +35,8 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Search answers return transcript citations with video filename, source URI, and timestamp ranges.
 - Chat messages persist as a selected conversation branch; assistant answers can be regenerated or retried without overwriting earlier answers.
 - Chat generation supports Vivadeo Auto through Modal Gemma, Pro workspaces through server-side Azure OpenAI GPT-5.6 Luna, and user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints.
+- Chat chooses one bounded evidence operation per question: spoken-content search, visual-moment search, or focused-moment inspection. The backend retains workspace authorization and cost limits; video or model content cannot widen source scope.
+- Generated answers stream from the selected answer service and persist partial content on the chat job so reconnecting clients can resume.
 - BYOK provider keys are encrypted in PostgreSQL when configured in Settings; transient chat keys are held only in Redis while a generation job runs.
 - Free workspaces retain the Modal Qwen video embedding path. Pro workspaces use NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions, with Qwen fallback for legacy rows until reindexing populates NVIDIA vectors.
 - Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
@@ -43,6 +45,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Ingest And Jobs
 
+- Chat attachments prepare spoken content first and track spoken/visual readiness independently. Transcript questions can answer as soon as spoken content is ready; visual questions trigger visual preparation only when needed, and focused timestamp questions extract a cached frame without building the whole visual index.
 - Ingest transcription uses Azure OpenAI Whisper; Modal remains responsible for Vivadeo Auto embeddings and answer generation.
 - Failed ingest and clip jobs have a retry path at `/v1/jobs/{job_id}/retry` for supported job kinds.
 - Retry accepts canceled ingest jobs as well as failed ones.

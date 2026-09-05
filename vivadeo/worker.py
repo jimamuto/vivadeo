@@ -32,7 +32,14 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
 )
-celery_app.conf.update(task_track_started=True, worker_prefetch_multiplier=1, worker_max_tasks_per_child=100, broker_connection_retry_on_startup=True)
+celery_app.conf.update(
+    task_track_started=True, worker_prefetch_multiplier=1,
+    worker_max_tasks_per_child=100, broker_connection_retry_on_startup=True,
+    task_routes={
+        "vivadeo.generate_chat": {"queue": "chat"},
+        "vivadeo.extract_evidence_frame": {"queue": "evidence"},
+    },
+)
 
 
 @worker_process_init.connect
@@ -79,6 +86,7 @@ def _update_job(job_id: str, **values) -> None:
                 "created_at": job.created_at.isoformat(),
                 "updated_at": job.updated_at.isoformat(),
                 "events": job.payload.get("progress_events", []),
+                "content": job.payload.get("streamed_answer"),
             }
     if payload is None:
         return
@@ -90,21 +98,28 @@ def _update_job(job_id: str, **values) -> None:
 
 
 def _stream_chat_answer(job_id: str, content: str) -> None:
-    for start in range(0, len(content), 24):
-        payload = {
-            "id": job_id,
-            "status": "running",
-            "progress": 0.95,
-            "message": "Writing response",
-            "content_delta": content[start:start + 24],
-        }
-        progress_bus.publish(f"vivadeo:job:{job_id}", json.dumps(payload, separators=(",", ":")))
+    with session_scope() as session:
+        job = session.scalar(select(Job).where(Job.id == job_id).with_for_update())
+        if job is None or job.status == "canceled":
+            raise JobCanceled("Answer canceled")
+        job.payload = dict(job.payload or {})
+        full_content = job.payload.get("streamed_answer", "") + content
+        if len(full_content) > 100_000:
+            raise RuntimeError("Answer exceeded the response limit")
+        job.payload["streamed_answer"] = full_content
+        job.message = "Writing response"
+        job.progress = 0.9
+    payload = {"id": job_id, "status": "running", "progress": 0.9,
+               "message": "Writing response", "content": full_content}
+    progress_bus.publish(f"vivadeo:job:{job_id}", json.dumps(payload, separators=(",", ":")))
 
 
 def _mark_video(video_id: str, **values) -> None:
     with session_scope() as session:
         video = session.get(Video, video_id)
         if video and video.status != "canceled":
+            if values.get("status") in {"failed", "canceled"} and "ready" in {video.transcript_status, video.visual_status}:
+                values["status"] = "ready"
             for key, value in values.items():
                 setattr(video, key, value)
 
@@ -118,12 +133,6 @@ def _job_canceled(job_id: str) -> bool:
 def _raise_if_canceled(job_id: str) -> None:
     if _job_canceled(job_id):
         raise JobCanceled(f"Job canceled: {job_id}")
-
-
-def _transcription_enabled(job_id: str) -> bool:
-    with session_scope() as session:
-        job = session.get(Job, job_id)
-        return bool((job.payload or {}).get("transcribe", True)) if job else False
 
 
 def _record_dlq(video_id: str, chunk_id: str, source_uri: str, start: float, end: float, error: str) -> None:
@@ -151,7 +160,8 @@ def _transcript_object_key(video_id: str) -> str:
 
 def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
     settings = get_settings()
-    _update_job(job_id, status="running", progress=0.08, message="Transcribing audio")
+    _mark_video(video_id, transcript_status="running")
+    _update_job(job_id, status="running", progress=0.08, message="Preparing spoken content")
     logger.info("azure_transcription_start job_id=%s video_id=%s", job_id, video_id)
     segments = AzureWhisperTranscriber(
         endpoint=settings.azure_openai_endpoint,
@@ -161,6 +171,7 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
         timeout=settings.azure_openai_whisper_timeout,
     ).transcribe(file_path)
     logger.info("azure_transcription_complete job_id=%s video_id=%s segments=%s", job_id, video_id, len(segments))
+    _raise_if_canceled(job_id)
     store = ObjectStore()
     tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
     try:
@@ -173,6 +184,8 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
         except OSError:
             pass
 
+    _raise_if_canceled(job_id)
+    embedding_job_id = None
     with session_scope() as session:
         session.execute(
             delete(VideoTranscriptSegment).where(
@@ -193,19 +206,83 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
         ]
         session.add_all(transcript_rows)
         session.flush()
+        video = session.get(Video, video_id)
+        if video is not None:
+            video.transcript_status = "ready"
+            video.error = None
         organization = session.get(Organization, organization_id)
         if organization and organization.plan in {"pro", "enterprise"} and settings.pro_embedding_api_key and transcript_rows:
-            nvidia = get_embedder(
-                backend="nvidia",
-                api_key=settings.pro_embedding_api_key,
-                base_url=settings.pro_embedding_base_url,
-                model=settings.pro_embedding_model,
-                timeout=settings.pro_embedding_timeout,
-            )
-            embeddings = nvidia.embed_texts([row.text for row in transcript_rows], input_type="passage")
-            for row, embedding in zip(transcript_rows, embeddings):
-                row.nvidia_embedding = embedding
-            reset_embedder()
+            embedding_job_id = new_id()
+            session.add(Job(id=embedding_job_id, organization_id=organization_id, video_id=video_id, kind="embed_transcript", status="queued", payload={}))
+    if embedding_job_id:
+        try:
+            embed_transcript_task.delay(embedding_job_id, video_id, organization_id)
+        except Exception:
+            logger.exception("transcript_embedding_dispatch_failed job_id=%s", embedding_job_id)
+            _update_job(embedding_job_id, status="failed", error="Search preparation could not start. The transcript is still available.")
+    _update_job(job_id, status="running", progress=0.4, message="Spoken content ready")
+
+
+@celery_app.task(name="vivadeo.embed_transcript")
+def embed_transcript_task(job_id: str, video_id: str, organization_id: str) -> None:
+    settings = get_settings()
+    try:
+        _raise_if_canceled(job_id)
+        _update_job(job_id, status="running", progress=0.1, message="Improving spoken-content search")
+        with session_scope() as session:
+            rows = [(row.id, row.text) for row in session.scalars(select(VideoTranscriptSegment).where(
+                VideoTranscriptSegment.video_id == video_id,
+                VideoTranscriptSegment.organization_id == organization_id,
+                VideoTranscriptSegment.nvidia_embedding.is_(None),
+            )).all()]
+        embedder = get_embedder(backend="nvidia", api_key=settings.pro_embedding_api_key,
+                               base_url=settings.pro_embedding_base_url, model=settings.pro_embedding_model,
+                               timeout=settings.pro_embedding_timeout)
+        for start in range(0, len(rows), 32):
+            _raise_if_canceled(job_id)
+            batch = rows[start:start + 32]
+            embeddings = embedder.embed_texts([text for _, text in batch], input_type="passage")
+            if len(embeddings) != len(batch):
+                raise RuntimeError("Incomplete transcript search preparation")
+            _raise_if_canceled(job_id)
+            with session_scope() as session:
+                for (segment_id, _), embedding in zip(batch, embeddings):
+                    row = session.get(VideoTranscriptSegment, segment_id)
+                    if row is not None and row.organization_id == organization_id:
+                        row.nvidia_embedding = embedding
+            _update_job(job_id, progress=min(0.95, (start + len(batch)) / max(1, len(rows))), message="Improving spoken-content search")
+        _update_job(job_id, status="succeeded", progress=1.0, message="Spoken-content search ready")
+    except JobCanceled:
+        return
+    except Exception:
+        _update_job(job_id, status="failed", error="Could not improve spoken-content search. The transcript remains available.", message="Search preparation interrupted")
+        raise
+    finally:
+        reset_embedder()
+
+
+def _prepare_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
+    with session_scope() as session:
+        job = session.get(Job, job_id)
+        video = session.get(Video, video_id)
+        payload = job.payload or {}
+        transcribe = payload.get("transcribe", True) and video.transcript_status != "ready"
+        visual = payload.get("prepare_visual", True) and video.visual_status != "ready"
+    if transcribe:
+        try:
+            _transcribe_file(video_id, organization_id, file_path, job_id)
+        except Exception as exc:
+            _mark_video(video_id, transcript_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+            raise
+    _raise_if_canceled(job_id)
+    if visual:
+        _mark_video(video_id, visual_status="running")
+        try:
+            _index_file(video_id, organization_id, file_path, job_id)
+            _mark_video(video_id, visual_status="ready")
+        except Exception as exc:
+            _mark_video(video_id, visual_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+            raise
 
 
 def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id: str, embedder=None) -> None:
@@ -247,8 +324,11 @@ def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id
                 message=f"Extracting visual keyframe {index}/{total}",
             )
         poses = []
+        with session_scope() as session:
+            job = session.get(Job, job_id)
+            needs_face_orientation = bool((job.payload or {}).get("detect_faces")) if job else False
         detect_head_poses = getattr(embedder, "detect_head_poses", None)
-        if detect_head_poses is not None:
+        if needs_face_orientation and detect_head_poses is not None:
             _update_job(job_id, status="running", progress=0.9, message="Detecting face orientation")
             try:
                 poses = detect_head_poses(frame_paths)
@@ -338,8 +418,8 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
             _update_job(
                 job_id,
                 status="running",
-                progress=min(0.95, processed / total),
-                message=f"Embedding chunk {processed}/{len(chunks)}",
+                progress=0.45 + 0.35 * processed / total,
+                message=f"Preparing visual evidence {processed}/{len(chunks)}",
             )
 
             if settings.skip_still and is_still_frame_chunk(chunk_path):
@@ -431,14 +511,9 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
             video.status = "indexing"
 
         _raise_if_canceled(job_id)
-        if _transcription_enabled(job_id):
-            _transcribe_file(video_id, organization_id, path, job_id)
-        else:
-            _update_job(job_id, status="running", progress=0.08, message="Transcription skipped")
-        _raise_if_canceled(job_id)
-        _index_file(video_id, organization_id, path, job_id)
+        _prepare_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
-        _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
+        _update_job(job_id, status="succeeded", progress=1.0, message="Evidence ready")
     except JobCanceled:
         _mark_video(video_id, status="canceled", error="Canceled by user")
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
@@ -464,12 +539,7 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
         store.download_file(object_key, local_path)
         _raise_if_canceled(job_id)
         _mark_video(video_id, status="indexing", duration=_get_video_duration(local_path))
-        if _transcription_enabled(job_id):
-            _transcribe_file(video_id, organization_id, local_path, job_id)
-        else:
-            _update_job(job_id, status="running", progress=0.08, message="Transcription skipped")
-        _raise_if_canceled(job_id)
-        _index_file(video_id, organization_id, local_path, job_id)
+        _prepare_file(video_id, organization_id, local_path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
     except JobCanceled:
@@ -503,14 +573,9 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
             video.duration = _get_video_duration(path)
             video.status = "indexing"
         _raise_if_canceled(job_id)
-        if _transcription_enabled(job_id):
-            _transcribe_file(video_id, organization_id, path, job_id)
-        else:
-            _update_job(job_id, status="running", progress=0.08, message="Transcription skipped")
-        _raise_if_canceled(job_id)
-        _index_file(video_id, organization_id, path, job_id)
+        _prepare_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
-        _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
+        _update_job(job_id, status="succeeded", progress=1.0, message="Evidence ready")
     except JobCanceled:
         _mark_video(video_id, status="canceled", error="Canceled by user")
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
@@ -522,16 +587,29 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-@celery_app.task(name="vivadeo.generate_chat")
+@celery_app.task(bind=True, name="vivadeo.generate_chat", max_retries=1800)
 def generate_chat_task(
+    self,
     job_id: str,
     thread_id: str,
     message_id: str,
     organization_id: str,
     request_payload: dict,
 ) -> None:
+    from celery.exceptions import Retry
+    from .preparation import ensure_chat_evidence, plan_chat_evidence
+
     try:
         _raise_if_canceled(job_id)
+        request_payload = dict(request_payload)
+        if request_payload.get("provider") in {"custom", "openai", "anthropic", "gemini", "nvidia"}:
+            request_payload["custom_api_key"] = progress_bus.get(f"vivadeo:chat-key:{job_id}")
+        with session_scope() as session:
+            request_payload = plan_chat_evidence(session, job_id, organization_id, thread_id, request_payload)
+            dependencies = ensure_chat_evidence(session, organization_id, thread_id, request_payload)
+        if dependencies:
+            _update_job(job_id, status="queued", progress=0.05, message="Preparing the evidence needed for your question")
+            raise self.retry(countdown=2)
         _update_job(job_id, status="running", progress=0.1, message="Preparing a reply")
         from .api import _complete_chat_message
         from .schemas import ChatMessageRequest
@@ -556,10 +634,8 @@ def generate_chat_task(
                 message_id=message_id,
                 request=ChatMessageRequest.model_validate(request_payload),
                 progress_callback=report_progress,
+                on_delta=lambda content: _stream_chat_answer(job_id, content),
             )
-            completed_message = next((item for item in thread.messages if item.id == message_id), None)
-            completed_content = completed_message.content if completed_message else ""
-        _stream_chat_answer(job_id, completed_content)
         if _job_canceled(job_id):
             with session_scope() as session:
                 message = session.get(ChatThreadMessage, message_id)
@@ -569,6 +645,8 @@ def generate_chat_task(
             _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
             return
         _update_job(job_id, status="succeeded", progress=1.0, message="Answer ready")
+    except Retry:
+        raise
     except JobCanceled:
         with session_scope() as session:
             message = session.get(ChatThreadMessage, message_id)
@@ -577,6 +655,15 @@ def generate_chat_task(
                 message.error = "Canceled by user"
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
+        canceled = _job_canceled(job_id)
+        with session_scope() as session:
+            message = session.get(ChatThreadMessage, message_id)
+            if message:
+                message.status = "canceled" if canceled else "failed"
+                message.error = "Canceled by user" if canceled else "Vivadeo could not prepare an answer. Retry any interrupted video preparation first."
+        progress_bus.delete(f"vivadeo:chat-key:{job_id}")
+        if canceled:
+            return
         _update_job(job_id, status="failed", error="Answer generation failed.", message="Answer generation failed")
         raise
 

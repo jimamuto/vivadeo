@@ -118,6 +118,9 @@ class Video(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
+    transcript_status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending")
+    visual_status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", server_default="pending")
+
     chunks: Mapped[list["VideoChunk"]] = relationship(back_populates="video")
 
 
