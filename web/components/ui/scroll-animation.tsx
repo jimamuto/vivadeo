@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import type { Variants } from 'motion/react';
 import type React from 'react';
 
@@ -11,6 +11,7 @@ type ScrollAnimationProps = {
   children: React.ReactNode;
   className?: string;
   viewport?: { amount?: number; margin?: string; once?: boolean };
+  variants?: Variants;
   delay?: number;
   direction?: Direction;
   as?: AsTag;
@@ -23,30 +24,33 @@ export function ScrollAnimation({
   children,
   className,
   viewport = defaultViewport,
+  variants: customVariants,
   delay = 0,
   direction = 'down',
   as: Component = 'div',
   ...props
 }: ScrollAnimationProps) {
+  const reduceMotion = useReducedMotion();
   const axis = direction === 'left' || direction === 'right' ? 'x' : 'y';
   const distance = direction === 'right' || direction === 'down' ? 24 : -24;
   const MotionComponent = motion[Component] as typeof motion.div;
+  const baseVariants: Variants = customVariants || {
+    hidden: axis === 'x' ? { filter: 'blur(10px)', opacity: 0, x: distance } : { filter: 'blur(10px)', opacity: 0, y: distance },
+    visible: { filter: 'blur(0px)', opacity: 1, x: 0, y: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } },
+  };
+  const visible = baseVariants.visible;
   const variants: Variants = {
-    hidden: axis === 'x' ? { opacity: 0, x: distance } : { opacity: 0, y: distance },
-    visible: {
-      opacity: 1,
-      x: 0,
-      y: 0,
-      transition: { duration: 0.7, delay: delay / 1000, ease: [0.16, 1, 0.3, 1] },
-    },
+    ...baseVariants,
+    visible: typeof visible === 'object' ? { ...visible, transition: { ...(visible.transition as object), delay: delay / 1000 } } : visible,
   };
 
   return (
     <MotionComponent
-      initial="hidden"
-      whileInView="visible"
+      initial={reduceMotion ? false : "hidden"}
+      animate={reduceMotion ? { opacity: 1, filter: 'blur(0px)', x: 0, y: 0 } : undefined}
+      whileInView={reduceMotion ? undefined : "visible"}
       viewport={viewport}
-      variants={variants}
+      variants={reduceMotion ? undefined : variants}
       className={className}
       {...props}
     >

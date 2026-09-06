@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
 import { ScrollAnimation } from '@/components/ui/scroll-animation';
+import TextAnimation from '@/components/ui/scroll-text';
 
 const questions = [
   {
@@ -34,7 +35,7 @@ export function LandingFaq() {
     <section className="landing-faq" id="faq" aria-labelledby="landing-faq-title">
       <ScrollAnimation className="landing-faq-heading">
         <p>FAQ</p>
-        <h2 id="landing-faq-title">Questions, answered.</h2>
+        <TextAnimation as="h2" id="landing-faq-title" text="Questions, answered." direction="right" />
         <span>Everything you need to begin searching your archive.</span>
       </ScrollAnimation>
       <div className="landing-faq-list">

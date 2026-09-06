@@ -5,6 +5,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LandingFaq } from "@/components/landing-faq";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 import ScrollBaseAnimation from "@/components/ui/scroll-text-marque";
+import TextAnimation from "@/components/ui/scroll-text";
 
 const archiveTeams = "Studios   •   Broadcasters   •   Newsrooms   •   Film archives   •   Sports media   •   Universities   •   Creative agencies   •";
 
@@ -99,7 +100,7 @@ export default async function HomePage() {
       <section className="landing-solutions" id="about">
         <ScrollAnimation className="landing-solutions-heading">
           <p>Solutions</p>
-          <h2>Solve your team&apos;s<br />biggest footage challenges.</h2>
+          <TextAnimation as="h2" text={"Solve your team's\nbiggest footage challenges."} lineAnime />
         </ScrollAnimation>
         <div className="landing-solution-points">
           {solutions.map((solution) => (
@@ -122,7 +123,7 @@ export default async function HomePage() {
       <section className="landing-connections">
         <ScrollAnimation className="landing-section-heading">
           <p>Connections</p>
-          <h2>Bring your video workflow together.</h2>
+          <TextAnimation as="h2" text="Bring your video workflow together." direction="right" />
           <span>Connect the tools around your archive without fragmenting search and review.</span>
         </ScrollAnimation>
         <div className="landing-connection-map">
@@ -139,7 +140,7 @@ export default async function HomePage() {
       <section className="landing-pricing" id="pricing">
         <ScrollAnimation className="landing-pricing-heading">
           <p>Pricing</p>
-          <h2>Simple plans for every archive.</h2>
+          <TextAnimation as="h2" text="Simple plans for every archive." />
         </ScrollAnimation>
         <div className="landing-pricing-grid">
           {plans.map((plan) => (
@@ -166,7 +167,7 @@ export default async function HomePage() {
       <footer className="landing-footer" id="contact">
         <ScrollAnimation className="landing-footer-cta">
           <div>
-            <h2>Your archive already has the answer.</h2>
+            <TextAnimation as="h2" text={"Your archive already\nhas the answer."} lineAnime />
             <p>Find the exact moment, verify the source, and keep your team moving.</p>
           </div>
           <Link href={signedIn ? "/dashboard" : "/sign-up"}>
