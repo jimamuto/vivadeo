@@ -4134,7 +4134,8 @@ main { width: 100%; }
 }
 
 .dashboard-wrap .library-workbench {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 
 .dashboard-wrap .library-detail-panel {
@@ -4261,6 +4262,37 @@ main { width: 100%; }
   padding: 8px 11px;
   font-size: 0.82rem;
 }
+
+.dashboard-wrap .library-list-panel { width: 100%; min-width: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.library-page-head { display: flex; align-items: end; justify-content: space-between; min-width: 0; gap: 24px; margin: 0 0 24px; }
+.library-page-head h1 { margin: 0; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -.04em; }
+.library-page-head p { margin: 8px 0 0; color: var(--muted); }
+.library-page-actions { display: flex; align-items: center; gap: 14px; padding-bottom: 2px; }
+.library-page-actions > span { color: var(--muted); font-size: .9rem; white-space: nowrap; }
+.library-page-head .button { flex: 0 0 auto; padding: 10px 14px; border-radius: 10px; white-space: nowrap; }
+.dashboard-wrap .library-toolbar { grid-template-columns: minmax(240px, 1.5fr) repeat(2, minmax(150px, .7fr)); gap: 10px; margin: 0 0 14px; padding: 0; }
+.dashboard-wrap .library-toolbar input, .dashboard-wrap .library-toolbar select { min-width: 0; min-height: 46px; padding: 11px 13px; border-radius: 10px; background: rgba(255, 255, 255, .72); font-size: inherit; }
+.dashboard-wrap .library-bulk-toolbar { min-height: 46px; margin: 0 0 22px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--color-grain) 13%, transparent); font-size: .76rem; }
+.library-table-wrap { overflow: hidden; border: 1px solid rgba(86, 86, 86, .14); border-radius: 16px; background: rgba(255, 255, 255, .62); }
+.library-table-head, .dashboard-wrap .library-video-card { display: grid; grid-template-columns: 28px minmax(180px, 2fr) minmax(110px, 1fr) 58px 118px 64px 84px 88px; align-items: center; min-width: 0; column-gap: 10px; }
+.library-table-head { min-height: 52px; margin: 0; padding: 0 16px; border-radius: 0; background: rgba(215, 206, 199, .22); color: var(--muted); font-size: .8rem; font-weight: 650; letter-spacing: .02em; }
+.dashboard-wrap .library-list-panel .library-list { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; }
+.dashboard-wrap .library-video-card { min-height: 86px; padding: 16px; overflow: visible; border: 0; border-bottom: 1px solid rgba(86, 86, 86, .11); border-radius: 0; background: transparent; color: var(--color-content); font-size: .8rem; }
+.dashboard-wrap .library-video-card:last-child { border-bottom: 0; }
+.dashboard-wrap .library-video-card:hover { background: color-mix(in srgb, var(--color-grain) 9%, transparent); }
+.dashboard-wrap .library-video-card[draggable="true"] { cursor: grab; }
+.dashboard-wrap .library-video-select { display: grid; place-items: center; margin: 0; }
+.library-name-cell { display: flex; align-items: center; min-width: 0; gap: 10px; }
+.dashboard-wrap .library-name-cell .library-video-preview, .dashboard-wrap .library-name-cell .library-video-placeholder { width: 72px; height: 42px; flex: 0 0 72px; aspect-ratio: auto; border-radius: 4px; object-fit: cover; }
+.dashboard-wrap .library-name-cell .library-video-placeholder { font-size: .62rem; }
+.library-name-cell > div, .library-tags-cell { min-width: 0; }
+.dashboard-wrap .library-video-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; font-weight: 650; }
+.library-name-cell small, .library-tags-cell small { display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+.library-tags-cell > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-row-actions { display: flex; align-items: center; gap: 3px; }
+.library-row-actions button { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: .8rem; }
+.library-row-actions button:hover, .library-row-actions button:focus-visible { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
+.library-row-actions button:disabled { opacity: .35; cursor: default; }
 
 .dashboard-wrap .job-history-only > article:nth-child(2) {
   display: none;

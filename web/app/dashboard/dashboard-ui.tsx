@@ -679,21 +679,14 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
   return (
     <section className="dashboard-split-panel library-workbench">
       <article className="card dashboard-panel library-list-panel">
-        <div className="dashboard-panel-head library-panel-head">
-          <span className="pill">{filteredVideos.length} videos</span>
-        </div>
+        <header className="library-page-head">
+          <div><h1>Media library</h1><p>Manage the video sources available to your workspace.</p></div>
+          <div className="library-page-actions"><span>{filteredVideos.length} {filteredVideos.length === 1 ? "video" : "videos"}</span><Link href={"/dashboard/ingest" as any} className="button">＋ Upload</Link></div>
+        </header>
         <div className="library-toolbar">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search library"
-            aria-label="Search library"
-          />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search library" />
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter library by status">
-            <option value="all">All statuses</option>
-            <option value="ready">Ready</option>
-            <option value="queued">Queued</option>
-            <option value="failed">Failed</option>
+            <option value="all">All statuses</option><option value="ready">Ready</option><option value="queued">Queued</option><option value="failed">Failed</option>
           </select>
           <select value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)} aria-label="Filter library by collection">
             {collections.map((collection) => <option key={collection} value={collection}>{collection === "all" ? "All collections" : collection}</option>)}
@@ -707,73 +700,22 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
           <button type="button" className="button-secondary" onClick={() => void runBulkAction("delete")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Delete</button>
           {selectedVideoIds.length > 0 ? <Link className="button-secondary" href={`/search?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`}>Use in search</Link> : null}
         </div>
-        {filteredVideos.length === 0 ? (
-          <div className="empty-state">
-            <h3>No videos yet</h3>
-            <p className="muted">Upload a video to get started.</p>
-            <Link href={"/dashboard/ingest" as any} className="button">Open ingest</Link>
-          </div>
-        ) : (
+        {filteredVideos.length === 0 ? <div className="empty-state"><h3>No videos yet</h3><p className="muted">Upload a video to get started.</p><Link href={"/dashboard/ingest" as any} className="button">Open ingest</Link></div> : <div className="library-table-wrap">
+          <div className="library-table-head" aria-hidden="true"><span /><span>Name</span><span>Tags</span><span>Type</span><span>Created</span><span>Duration</span><span>Status</span><span>Actions</span></div>
           <div className="library-list">
             {filteredVideos.map((video) => {
-              const mediaUrl = video.object_key
-                ? `/api/proxy/v1/media/${video.object_key.split("/").map(encodeURIComponent).join("/")}`
-                : null;
-              return (
-                <article
-                  key={video.id}
-                  className="library-item library-video-card"
-                  draggable={permissions.canEdit}
-                  onDragStart={() => setDraggedVideoId(video.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => {
-                    if (draggedVideoId) void reorderVideo(draggedVideoId, video.id);
-                    setDraggedVideoId(null);
-                  }}
-                  onDragEnd={() => setDraggedVideoId(null)}
-                >
-                  {mediaUrl ? <video className="library-video-preview" src={mediaUrl} controls preload="metadata" /> : <div className="library-video-placeholder">Preview unavailable</div>}
-                  <div className="library-video-card-body">
-                    <label className="library-video-select"><input type="checkbox" checked={selectedVideoIds.includes(video.id)} onChange={(event) => setSelectedVideoIds((current) => event.target.checked ? [...new Set([...current, video.id])] : current.filter((id) => id !== video.id))} /> Select</label>
-                    <div className="library-video-card-head">
-                      <div>
-                        <input
-                          className="library-video-title"
-                          defaultValue={video.filename}
-                          aria-label={`Rename ${video.filename}`}
-                          onBlur={(event) => void updateLibraryMetadata(video, { filename: event.target.value })}
-                        />
-                        <p>{sourceLabel(video.source_type)} • {fmt(video.duration)}</p>
-                        <p className="muted">{latestJobByVideo.get(video.id)?.transcribe === false ? "Text search skipped" : "Transcript enabled"}</p>
-                      </div>
-                      <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span>
-                    </div>
-                    <p className="muted">{fmtDate(video.created_at)}</p>
-                    <div className="library-video-card-fields">
-                      <input
-                        defaultValue={video.collection || ""}
-                        placeholder="Collection"
-                        aria-label={`Collection for ${video.filename}`}
-                        onBlur={(event) => void updateLibraryMetadata(video, { collection: event.target.value })}
-                      />
-                      <input
-                        defaultValue={(video.labels || []).join(", ")}
-                        placeholder="Labels"
-                        aria-label={`Labels for ${video.filename}`}
-                        onBlur={(event) => void updateLibraryMetadata(video, { labels: event.target.value.split(",") })}
-                      />
-                    </div>
-                    <div className="dashboard-panel-links">
-                      <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "archive")} disabled={!permissions.canEdit}>Archive</button>
-                      <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>Reindex</button>
-                      <button type="button" className="button-secondary" onClick={() => void runVideoAction(video.id, "delete")} disabled={!permissions.canEdit}>Delete</button>
-                    </div>
-                  </div>
-                </article>
-              );
+              const mediaUrl = video.object_key ? `/api/proxy/v1/media/${video.object_key.split("/").map(encodeURIComponent).join("/")}` : null;
+              return <article key={video.id} className="library-item library-video-card" draggable={permissions.canEdit} onDragStart={() => setDraggedVideoId(video.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedVideoId) void reorderVideo(draggedVideoId, video.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedVideoId(null)}>
+                <label className="library-video-select"><input type="checkbox" aria-label={`Select ${video.filename}`} checked={selectedVideoIds.includes(video.id)} onChange={(event) => setSelectedVideoIds((current) => event.target.checked ? [...new Set([...current, video.id])] : current.filter((id) => id !== video.id))} /></label>
+                <div className="library-name-cell">{mediaUrl ? <video className="library-video-preview" src={mediaUrl} muted preload="metadata" /> : <div className="library-video-placeholder">Video</div>}<div><input className="library-video-title" defaultValue={video.filename} aria-label={`Rename ${video.filename}`} onBlur={(event) => void updateLibraryMetadata(video, { filename: event.target.value })} /><small>{sourceLabel(video.source_type)}</small></div></div>
+                <div className="library-tags-cell"><span>{(video.labels || []).join(", ") || video.collection || "Uncategorized"}</span><small>{latestJobByVideo.get(video.id)?.transcribe === false ? "Text search off" : "Transcript ready"}</small></div>
+                <span>Video</span><span>{fmtDate(video.created_at)}</span><span>{fmt(video.duration)}</span>
+                <span><span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span></span>
+                <div className="library-row-actions"><button type="button" title="Archive" aria-label={`Archive ${video.filename}`} onClick={() => void runVideoAction(video.id, "archive")} disabled={!permissions.canEdit}>□</button><button type="button" title="Reindex" aria-label={`Reindex ${video.filename}`} onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>↻</button><button type="button" title="Delete" aria-label={`Delete ${video.filename}`} onClick={() => void runVideoAction(video.id, "delete")} disabled={!permissions.canEdit}>⌫</button></div>
+              </article>;
             })}
           </div>
-        )}
+        </div>}
       </article>
 
       <article className="card dashboard-panel library-detail-panel">
