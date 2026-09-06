@@ -70,22 +70,13 @@ export function DashboardShell({
 
   return (
     <div className={`shell page dashboard-wrap${collapsed ? " sidebar-collapsed" : ""}`}>
-      <aside className="dashboard-sidebar">
+      <aside id="dashboard-sidebar" className="dashboard-sidebar">
         <div className="dashboard-sidebar-brand">
-          {collapsed ? (
-            <button className="dashboard-brand-collapsed-toggle" type="button" onClick={toggleSidebar} aria-label="Expand sidebar" data-tooltip="Expand sidebar">
-              <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="" />
-            </button>
-          ) : (
-            <>
-              <Link href="/" className="dashboard-brand-mark">
-                <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />
-              </Link>
-              <button className="sidebar-toggle" type="button" onClick={toggleSidebar} aria-label="Close sidebar" data-tooltip="Close sidebar">
-                <span className="sidebar-expander" aria-hidden="true" />
-              </button>
-            </>
-          )}
+          <Link href="/" className="dashboard-brand-mark">
+            {collapsed
+              ? <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="Vivadeo" />
+              : <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />}
+          </Link>
         </div>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">General</span>
@@ -97,11 +88,25 @@ export function DashboardShell({
       </aside>
       <div className="dashboard-frame">
         <header className="dashboard-command-bar">
-          <nav className="dashboard-breadcrumb" aria-label="Breadcrumb">
-            <Link href="/chat">Workspace</Link>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-            <span aria-current="page">{pageLabel}</span>
-          </nav>
+          <div className="dashboard-command-leading">
+            <button
+              className="dashboard-command-sidebar-toggle"
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-controls="dashboard-sidebar"
+              aria-expanded={!collapsed}
+              data-tooltip={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <span className="sidebar-expander" aria-hidden="true" />
+            </button>
+            <span className="dashboard-command-divider" aria-hidden="true" />
+            <nav className="dashboard-breadcrumb" aria-label="Breadcrumb">
+              <Link href="/chat">Workspace</Link>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+              <span aria-current="page">{pageLabel}</span>
+            </nav>
+          </div>
           <nav aria-label="Workspace actions">
             <form className="dashboard-command-search" action="/chat" method="get" role="search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
