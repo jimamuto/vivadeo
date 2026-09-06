@@ -56,10 +56,6 @@ services:
         source: ./media
         target: /media
         read_only: true
-      - type: bind
-        source: ${VIVADEO_MODAL_CONFIG_PATH:-./.modal.toml}
-        target: /root/.modal.toml
-        read_only: true
     ports:
       - "8000:8000"
     depends_on:
@@ -109,10 +105,6 @@ services:
       - type: bind
         source: ./media
         target: /media
-        read_only: true
-      - type: bind
-        source: ${VIVADEO_MODAL_CONFIG_PATH:-./.modal.toml}
-        target: /root/.modal.toml
         read_only: true
     depends_on:
       api:
