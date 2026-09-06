@@ -1,11 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 type NavIcon = "chat" | "ingest" | "library" | "jobs";
+type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
+type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
+
+const PALETTE_COMMANDS: PaletteCommand[] = [
+  { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "chat", keywords: "search ask answer new chat footage" },
+  { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
+  { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
+  { label: "Job history", description: "Review uploads, imports, and processing", href: "/dashboard/jobs", group: "Workspace", icon: "jobs", keywords: "history status progress failed jobs processing" },
+  { label: "Workspace", description: "Manage members and workspace access", href: "/dashboard/workspace", group: "Workspace", icon: "workspace", keywords: "organization team members roles invites" },
+  { label: "Profile settings", description: "Update your profile and preferences", href: "/settings#account", group: "Settings", icon: "profile", keywords: "account name avatar timezone preferences" },
+  { label: "Security", description: "Manage password and active sessions", href: "/settings#security", group: "Settings", icon: "shield", keywords: "password sessions login security" },
+  { label: "Data and privacy", description: "Review privacy and account controls", href: "/settings#privacy", group: "Settings", icon: "shield", keywords: "privacy data delete account" },
+  { label: "Answer service", description: "Configure how Vivadeo answers questions", href: "/settings#ai", group: "Settings", icon: "settings", keywords: "answer service provider model settings" },
+];
+
+function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
+  const paths: Record<PaletteIcon, string> = {
+    chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
+    ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
+    library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
+    jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
+    workspace: "M4 19v-8l8-6 8 6v8 M8 19v-5h8v5",
+    settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6 7 7 M17 17l1.4 1.4 M18.4 5.6 17 7 M7 17l-1.4 1.4",
+    shield: "M12 3l7 3v5c0 4.5-2.8 7.5-7 10-4.2-2.5-7-5.5-7-10V6z M9 12l2 2 4-4",
+    profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M5 21c.8-4 3.1-6 7-6s6.2 2 7 6",
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
+}
 
 function NavGlyph({ icon }: { icon: NavIcon }) {
   const paths: Record<NavIcon, string> = {
@@ -43,7 +71,13 @@ export function DashboardShell({
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [activeCommand, setActiveCommand] = useState(0);
+  const paletteRef = useRef<HTMLDialogElement>(null);
+  const paletteInputRef = useRef<HTMLInputElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
   const pageLabel = pathname.startsWith("/dashboard/library")
     ? "Library"
     : pathname.startsWith("/dashboard/jobs")
@@ -59,6 +93,68 @@ export function DashboardShell({
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
   }, []);
+
+  useEffect(() => {
+    function openSearch(event: KeyboardEvent) {
+      if (event.key.toLowerCase() !== "k" || (!event.metaKey && !event.ctrlKey)) return;
+      event.preventDefault();
+      setPaletteOpen(true);
+    }
+    window.addEventListener("keydown", openSearch);
+    return () => window.removeEventListener("keydown", openSearch);
+  }, []);
+
+  useEffect(() => {
+    const dialog = paletteRef.current;
+    if (!dialog) return;
+    if (paletteOpen && !dialog.open) {
+      dialog.showModal();
+      requestAnimationFrame(() => paletteInputRef.current?.focus());
+    } else if (!paletteOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [paletteOpen]);
+
+  useEffect(() => setActiveCommand(0), [paletteQuery]);
+
+  function closePalette() {
+    setPaletteOpen(false);
+    setPaletteQuery("");
+  }
+
+  function runCommand(command: PaletteCommand) {
+    closePalette();
+    router.push(command.href as any);
+  }
+
+  const query = paletteQuery.trim().toLowerCase();
+  const matchingCommands = PALETTE_COMMANDS.filter((command) =>
+    `${command.label} ${command.description} ${command.keywords}`.toLowerCase().includes(query),
+  );
+  const paletteCommands = query
+    ? [
+        ...matchingCommands,
+        { label: `Search archive for “${paletteQuery.trim()}”`, description: "Ask Vivadeo across your workspace videos", href: `/chat?q=${encodeURIComponent(paletteQuery.trim())}`, group: "Search", icon: "chat" as PaletteIcon, keywords: "" },
+      ]
+    : PALETTE_COMMANDS;
+  const commandGroups = paletteCommands.reduce<Array<{ label: string; commands: PaletteCommand[] }>>((groups, command) => {
+    const group = groups.find((item) => item.label === command.group);
+    if (group) group.commands.push(command);
+    else groups.push({ label: command.group, commands: [command] });
+    return groups;
+  }, []);
+
+  function handlePaletteKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      setActiveCommand((current) => (current + direction + paletteCommands.length) % paletteCommands.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const command = paletteCommands[activeCommand];
+      if (command) runCommand(command);
+    }
+  }
 
   function toggleSidebar() {
     setCollapsed((current) => {
@@ -108,10 +204,11 @@ export function DashboardShell({
             </nav>
           </div>
           <nav aria-label="Workspace actions">
-            <form className="dashboard-command-search" action="/chat" method="get" role="search">
+            <button className="dashboard-command-search" type="button" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog" aria-controls="command-palette" aria-expanded={paletteOpen}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
-              <input name="q" type="search" placeholder="Search anything..." aria-label="Search anything" />
-            </form>
+              <span>Search anything...</span>
+              <kbd aria-label="Command or Control plus K">⌘ K</kbd>
+            </button>
             <Link href="/dashboard/jobs" aria-label="View activity">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
             </Link>
@@ -131,6 +228,57 @@ export function DashboardShell({
         </header>
         <main className="dashboard-stage">{children}</main>
       </div>
+
+      <dialog
+        ref={paletteRef}
+        id="command-palette"
+        className="command-palette"
+        aria-label="Search Vivadeo"
+        onClose={closePalette}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closePalette();
+        }}
+      >
+        <div className="command-palette-panel">
+          <header className="command-palette-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
+            <input
+              ref={paletteInputRef}
+              type="search"
+              value={paletteQuery}
+              placeholder="Type a command or search..."
+              aria-label="Search commands"
+              onChange={(event) => setPaletteQuery(event.target.value)}
+              onKeyDown={handlePaletteKeyDown}
+            />
+            <button type="button" onClick={closePalette} aria-label="Close search">×</button>
+          </header>
+          <div className="command-palette-results">
+            {commandGroups.map((group) => (
+              <section key={group.label} aria-labelledby={`command-group-${group.label.replace(/\s+/g, "-").toLowerCase()}`}>
+                <h2 id={`command-group-${group.label.replace(/\s+/g, "-").toLowerCase()}`}>{group.label}</h2>
+                {group.commands.map((command) => {
+                  const index = paletteCommands.indexOf(command);
+                  return (
+                    <button
+                      key={`${command.group}-${command.label}`}
+                      type="button"
+                      className={index === activeCommand ? "is-active" : ""}
+                      onMouseEnter={() => setActiveCommand(index)}
+                      onClick={() => runCommand(command)}
+                    >
+                      <span className="command-palette-icon"><PaletteGlyph icon={command.icon} /></span>
+                      <span><strong>{command.label}</strong><small>{command.description}</small></span>
+                      <kbd>↵</kbd>
+                    </button>
+                  );
+                })}
+              </section>
+            ))}
+          </div>
+          <footer><span>↑↓ Navigate</span><span>↵ Open</span><span>Esc Close</span></footer>
+        </div>
+      </dialog>
     </div>
   );
 }
