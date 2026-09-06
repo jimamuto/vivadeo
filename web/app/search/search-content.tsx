@@ -1348,16 +1348,8 @@ export function SearchContent({
                       </div>, document.body) : null}
                   </div>
                 </div>
-                <div className="chat-message-attachments" aria-live="polite" aria-label="Attached video preparation">
-                  {threadSources.map((source) => <span key={source.video_id} className="chat-message-attachment">
-                    {source.filename}: {source.transcript_status === "ready" ? "Ready for spoken questions" : source.visual_status === "ready" ? "Visual evidence ready" : ["failed", "canceled"].includes(source.status) ? "Preparation interrupted" : "Preparing spoken content"}
-                  </span>)}
-                  {uploadItems.filter((item) => !threadSources.some((source) => source.video_id === item.videoId)).map((item) => <span key={item.id} className="chat-message-attachment">
-                    {item.filename}: {item.status === "uploading" ? `Uploading ${Math.round((item.progress || 0) * 100)}%` : ["failed", "canceled", "rejected"].includes(item.status) ? "Upload interrupted" : "Preparing spoken content"}
-                  </span>)}
-                </div>
                 <div className="chat-composer-meta">
-                  {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "source" : "sources"}</span> : null}
+                  {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "attachment" : "attachments"}</span> : null}
                   <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
                 </div>
               </div>
