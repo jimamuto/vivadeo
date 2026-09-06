@@ -1,3 +1,3 @@
 export function BrandLogo({ className = "" }: { className?: string }) {
-  return <img className={`brand-logo ${className}`.trim()} src="/vivadeoavatar.png" alt="Vivadeo" />;
+  return <span className={`brand-lockup ${className}`.trim()}><img className="brand-mark-image" src="/vivadeo-mark.png" alt="" /><img className="brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" /></span>;
 }

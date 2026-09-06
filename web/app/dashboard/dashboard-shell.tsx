@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { BrandLogo } from "@/components/brand-logo";
 
 type NavIcon = "chat" | "ingest" | "library" | "jobs";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
@@ -171,7 +172,7 @@ export function DashboardShell({
           <Link href="/" className="dashboard-brand-mark">
             {collapsed
               ? <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="Vivadeo" />
-              : <img className="dashboard-brand-logo" src="/vivadeoavatar.png" alt="Vivadeo" />}
+              : <BrandLogo className="dashboard-brand-logo" />}
           </Link>
         </div>
         <nav className="dashboard-nav" aria-label="Main navigation">

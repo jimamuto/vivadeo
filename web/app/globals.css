@@ -77,7 +77,9 @@ main { width: 100%; }
   backdrop-filter: blur(12px);
 }
 
-.brand-logo { display: block; width: 132px; height: 38px; object-fit: cover; object-position: center; }
+.brand-lockup { display: inline-flex; align-items: center; gap: 9px; }
+.brand-mark-image { display: block; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 8px; }
+.brand-logo { display: block; width: 132px; height: 38px; object-fit: cover; object-position: center; transform: translateY(-4px); }
 .brand {
   display: inline-flex;
   align-items: center;
@@ -1846,7 +1848,9 @@ main { width: 100%; }
 }
 .dashboard-sidebar-brand { display: flex; align-items: center; justify-content: flex-start; gap: 6px; width: 100%; padding: 0 8px; }
 .dashboard-brand-mark { display: inline-flex; align-items: center; gap: 9px; max-width: calc(100% - 52px); transition: max-width 240ms ease, transform 240ms ease; color: var(--color-content); font-size: 1.08rem; letter-spacing: -0.03em; }
-.dashboard-brand-logo { display: block; width: 112px; height: 34px; object-fit: cover; object-position: center; }
+.dashboard-brand-logo { gap: 8px; }
+.dashboard-brand-logo .brand-mark-image { width: 30px; height: 30px; flex-basis: 30px; }
+.dashboard-brand-logo .brand-logo { width: 112px; height: 34px; }
 .dashboard-brand-collapsed-icon { display: block; width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 4px 12px rgba(86, 86, 86, .12); }
 .dashboard-brand-icon { font-size: .92rem; font-weight: 700; letter-spacing: -.04em; }
 .dashboard-command-search { display: flex; align-items: center; width: min(24vw, 280px); height: 36px; gap: 8px; padding: 0 11px; border: 1px solid rgba(86, 86, 86, .16); border-radius: 9px; background: color-mix(in srgb, var(--color-surface-solid) 92%, var(--color-grain)); color: var(--color-blackboard); box-shadow: 0 5px 16px rgba(86, 86, 86, .08), inset 0 1px rgba(255, 255, 255, .68); cursor: pointer; text-align: left; transition: border-color 160ms ease, box-shadow 160ms ease; }
@@ -1929,7 +1933,7 @@ main { width: 100%; }
 .dashboard-command-menu a:hover, .dashboard-command-menu button:hover, .dashboard-command-menu a:focus-visible, .dashboard-command-menu button:focus-visible { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
 .dashboard-command-menu form { margin: 0; }
 .dashboard-wrap .topbar { position: sticky; top: 0; z-index: 15; margin: 0; border-bottom: 1px solid rgba(86, 86, 86, .12); background: var(--color-surface-translucent); }
-.topbar-brand-logo { width: 132px; height: 38px; }
+.topbar-brand-logo .brand-logo { width: 132px; height: 38px; }
 .dashboard-wrap .topbar-shell { width: 100%; max-width: none; min-height: 72px; padding: 0 30px; }
 .topbar-title-group { display: inline-flex; align-items: center; gap: 12px; }
 .topbar-title { font-size: 1.25rem; letter-spacing: -.03em; }
@@ -1943,7 +1947,7 @@ main { width: 100%; }
 .sidebar-collapsed .dashboard-account-trigger { justify-content: center; padding-inline: 4px; }
 .sidebar-collapsed .dashboard-account-menu { left: 44px; bottom: 0; width: 240px; }
 .sidebar-collapsed .dashboard-brand-mark { width: calc(100% - 44px); max-width: none; justify-content: center; }
-.sidebar-collapsed .dashboard-brand-logo { width: 34px; height: 34px; object-position: center; }
+.sidebar-collapsed .dashboard-brand-logo { width: 34px; height: 34px; }
 .sidebar-collapsed .dashboard-sidebar { padding-inline: 8px; }
 .sidebar-collapsed .dashboard-sidebar-brand { padding: 0; justify-content: center; }
 .sidebar-collapsed .dashboard-nav { gap: 8px; margin-top: 0; }
