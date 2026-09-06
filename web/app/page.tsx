@@ -45,13 +45,6 @@ const connections = [
   { icon: "/images/connections/premiere-pro.svg", name: "Adobe Premiere Pro" },
 ];
 
-const teamStories = [
-  { image: "/images/testimonials/documentary-editor.webp", name: "Maya Chen", role: "Documentary editor", body: "I can ask about an interview and jump straight to the cited moment. Review starts with the footage instead of another search." },
-  { image: "/images/testimonials/archive-manager.webp", name: "Elena Ward", role: "Archive manager", body: "Vivadeo keeps ingest progress, source context, and workspace access together. I always know what is ready and what needs attention." },
-  { image: "/images/testimonials/sports-producer.webp", name: "Noah Brooks", role: "Sports producer", body: "Finding the exact play used to mean scrubbing through entire recordings. Now I can return to the relevant time range immediately." },
-  { image: "/images/testimonials/newsroom-researcher.webp", name: "Nadia Okafor", role: "Newsroom researcher", body: "The citations make answers useful in an editorial workflow. I can verify the source moment before anything moves forward." },
-];
-
 const solutions = [
   { icon: "⌕", title: "Find the right moment", body: "Ask a question and move directly to the relevant part of your archive." },
   { icon: "✓", title: "Keep evidence attached", body: "Review source context and timestamps before footage moves forward." },
@@ -143,31 +136,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="landing-stories">
-        <ScrollAnimation className="landing-section-heading">
-          <p>Illustrative team stories</p>
-          <h2>Built for people who live in footage.</h2>
-        </ScrollAnimation>
-        <div className="landing-stories-grid">
-          {teamStories.map((story) => (
-            <ScrollAnimation as="article" className="landing-story" key={story.role}>
-              <p>{story.body}</p>
-              <div>
-                <img className="landing-story-avatar" src={story.image} alt="" />
-                <span className="landing-story-person">
-                  <strong>{story.name}</strong>
-                  <small>{story.role}</small>
-                </span>
-              </div>
-            </ScrollAnimation>
-          ))}
-          <ScrollAnimation className="landing-story-visual">
-            <img src="/images/testimonials/featured-portrait.webp" alt="Video editor working in a film archive" />
-            <span>Watch the story</span>
-          </ScrollAnimation>
-        </div>
-      </section>
-
       <section className="landing-pricing" id="pricing">
         <ScrollAnimation className="landing-pricing-heading">
           <p>Pricing</p>
@@ -196,10 +164,20 @@ export default async function HomePage() {
       <LandingFaq />
 
       <footer className="landing-footer" id="contact">
-        <ScrollAnimation className="landing-footer-top">
+        <ScrollAnimation className="landing-footer-cta">
           <div>
+            <h2>Your archive already has the answer.</h2>
+            <p>Find the exact moment, verify the source, and keep your team moving.</p>
+          </div>
+          <Link href={signedIn ? "/dashboard" : "/sign-up"}>
+            {signedIn ? "Open console" : "Start searching"}
+          </Link>
+        </ScrollAnimation>
+
+        <ScrollAnimation className="landing-footer-main">
+          <div className="landing-footer-intro">
             <Link href="/" className="landing-footer-brand"><BrandLogo /></Link>
-            <h2>Find more in every frame.</h2>
+            <p>Video search and review for workspace teams.</p>
           </div>
           <nav aria-label="Product">
             <h3>Product</h3>
@@ -207,19 +185,16 @@ export default async function HomePage() {
             <Link href="/dashboard/library">Library</Link>
             <Link href="/jobs">Jobs</Link>
           </nav>
-          <nav aria-label="Company">
-            <h3>Company</h3>
+          <nav aria-label="Explore">
+            <h3>Explore</h3>
             <Link href="#about">About</Link>
             <Link href="#pricing">Pricing</Link>
             <Link href={signedIn ? "/dashboard" : "/sign-up"}>Get started</Link>
           </nav>
         </ScrollAnimation>
-        <ScrollAnimation className="landing-footer-art" aria-hidden="true">
-          <span>⌕</span><span>00:42</span><span>▶</span><span>CC</span><span>✓</span>
-        </ScrollAnimation>
         <ScrollAnimation className="landing-footer-bottom">
           <span>© {new Date().getFullYear()} Vivadeo</span>
-          <span>Video search and review for workspace teams.</span>
+          <span>Find more in every frame.</span>
         </ScrollAnimation>
       </footer>
     </div>
