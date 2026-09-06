@@ -74,7 +74,7 @@ export function DashboardShell({
         <div className="dashboard-sidebar-brand">
           {collapsed ? (
             <button className="dashboard-brand-collapsed-toggle" type="button" onClick={toggleSidebar} aria-label="Expand sidebar" data-tooltip="Expand sidebar">
-              <span className="sidebar-expander collapsed-brand-expander" aria-hidden="true" />
+              <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="" />
             </button>
           ) : (
             <>

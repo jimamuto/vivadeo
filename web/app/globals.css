@@ -1848,8 +1848,7 @@ main { width: 100%; }
 .dashboard-brand-mark { display: inline-flex; align-items: center; gap: 9px; max-width: calc(100% - 52px); transition: max-width 240ms ease, transform 240ms ease; color: var(--color-content); font-size: 1.08rem; letter-spacing: -0.03em; }
 .dashboard-brand-logo { display: block; width: 112px; height: 34px; object-fit: cover; object-position: center; }
 .dashboard-brand-collapsed-toggle { position: relative; z-index: 30; display: grid; place-items: center; align-self: center; width: 100%; height: 32px; min-height: 32px; padding: 0; border: 0; background: transparent; cursor: pointer; }
-.dashboard-brand-collapsed-toggle .dashboard-brand-logo { width: 78px; height: 32px; transition: opacity 140ms ease; }
-.collapsed-brand-expander { position: static; width: 22px; height: 20px; opacity: 1; transform: none; }
+.dashboard-brand-collapsed-icon { display: block; width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 4px 12px rgba(86, 86, 86, .12); }
 
 .dashboard-brand-collapsed-toggle[data-tooltip]::after { position: absolute; top: 50%; left: calc(100% + 10px); z-index: 8; padding: 8px 11px; border: 1px solid rgba(215, 206, 199, .22); border-radius: 8px; background: var(--blackboard); color: #fffdfa; content: attr(data-tooltip); font-size: .72rem; white-space: nowrap; opacity: 0; pointer-events: none; transform: translateY(-50%) translateX(-3px); transition: opacity 140ms ease, transform 140ms ease; box-shadow: 0 8px 18px rgba(86, 86, 86, .16); }
 .dashboard-brand-collapsed-toggle[data-tooltip]:hover::after, .dashboard-brand-collapsed-toggle[data-tooltip]:focus-visible::after { opacity: 1; transform: translateY(-50%) translateX(0); }
