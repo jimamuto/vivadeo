@@ -17,12 +17,6 @@ export default async function JobsPage() {
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
-        <section className="dashboard-section-head jobs-page-head">
-          <div>
-            <h1>Workspace jobs</h1>
-            <p className="muted">Track ingestion and processing jobs.</p>
-          </div>
-        </section>
         <JobsPanel jobs={jobs} />
       </div>
     </DashboardShell>

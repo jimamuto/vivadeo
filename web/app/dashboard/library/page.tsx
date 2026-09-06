@@ -23,12 +23,6 @@ export default async function LibraryPage({
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
-        <section className="dashboard-section-head library-page-head">
-          <div>
-            <h1>Video library</h1>
-            <p className="muted">Browse and manage your workspace footage.</p>
-          </div>
-        </section>
         <LibraryPanel videos={videos} jobs={jobs} initialVideoId={selectedVideoId} initialStartTime={selectedStartTime} />
       </div>
     </DashboardShell>

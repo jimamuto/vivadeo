@@ -43,6 +43,18 @@ export function DashboardShell({
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
+  const pathname = usePathname();
+  const pageLabel = pathname.startsWith("/dashboard/library")
+    ? "Library"
+    : pathname.startsWith("/dashboard/jobs")
+      ? "History"
+      : pathname.startsWith("/dashboard/ingest")
+        ? "Ingest"
+        : pathname.startsWith("/settings")
+          ? "Settings"
+          : pathname.startsWith("/jobs")
+            ? "Job progress"
+            : "Chat";
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
@@ -89,6 +101,11 @@ export function DashboardShell({
       </aside>
       <div className="dashboard-frame">
         <header className="dashboard-command-bar">
+          <nav className="dashboard-breadcrumb" aria-label="Breadcrumb">
+            <Link href="/chat">Workspace</Link>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+            <span aria-current="page">{pageLabel}</span>
+          </nav>
           <nav aria-label="Workspace actions">
             <Link href="/dashboard/jobs" aria-label="View activity">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
