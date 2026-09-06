@@ -40,6 +40,24 @@ function sourceLabel(sourceType: string) {
   return sourceType.replace(/_/g, " ");
 }
 
+const HISTORY_JOB_LABELS: Record<string, string> = {
+  ingest_uploaded_object: "Video upload",
+  ingest_url: "Video import",
+  ingest_local_path: "Local video import",
+  trim_clip: "Clip export",
+};
+
+function jobLabel(kind: string) {
+  return HISTORY_JOB_LABELS[kind] || kind.replace(/_/g, " ");
+}
+
+function jobStatusLabel(status: string) {
+  if (status === "succeeded") return "Completed";
+  if (status === "running") return "Processing";
+  if (status === "queued") return "Waiting";
+  return status;
+}
+
 export function fmt(seconds: number | null): string {
   if (seconds == null) return "-";
   const m = Math.floor(seconds / 60);
@@ -48,9 +66,15 @@ export function fmt(seconds: number | null): string {
 }
 
 function fmtDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+    timeZoneName: "short",
   }).format(new Date(value));
 }
 
@@ -308,236 +332,153 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   );
 }
 
-export function JobsPanel({ jobs }: { jobs: Job[]; }) {
+export function JobsPanel({ jobs, videos, referenceTime }: { jobs: Job[]; videos: Video[]; referenceTime: string }) {
   const permissions = useWorkspacePermissions();
   const [items, setItems] = useState(jobs);
-  const [selectedId, setSelectedId] = useState(jobs[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [retryNote, setRetryNote] = useState<string | null>(null);
-  const [cancelNote, setCancelNote] = useState<string | null>(null);
-  const [timeline, setTimeline] = useState<Array<{ at: string; message: string }>>([]);
-  const [deadLetterEntries, setDeadLetterEntries] = useState<
-    Array<{ id: string; chunk_id: string; source_uri: string; start_time: number; end_time: number; error: string; attempts: number }>
-  >([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setItems(jobs);
-    setSelectedId((current) => (current && jobs.some((job) => job.id === current) ? current : jobs[0]?.id ?? ""));
-  }, [jobs]);
-
-  useEffect(() => {
-    if (!selectedId) return;
-    setTimeline([]);
-    const stream = new EventSource(`/api/job-events/${selectedId}`);
-    stream.addEventListener("job", (event) => {
-      const nextJob = JSON.parse((event as MessageEvent<string>).data) as Job;
-      setItems((current) => current.map((job) => (job.id === nextJob.id ? { ...job, ...nextJob } : job)));
-      setTimeline((current) => {
-        const nextMessage = nextJob.message || nextJob.status;
-        if (current[0]?.message === nextMessage) return current;
-        return [{ at: new Date().toISOString(), message: nextMessage }, ...current].slice(0, 12);
-      });
-      if (nextJob.status === "succeeded" || nextJob.status === "failed" || nextJob.status === "canceled") {
-        stream.close();
-      }
-    });
-    stream.addEventListener("error", () => {
-      stream.close();
-    });
-    return () => {
-      stream.close();
-    };
-  }, [selectedId]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const response = await fetch("/api/proxy/v1/jobs/dead-letter");
-        if (!response.ok) return;
-        const payload = (await response.json()) as Array<{ id: string; chunk_id: string; source_uri: string; start_time: number; end_time: number; error: string; attempts: number }>;
-        setDeadLetterEntries(payload);
-      } catch {
-        return;
-      }
-    })();
-  }, []);
-
   const [historyQuery, setHistoryQuery] = useState("");
+  const [historyKind, setHistoryKind] = useState("all");
+  const [historyStatus, setHistoryStatus] = useState("all");
+  const [historyRange, setHistoryRange] = useState("30");
   const [historySort, setHistorySort] = useState<"newest" | "oldest" | "status">("newest");
-  const visibleItems = [...items]
-    .filter((job) => `${job.kind} ${job.status} ${job.message || ""}`.toLowerCase().includes(historyQuery.toLowerCase()))
+
+  useEffect(() => setItems(jobs), [jobs]);
+
+  const videoNames = useMemo(() => new Map(videos.map((video) => [video.id, video.filename])), [videos]);
+  const historyItems = items.filter((job) => job.kind in HISTORY_JOB_LABELS);
+  const jobKinds = [...new Set(historyItems.map((job) => job.kind))].sort();
+  const query = historyQuery.trim().toLowerCase();
+  const cutoff = historyRange === "all" ? 0 : new Date(referenceTime).getTime() - Number(historyRange) * 86_400_000;
+  const visibleItems = [...historyItems]
+    .filter((job) => {
+      const source = job.video_id ? videoNames.get(job.video_id) || "" : "";
+      return (!query || `${job.kind} ${job.status} ${job.message || ""} ${source}`.toLowerCase().includes(query))
+        && (historyKind === "all" || job.kind === historyKind)
+        && (historyStatus === "all" || job.status === historyStatus)
+        && (!cutoff || new Date(job.created_at).getTime() >= cutoff);
+    })
     .sort((a, b) => {
       if (historySort === "status") return a.status.localeCompare(b.status);
       const direction = historySort === "newest" ? -1 : 1;
       return direction * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     });
-  const selectedJob = items.find((job) => job.id === selectedId) ?? items[0] ?? null;
 
-  async function retryJob(jobId: string) {
-    setRetryNote(null);
-    setCancelNote(null);
+  async function updateJob(jobId: string, action: "retry" | "cancel") {
+    setNotice(null);
     setError(null);
     try {
-      const nextJob = await proxyPost<Job>(`/v1/jobs/${jobId}/retry`, "");
+      const nextJob = await proxyPost<Job>(`/v1/jobs/${jobId}/${action}`, "");
       setItems((current) => current.map((job) => (job.id === jobId ? { ...job, ...nextJob } : job)));
-      setRetryNote("Retry queued.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unknown error");
-    }
-  }
-
-  async function cancelJob(jobId: string) {
-    setRetryNote(null);
-    setCancelNote(null);
-    setError(null);
-    try {
-      const nextJob = await proxyPost<Job>(`/v1/jobs/${jobId}/cancel`, "");
-      setItems((current) => current.map((job) => (job.id === jobId ? { ...job, ...nextJob } : job)));
-      setCancelNote("Job canceled.");
+      setNotice(action === "retry" ? "Retry queued." : "Job canceled.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unknown error");
     }
   }
 
   return (
-    <section className="dashboard-split-panel job-history-only">
-      <article className="card dashboard-panel">
-        <div className="dashboard-panel-head">
-          <h2>Job history</h2>
+    <section className="job-history-page">
+      <header className="job-history-heading">
+        <div>
+          <h1>Job history</h1>
+          <p>Track video uploads, imports, and processing outcomes for this workspace.</p>
         </div>
-        <div className="history-toolbar">
-          <label className="sr-only" htmlFor="job-history-search">Search jobs</label>
-          <input id="job-history-search" type="search" placeholder="Search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} />
-          <label className="sr-only" htmlFor="job-history-sort">Sort jobs</label>
-          <select id="job-history-sort" value={historySort} onChange={(event) => setHistorySort(event.target.value as typeof historySort)}>
+        <span>{visibleItems.length} {visibleItems.length === 1 ? "job" : "jobs"}</span>
+      </header>
+
+      <div className="history-toolbar">
+        <label className="history-search" htmlFor="job-history-search">
+          <span className="sr-only">Search jobs</span>
+          <input id="job-history-search" type="search" placeholder="Search jobs or sources" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} />
+        </label>
+        <label>
+          <span className="sr-only">Job type</span>
+          <select value={historyKind} onChange={(event) => setHistoryKind(event.target.value)}>
+            <option value="all">All job types</option>
+            {jobKinds.map((kind) => <option key={kind} value={kind}>{jobLabel(kind)}</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="sr-only">Status</span>
+          <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="queued">Waiting</option>
+            <option value="running">Processing</option>
+            <option value="succeeded">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="canceled">Canceled</option>
+          </select>
+        </label>
+        <label>
+          <span className="sr-only">Date range</span>
+          <select value={historyRange} onChange={(event) => setHistoryRange(event.target.value)}>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+        </label>
+        <label>
+          <span className="sr-only">Sort jobs</span>
+          <select value={historySort} onChange={(event) => setHistorySort(event.target.value as typeof historySort)}>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="status">Status</option>
           </select>
+        </label>
+      </div>
+
+      {error ? <p className="notice notice-bad">{error}</p> : null}
+      {notice ? <p className="notice notice-good">{notice}</p> : null}
+      {historyItems.length === 0 ? <p className="history-empty">No processing history yet. Video uploads and imports will appear here.</p> : visibleItems.length === 0 ? <p className="history-empty">No jobs match these filters.</p> : (
+        <div className="job-history-table-wrap">
+          <table className="job-history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Job</th>
+                <th>Source</th>
+                <th>Progress</th>
+                <th>Status</th>
+                <th><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((job) => {
+                const source = job.video_id ? videoNames.get(job.video_id) : null;
+                const progress = Math.round((job.progress ?? 0) * 100);
+                return (
+                  <tr key={job.id}>
+                    <td data-label="Date"><time dateTime={job.created_at}>{fmtDate(job.created_at)}</time></td>
+                    <td data-label="Job">
+                      <strong>{jobLabel(job.kind)}</strong>
+                      <span>{job.message || "Waiting for an update"}</span>
+                    </td>
+                    <td data-label="Source">{source || (job.video_id ? `Video ${job.video_id.slice(0, 8)}` : "Workspace")}</td>
+                    <td data-label="Progress">
+                      <span className="history-progress-value">{progress}%</span>
+                      <span className="history-progress-track" aria-hidden="true"><span style={{ width: `${progress}%` }} /></span>
+                    </td>
+                    <td data-label="Status"><span className={`job-status job-status-${statusTone(job.status)}`}><i aria-hidden="true" />{jobStatusLabel(job.status)}</span></td>
+                    <td className="history-actions">
+                      <details>
+                        <summary aria-label={`Actions for ${jobLabel(job.kind)}`}>•••</summary>
+                        <div>
+                          <Link href={`/jobs?job=${encodeURIComponent(job.id)}`}>View details</Link>
+                          {job.video_id ? <Link href={`/dashboard/library?video_id=${encodeURIComponent(job.video_id)}`}>Open in Library</Link> : null}
+                          {job.status === "queued" || job.status === "running" ? <button type="button" disabled={isPending || !permissions.canEdit} onClick={() => startTransition(() => updateJob(job.id, "cancel"))}>Cancel job</button> : null}
+                          {job.status === "failed" || job.status === "canceled" ? <button type="button" disabled={isPending || !permissions.canEdit} onClick={() => startTransition(() => updateJob(job.id, "retry"))}>Retry job</button> : null}
+                        </div>
+                      </details>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        {items.length === 0 ? <p className="muted">No jobs yet.</p> : visibleItems.length === 0 ? <p className="muted">No matching jobs.</p> : (
-          <div className="job-history-list">
-            {visibleItems.map((job) => (
-              <button
-                key={job.id}
-                type="button"
-                className="job-history-item"
-              >
-                <div>
-                  <strong>{job.kind.replace(/_/g, " ")}</strong>
-                  <p>{job.message || "No worker message yet."}</p>
-                </div>
-                <div className="job-history-meta">
-                  <span className={`job-status job-status-${statusTone(job.status)}`}>{job.status}</span>
-                  <span>{Math.round((job.progress ?? 0) * 100)}%</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </article>
-
-      <article className="card dashboard-panel">
-        <div className="dashboard-panel-head">
-          <h2>Job detail</h2>
-        </div>
-        {error ? <p className="notice notice-bad">{error}</p> : null}
-        {!selectedJob ? <p className="muted">Select job to inspect details.</p> : (
-          <div className="job-card">
-            <div className="job-card-head">
-              <div>
-                <p className="eyebrow">Job {selectedJob.id.slice(0, 8)}</p>
-                <h3>{selectedJob.kind.replace(/_/g, " ")}</h3>
-              </div>
-              <span className={`job-status job-status-${statusTone(selectedJob.status)}`}>{selectedJob.status}</span>
-            </div>
-
-            <div className="job-progress" aria-label="Job progress">
-              <div className="job-progress-track">
-                <div className="job-progress-fill" style={{ width: `${Math.max(0, Math.min(1, selectedJob.progress ?? 0)) * 100}%` }} />
-              </div>
-              <div className="job-progress-meta">
-                <span>{Math.round((selectedJob.progress ?? 0) * 100)}%</span>
-                <span>{selectedJob.message || "Waiting for worker"}</span>
-              </div>
-            </div>
-
-            <JobStages job={selectedJob} />
-
-            <div className="detail-grid">
-              <article className="detail-card">
-                <span>Video ID</span>
-                <strong>{selectedJob.video_id || "-"}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Clip ID</span>
-                <strong>{selectedJob.clip_id || "-"}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Queued</span>
-                <strong>{fmtDate(selectedJob.created_at)}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Updated</span>
-                <strong>{fmtDate(selectedJob.updated_at)}</strong>
-              </article>
-            </div>
-
-            {timeline.length > 0 ? (
-              <div className="dashboard-stack">
-                <h3>Worker timeline</h3>
-                <div className="job-history-list">
-                  {timeline.map((entry) => (
-                    <article key={`${entry.at}-${entry.message}`} className="detail-card">
-                      <span>{entry.message}</span>
-                      <strong>{new Date(entry.at).toLocaleTimeString()}</strong>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {selectedJob.error ? <p className="notice notice-bad">Failure reason: {selectedJob.error}</p> : null}
-            {selectedJob.status === "queued" || selectedJob.status === "running" ? (
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={() => startTransition(() => cancelJob(selectedJob.id))}
-                disabled={isPending || !permissions.canEdit}
-              >
-                Cancel job
-              </button>
-            ) : null}
-            {selectedJob.status === "failed" ? (
-              <button
-                className="button"
-                type="button"
-                onClick={() => startTransition(() => retryJob(selectedJob.id))}
-                disabled={isPending || !permissions.canEdit}
-              >
-                Retry failed job
-              </button>
-            ) : null}
-            {cancelNote ? <p className="notice notice-good">{cancelNote}</p> : null}
-            {retryNote ? <p className="notice notice-good">{retryNote}</p> : null}
-            {deadLetterEntries.length > 0 ? (
-              <div className="dashboard-stack">
-                <h3>Dead-letter queue</h3>
-                <div className="job-history-list">
-                  {deadLetterEntries.map((entry) => (
-                    <article key={entry.id} className="detail-card">
-                      <span>{entry.chunk_id}</span>
-                      <strong>{fmt(entry.start_time)} - {fmt(entry.end_time)}</strong>
-                      <p className="muted">{entry.source_uri}</p>
-                      <p className="muted">{entry.error}</p>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </article>
+      )}
     </section>
   );
 }

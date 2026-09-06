@@ -12,12 +12,12 @@ export default async function JobsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const displayName = session?.user?.name || session?.user?.email || "V";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
-  const { jobs } = await fetchDashboardData(activeWorkspace);
+  const { jobs, videos } = await fetchDashboardData(activeWorkspace);
 
   return (
       <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
       <div className="dashboard-stack">
-        <JobsPanel jobs={jobs} />
+        <JobsPanel jobs={jobs} videos={videos} referenceTime={new Date().toISOString()} />
       </div>
     </DashboardShell>
   );
