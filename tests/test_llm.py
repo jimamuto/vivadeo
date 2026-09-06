@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from vivadeo.llm import OpenAICompatibleChat, OpenAICompatibleError, validate_base_url
+from vivadeo.llm import OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models, validate_base_url
 
 
 class _Response:
@@ -23,6 +23,20 @@ def test_validate_base_url_requires_secure_remote_endpoint():
     assert validate_base_url("http://localhost:11434") == "http://localhost:11434"
     with pytest.raises(OpenAICompatibleError):
         validate_base_url("http://api.example.com/v1")
+
+
+def test_ollama_models_are_discovered_through_the_docker_host(monkeypatch):
+    captured = {}
+
+    def respond(request, timeout):
+        captured["url"] = request.full_url
+        return _Response({"models": [{"name": "qwen3:8b"}, {"name": "gemma3:4b"}]})
+
+    monkeypatch.setattr("vivadeo.llm.Path.exists", lambda _path: True)
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
+
+    assert list_ollama_models("http://localhost:11434") == ["gemma3:4b", "qwen3:8b"]
+    assert captured["url"] == "http://host.docker.internal:11434/api/tags"
 
 
 def test_openai_compatible_chat_normalizes_answer(monkeypatch):

@@ -38,6 +38,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Chat chooses one bounded evidence operation per question: spoken-content search, visual-moment search, or focused-moment inspection. The backend retains workspace authorization and cost limits; video or model content cannot widen source scope.
 - Generated answers stream from the selected answer service and persist partial content on the chat job so reconnecting clients can resume.
 - BYOK provider keys are encrypted in PostgreSQL when configured in Settings; transient chat keys are held only in Redis while a generation job runs.
+- Ollama settings can detect models installed on the local Ollama service; containerized development routes local Ollama requests through the host.
 - Vivadeo prioritizes NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions when configured, with Modal Qwen visual embeddings and fallback retrieval for legacy transcript rows until reindexing populates NVIDIA vectors.
 - Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
 - Recent searches are client-only in `localStorage` under `vivadeo.recent-searches`; there is no server sync or workspace scoping yet.

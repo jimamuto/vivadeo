@@ -20,6 +20,8 @@ export function LlmSettingsPanel() {
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
 
   useEffect(() => {
     void fetch("/api/proxy/v1/settings/llm", { cache: "no-store" })
@@ -33,6 +35,27 @@ export function LlmSettingsPanel() {
       })
       .catch((cause) => setStatus(cause instanceof Error ? cause.message : "Could not load AI settings"));
   }, []);
+
+  async function detectOllamaModels() {
+    const endpoint = baseUrl.trim() || "http://localhost:11434";
+    setBaseUrl(endpoint);
+    setDetecting(true);
+    setStatus(null);
+    try {
+      const response = await fetch(`/api/proxy/v1/settings/llm/ollama-models?base_url=${encodeURIComponent(endpoint)}`, { cache: "no-store" });
+      const payload = await response.json() as { models?: string[]; detail?: string };
+      if (!response.ok) throw new Error(payload.detail || "Could not detect local models");
+      const models = payload.models || [];
+      setOllamaModels(models);
+      if (!model && models.length) setModel(models[0]);
+      setStatus(models.length ? `Found ${models.length} local ${models.length === 1 ? "model" : "models"}.` : "Ollama is running, but no local models are installed.");
+    } catch (cause) {
+      setOllamaModels([]);
+      setStatus(cause instanceof Error ? cause.message : "Could not detect local models");
+    } finally {
+      setDetecting(false);
+    }
+  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,12 +90,12 @@ export function LlmSettingsPanel() {
       </div>
       <form className="settings-form" onSubmit={save}>
         <div className="settings-form-grid">
-          <label className="field"><span>Provider</span><select value={provider} onChange={(event) => setProvider(event.target.value)}>{providers.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="field"><span>Provider</span><select value={provider} onChange={(event) => { const next = event.target.value; setProvider(next); if (next === "ollama" && !baseUrl) setBaseUrl("http://localhost:11434"); }}>{providers.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           {provider !== "vivadeo-auto" ? <>
             <label className="field"><span>Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={provider === "ollama" ? "http://localhost:11434" : "https://api.example.com/v1"} /></label>
-            <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model name" /></label>
-            <label className="field"><span>API key {apiKeyConfigured ? "(configured)" : ""}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={apiKeyConfigured ? "Leave blank to keep current key" : "Paste API key"} autoComplete="off" /></label>
-          </> : <p className="muted settings-inline-note">Vivadeo Auto is included with your workspace. Premium workspaces use the configured premium answer service.</p>}
+            {provider === "ollama" ? <div className="field"><span>Local models</span>{ollamaModels.length ? <select value={model} onChange={(event) => setModel(event.target.value)}>{ollamaModels.map((name) => <option key={name} value={name}>{name}</option>)}</select> : <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Detect or enter a model name" />}<button className="button-secondary" type="button" disabled={detecting} onClick={() => void detectOllamaModels()}>{detecting ? "Detecting…" : "Detect local models"}</button></div> : <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model name" /></label>}
+            {provider !== "ollama" ? <label className="field"><span>API key {apiKeyConfigured ? "(configured)" : ""}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={apiKeyConfigured ? "Leave blank to keep current key" : "Paste API key"} autoComplete="off" /></label> : null}
+          </> : <p className="muted settings-inline-note">Vivadeo Auto is included with your workspace.</p>}
         </div>
         <div className="settings-actions"><button className="button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save AI settings"}</button>{status ? <span className="muted" role="status">{status}</span> : null}</div>
         <p className="muted settings-inline-note">Keys are protected and never displayed again after saving.</p>

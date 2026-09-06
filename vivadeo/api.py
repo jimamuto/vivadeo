@@ -40,7 +40,7 @@ from .db import (
 )
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
-from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat
+from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
@@ -669,6 +669,20 @@ def get_llm_settings(
         model=llm.get("model", ""),
         api_key_configured=bool(decrypt_secret(llm.get("api_key"))),
     )
+
+
+@app.get(
+    "/v1/settings/llm/ollama-models",
+    dependencies=[Depends(require_api_key)],
+)
+def get_ollama_models(
+    base_url: str = "http://localhost:11434",
+    organization_id: str = Depends(workspace_dep),
+):
+    try:
+        return {"models": list_ollama_models(base_url)}
+    except OpenAICompatibleError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.put(

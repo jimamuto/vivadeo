@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 
@@ -71,9 +71,28 @@ def _read_answer_stream(response, on_delta, protocol: str) -> str:
     return answer
 
 
+def _ollama_base_url(value: str) -> str:
+    base_url = validate_base_url(value)
+    parsed = urlparse(base_url)
+    if Path("/.dockerenv").exists() and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+        host = "host.docker.internal"
+        netloc = f"{host}:{parsed.port}" if parsed.port else host
+        return urlunparse(parsed._replace(netloc=netloc))
+    return base_url
+
+
+def list_ollama_models(base_url: str, timeout: int = 10) -> list[str]:
+    try:
+        with urlopen(Request(f"{_ollama_base_url(base_url)}/api/tags"), timeout=timeout) as response:
+            payload = json.load(response)
+        return sorted({str(item["name"]) for item in payload.get("models", []) if item.get("name")})
+    except (HTTPError, URLError, TimeoutError, OSError, KeyError, TypeError, ValueError) as exc:
+        raise OpenAICompatibleError("Could not connect to the local Ollama service.") from exc
+
+
 class OllamaChat:
     def __init__(self, *, base_url: str, model: str, timeout: int = 120):
-        self.base_url = validate_base_url(base_url)
+        self.base_url = _ollama_base_url(base_url)
         self.model = model.strip()
         self.timeout = timeout
         if not self.model:
