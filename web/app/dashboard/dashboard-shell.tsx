@@ -87,10 +87,6 @@ export function DashboardShell({
             </>
           )}
         </div>
-        <form id="dashboard-sidebar-search" className="dashboard-sidebar-search" action="/chat" method="get" role="search" data-tooltip="Search archive">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
-          <input name="q" type="search" placeholder="Search" aria-label="Search videos" />
-        </form>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">General</span>
           <NavItem href="/chat" label="Chat" icon="chat" />
@@ -107,6 +103,10 @@ export function DashboardShell({
             <span aria-current="page">{pageLabel}</span>
           </nav>
           <nav aria-label="Workspace actions">
+            <form className="dashboard-command-search" action="/chat" method="get" role="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
+              <input name="q" type="search" placeholder="Search anything..." aria-label="Search anything" />
+            </form>
             <Link href="/dashboard/jobs" aria-label="View activity">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
             </Link>
