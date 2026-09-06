@@ -499,6 +499,7 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
   const [chunksStatus, setChunksStatus] = useState<FetchStatus>({ state: "idle" });
   const [actionStatus, setActionStatus] = useState<FetchStatus>({ state: "idle" });
   const [draggedVideoId, setDraggedVideoId] = useState<string | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
   const detailPlayerRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -540,6 +541,13 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
   const selectedMediaUrl = selectedVideo?.object_key
     ? `/api/proxy/v1/media/${selectedVideo.object_key.split("/").map(encodeURIComponent).join("/")}`
     : null;
+
+  useEffect(() => {
+    if (!viewOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setViewOpen(false); };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [viewOpen]);
 
   useEffect(() => {
     const player = detailPlayerRef.current;
@@ -711,12 +719,14 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
                 <div className="library-tags-cell"><span>{(video.labels || []).join(", ") || video.collection || "Uncategorized"}</span><small>{latestJobByVideo.get(video.id)?.transcribe === false ? "Text search off" : "Transcript ready"}</small></div>
                 <span>Video</span><span>{fmtDate(video.created_at)}</span><span>{fmt(video.duration)}</span>
                 <span><span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span></span>
-                <div className="library-row-actions"><button type="button" title="Archive" aria-label={`Archive ${video.filename}`} onClick={() => void runVideoAction(video.id, "archive")} disabled={!permissions.canEdit}>□</button><button type="button" title="Reindex" aria-label={`Reindex ${video.filename}`} onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>↻</button><button type="button" title="Delete" aria-label={`Delete ${video.filename}`} onClick={() => void runVideoAction(video.id, "delete")} disabled={!permissions.canEdit}>⌫</button></div>
+                <div className="library-row-actions"><button type="button" className="library-view-button" onClick={() => { setSelectedId(video.id); setViewOpen(true); }}>View</button><button type="button" title="Reindex" aria-label={`Reindex ${video.filename}`} onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>↻</button><button type="button" title="Delete" aria-label={`Delete ${video.filename}`} onClick={() => void runVideoAction(video.id, "delete")} disabled={!permissions.canEdit}>⌫</button></div>
               </article>;
             })}
           </div>
         </div>}
       </article>
+
+      {viewOpen && selectedVideo ? <div className="library-view-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setViewOpen(false); }}><section className="library-view-dialog" role="dialog" aria-modal="true" aria-labelledby="library-view-title"><header><div><h2 id="library-view-title">{selectedVideo.filename}</h2><p>{fmt(selectedVideo.duration)} · {sourceLabel(selectedVideo.source_type)}</p></div><button type="button" autoFocus onClick={() => setViewOpen(false)} aria-label="Close video viewer">×</button></header>{selectedMediaUrl ? <video src={selectedMediaUrl} controls autoPlay preload="metadata" /> : <div className="library-view-unavailable">Preview unavailable</div>}</section></div> : null}
 
       <article className="card dashboard-panel library-detail-panel">
         <div className="dashboard-panel-head library-panel-head">

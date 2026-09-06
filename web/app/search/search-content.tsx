@@ -940,11 +940,12 @@ export function SearchContent({
     setEditingPrompt(message.content);
   }
 
-  async function copyPrompt(content: string) {
+  async function copyMessage(content: string, label: "Prompt" | "Response") {
     try {
       await navigator.clipboard.writeText(content);
+      setStatus(`${label} copied.`);
     } catch {
-      setStatus("Could not copy this prompt.");
+      setStatus(`Could not copy this ${label.toLowerCase()}.`);
     }
   }
 
@@ -1417,7 +1418,7 @@ export function SearchContent({
                         <div className="search-meta">
                           {turn.role === "assistant" ? (
                             <>
-                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <div className="search-answer-text"><MarkdownText text={turn.content} /></div> : null}
+                              {isFailed ? <div className="search-answer-text">Vivadeo could not prepare this answer.</div> : turn.content ? <><div className="search-answer-text"><MarkdownText text={turn.content} /></div><div className="chat-assistant-message-actions"><button type="button" onClick={() => void copyMessage(turn.content, "Response")} aria-label="Copy response"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" /><path d="M16 8V5H5v11h3" /></svg><span>Copy</span></button></div></> : null}
                               {turn.intent?.modality ? <div className="chat-evidence-summary">{turn.intent.modality === "visual" ? "Visual evidence" : turn.intent.modality === "hybrid" ? "Visual + spoken evidence" : "Transcript evidence"}{turn.verification_summary?.verified ? ` · ${turn.verification_summary.verified} verified` : ""}{turn.verification_summary?.possible ? ` · ${turn.verification_summary.possible} possible` : ""}</div> : null}
                               {turn.error ? <p className="chat-message-error" role="alert">{turn.error}</p> : null}
                               {branchMessages.length > 1 ? <div className="chat-message-actions">
@@ -1442,7 +1443,7 @@ export function SearchContent({
                                   <button type="button" onClick={() => editPrompt(turn)} aria-label="Edit prompt">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" /></svg>
                                   </button>
-                                  <button type="button" onClick={() => void copyPrompt(turn.content)} aria-label="Copy prompt">
+                                  <button type="button" onClick={() => void copyMessage(turn.content, "Prompt")} aria-label="Copy prompt">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" /><path d="M16 8V5H5v11h3" /></svg>
                                   </button>
                                 </div>
