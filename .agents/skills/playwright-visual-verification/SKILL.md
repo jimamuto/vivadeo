@@ -29,7 +29,7 @@ Use the running development app at `http://localhost:3000`. Do not build images 
    });
    ```
 
-5. Create a temporary user through the real sign-up UI so Better Auth creates the credential correctly. Immediately set only that test user's `email_verified` value to `TRUE` in the development PostgreSQL container, confirm the update, then sign in through the real UI. Do not wait for or retrieve a verification email. Read the container's database name and user programmatically without printing credentials. Never print passwords, connection strings, cookies, or API keys.
+5. Reuse an existing dedicated test user before creating another account. Confirm that exact user exists and has `email_verified = TRUE` in the development PostgreSQL database, then sign in through the real UI with its test credentials. Create a temporary user through the sign-up UI only when no reusable test user exists. Read the container's database name and user programmatically without printing passwords, connection strings, cookies, or API keys.
 6. Reproduce the exact user sequence. For timing bugs, repeat the action enough times to cross the failure threshold and wait for each response to finish before continuing.
 7. Capture evidence from the browser, not assumptions from source:
    - viewport screenshot
