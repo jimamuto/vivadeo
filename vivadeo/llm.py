@@ -1,4 +1,4 @@
-"""Small OpenAI-compatible chat client for Pro and transient BYOK requests."""
+"""Small OpenAI-compatible client for Vivadeo Auto and transient BYOK requests."""
 
 import base64
 import json

@@ -213,10 +213,11 @@ def test_search_chat_answers_with_transcript_citations(monkeypatch):
         def execute(self, stmt):
             return FakeRows()
 
-    class FakeGemma:
-        def __init__(self, app_name, function_name, timeout):
-            assert app_name == "gemma-app"
-            assert function_name == "answer"
+    class FakeAutoChat:
+        def __init__(self, base_url, api_key, model, timeout):
+            assert base_url == "https://luna.example/v1"
+            assert api_key == "secret"
+            assert model == "gpt-5.6-luna"
 
         def answer(self, messages, context):
             assert messages[-1]["content"] == "When is launch?"
@@ -226,8 +227,8 @@ def test_search_chat_answers_with_transcript_citations(monkeypatch):
     monkeypatch.setattr(api, "get_embedder", lambda: FakeEmbedder())
     monkeypatch.setattr(api, "reset_embedder", lambda: None)
     monkeypatch.setattr(api, "PostgresVideoStore", FakeStore)
-    monkeypatch.setattr(api, "ModalGemmaChat", FakeGemma)
-    monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(modal_gemma_app="gemma-app", modal_gemma_function="answer", modal_timeout=30))
+    monkeypatch.setattr(api, "OpenAICompatibleChat", FakeAutoChat)
+    monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(auto_llm_base_url="https://luna.example/v1", auto_llm_api_key="secret", auto_llm_model="gpt-5.6-luna", auto_llm_timeout=30))
 
     response = api.search_chat(
         api.ChatRequest(messages=[api.ChatMessage(role="user", content="When is launch?")], results=4),
@@ -285,8 +286,8 @@ def test_comparison_retrieves_each_video_independently(monkeypatch):
             self.calls += 1
             return FakeRows((segments[index], videos[index]))
 
-    class FakeGemma:
-        def __init__(self, app_name, function_name, timeout):
+    class FakeAutoChat:
+        def __init__(self, base_url, api_key, model, timeout):
             pass
 
         def answer(self, messages, context):
@@ -296,8 +297,8 @@ def test_comparison_retrieves_each_video_independently(monkeypatch):
     monkeypatch.setattr(api, "get_embedder", lambda: FakeEmbedder())
     monkeypatch.setattr(api, "reset_embedder", lambda: None)
     monkeypatch.setattr(api, "PostgresVideoStore", FakeStore)
-    monkeypatch.setattr(api, "ModalGemmaChat", FakeGemma)
-    monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(modal_gemma_app="gemma-app", modal_gemma_function="answer", modal_timeout=30))
+    monkeypatch.setattr(api, "OpenAICompatibleChat", FakeAutoChat)
+    monkeypatch.setattr(api, "get_runtime_settings", lambda: SimpleNamespace(auto_llm_base_url="https://luna.example/v1", auto_llm_api_key="secret", auto_llm_model="gpt-5.6-luna", auto_llm_timeout=30))
 
     response = api.search_chat(
         api.ChatRequest(

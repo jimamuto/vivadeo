@@ -41,7 +41,6 @@ from .db import (
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
 from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat
-from .modal_gemma import ModalGemmaChat
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
@@ -1751,15 +1750,7 @@ def _complete_chat_message(
     assistant.error = None
     assistant.updated_at = utcnow()
     if thread.title == "New thread":
-        try:
-            settings = get_runtime_settings()
-            thread.title = ModalGemmaChat(
-                app_name=settings.modal_gemma_app,
-                function_name=settings.modal_gemma_function,
-                timeout=settings.modal_timeout,
-            ).title(parent.content)
-        except Exception:
-            thread.title = " ".join(parent.content.split())[:255] or "New thread"
+        thread.title = " ".join(parent.content.split())[:255] or "New thread"
     thread.current_message_id = assistant.id
     thread.updated_at = utcnow()
     session.commit()
@@ -1955,7 +1946,7 @@ def create_chat_message(
         raise HTTPException(status_code=400, detail="AI endpoint, API key, and model are required")
     if request.provider == "ollama" and (not request.custom_base_url or not request.custom_model):
         raise HTTPException(status_code=400, detail="Ollama endpoint and model are required")
-    if request.provider not in {"vivadeo-auto", "vivadeo-pro", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
+    if request.provider not in {"vivadeo-auto", "custom", "ollama", "openai", "anthropic", "gemini", "nvidia"}:
         raise HTTPException(status_code=400, detail="Unsupported chat provider")
 
     requested_video_ids = list(dict.fromkeys([*request.video_ids, *([request.video_id] if request.video_id else []), *request.comparison_video_ids]))
@@ -2214,20 +2205,14 @@ def delete_chat_thread(
 
 def _chat_generator(request, session: Session, organization_id: str):
     settings = get_runtime_settings()
-    try:
-        plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
-    except Exception:
-        plan = "starter"
     if request.provider == "ollama":
-        generator = OllamaChat(base_url=request.custom_base_url or "", model=request.custom_model or "", timeout=settings.pro_llm_timeout)
+        generator = OllamaChat(base_url=request.custom_base_url or "", model=request.custom_model or "", timeout=settings.auto_llm_timeout)
     elif request.provider == "anthropic":
-        generator = AnthropicChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.pro_llm_timeout)
+        generator = AnthropicChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.auto_llm_timeout)
     elif request.provider in {"custom", "openai", "gemini", "nvidia"}:
-        generator = OpenAICompatibleChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.pro_llm_timeout)
-    elif plan in {"pro", "enterprise"} and settings.pro_llm_api_key and settings.pro_llm_base_url:
-        generator = OpenAICompatibleChat(base_url=settings.pro_llm_base_url, api_key=settings.pro_llm_api_key, model=settings.pro_llm_model, timeout=settings.pro_llm_timeout)
+        generator = OpenAICompatibleChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.auto_llm_timeout)
     else:
-        generator = ModalGemmaChat(app_name=settings.modal_gemma_app, function_name=settings.modal_gemma_function, timeout=settings.modal_timeout)
+        generator = OpenAICompatibleChat(base_url=settings.auto_llm_base_url or "", api_key=settings.auto_llm_api_key or "", model=settings.auto_llm_model, timeout=settings.auto_llm_timeout)
     return generator
 
 
@@ -2342,11 +2327,7 @@ def search_chat(
     )
     runtime_settings = get_runtime_settings()
     _report_search_stage(session, search_run, progress_callback, "retrieving", 0.2, "Retrieving relevant video moments")
-    try:
-        plan = session.scalar(select(Organization.plan).where(Organization.id == organization_id))
-    except Exception:
-        plan = "starter"
-    use_nvidia = plan in {"pro", "enterprise"} and bool(getattr(runtime_settings, "pro_embedding_api_key", None))
+    use_nvidia = bool(getattr(runtime_settings, "nvidia_embedding_api_key", None))
     visual_verifier = None
     visual_question = intent["modality"] in {"visual", "hybrid"}
     from .evidence_tools import is_transcript_overview
@@ -2355,15 +2336,15 @@ def search_chat(
     result_limit = 100 if intent["search_mode"] == "all" else request.results
     if (
         visual_question
-        and request.provider == "vivadeo-pro"
-        and getattr(runtime_settings, "pro_llm_api_key", None)
-        and getattr(runtime_settings, "pro_llm_base_url", None)
+        and request.provider == "vivadeo-auto"
+        and getattr(runtime_settings, "auto_llm_api_key", None)
+        and getattr(runtime_settings, "auto_llm_base_url", None)
     ):
         visual_verifier = OpenAICompatibleChat(
-            base_url=runtime_settings.pro_llm_base_url,
-            api_key=runtime_settings.pro_llm_api_key,
-            model=runtime_settings.pro_llm_model,
-            timeout=runtime_settings.pro_llm_timeout,
+            base_url=runtime_settings.auto_llm_base_url,
+            api_key=runtime_settings.auto_llm_api_key,
+            model=runtime_settings.auto_llm_model,
+            timeout=runtime_settings.auto_llm_timeout,
         )
     try:
         # Spoken-content questions never depend on the visual index.
@@ -2397,7 +2378,7 @@ def search_chat(
                 transcript_scope = [source_id or request.focus_video_id or request.video_id] if source_id or request.focus_video_id or request.video_id else scope_video_ids
                 if use_nvidia and not overview and request.focus_start_time is None and store.transcript_embeddings_ready(organization_id, transcript_scope):
                     if transcript_embedding is None:
-                        transcript_embedder = get_embedder(backend="nvidia", api_key=runtime_settings.pro_embedding_api_key, base_url=runtime_settings.pro_embedding_base_url, model=runtime_settings.pro_embedding_model, timeout=runtime_settings.pro_embedding_timeout)
+                        transcript_embedder = get_embedder(backend="nvidia", api_key=runtime_settings.nvidia_embedding_api_key, base_url=runtime_settings.nvidia_embedding_base_url, model=runtime_settings.nvidia_embedding_model, timeout=runtime_settings.nvidia_embedding_timeout)
                         transcript_embedding = transcript_embedder.embed_query(question)
                     source_hits = store.search_transcript_embeddings(transcript_embedding, n_results=scope_limit, organization_id=organization_id, video_ids=transcript_scope)
                 else:
@@ -2422,10 +2403,10 @@ def search_chat(
                     reset_embedder()
                     transcript_embedder = get_embedder(
                         backend="nvidia",
-                        api_key=runtime_settings.pro_embedding_api_key,
-                        base_url=runtime_settings.pro_embedding_base_url,
-                        model=runtime_settings.pro_embedding_model,
-                        timeout=runtime_settings.pro_embedding_timeout,
+                        api_key=runtime_settings.nvidia_embedding_api_key,
+                        base_url=runtime_settings.nvidia_embedding_base_url,
+                        model=runtime_settings.nvidia_embedding_model,
+                        timeout=runtime_settings.nvidia_embedding_timeout,
                     )
                     transcript_embedding = transcript_embedder.embed_query(question)
                 transcript_hits = store.search_transcript_embeddings(transcript_embedding, **search_kwargs)
@@ -2572,15 +2553,7 @@ def search_chat(
         _finish_search_run(search_run, status="completed", summary=verification_summary)
         if thread is not None:
             if thread.title == "New thread":
-                try:
-                    settings = get_runtime_settings()
-                    thread.title = ModalGemmaChat(
-                        app_name=settings.modal_gemma_app,
-                        function_name=settings.modal_gemma_function,
-                        timeout=settings.modal_timeout,
-                    ).title(question)
-                except Exception:
-                    thread.title = " ".join(question.split())[:255] or "New thread"
+                thread.title = " ".join(question.split())[:255] or "New thread"
             assistant = _append_chat_message(
                 thread,
                 session=session,
@@ -2611,13 +2584,7 @@ def search_chat(
     assistant_message: ChatThreadMessage | None = None
     try:
         if thread is not None and thread.title == "New thread":
-            if isinstance(generator, ModalGemmaChat):
-                try:
-                    thread.title = generator.title(question)
-                except Exception:
-                    thread.title = " ".join(question.split())[:255] or "New thread"
-            else:
-                thread.title = " ".join(question.split())[:255] or "New thread"
+            thread.title = " ".join(question.split())[:255] or "New thread"
         if thread is not None:
             assistant_message = _append_chat_message(
                 thread,

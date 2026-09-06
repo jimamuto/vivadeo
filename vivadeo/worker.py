@@ -213,8 +213,7 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
         if video is not None:
             video.transcript_status = "ready"
             video.error = None
-        organization = session.get(Organization, organization_id)
-        if organization and organization.plan in {"pro", "enterprise"} and settings.pro_embedding_api_key and transcript_rows:
+        if settings.nvidia_embedding_api_key and transcript_rows:
             embedding_job_id = new_id()
             session.add(Job(id=embedding_job_id, organization_id=organization_id, video_id=video_id, kind="embed_transcript", status="queued", payload={}))
     if embedding_job_id:
@@ -238,9 +237,9 @@ def embed_transcript_task(job_id: str, video_id: str, organization_id: str) -> N
                 VideoTranscriptSegment.organization_id == organization_id,
                 VideoTranscriptSegment.nvidia_embedding.is_(None),
             )).all()]
-        embedder = get_embedder(backend="nvidia", api_key=settings.pro_embedding_api_key,
-                               base_url=settings.pro_embedding_base_url, model=settings.pro_embedding_model,
-                               timeout=settings.pro_embedding_timeout)
+        embedder = get_embedder(backend="nvidia", api_key=settings.nvidia_embedding_api_key,
+                               base_url=settings.nvidia_embedding_base_url, model=settings.nvidia_embedding_model,
+                               timeout=settings.nvidia_embedding_timeout)
         for start in range(0, len(rows), 32):
             _raise_if_canceled(job_id)
             batch = rows[start:start + 32]

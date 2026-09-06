@@ -31,14 +31,14 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 - Search is moving to a transcript-grounded chat surface on `/search`.
 - Search chat sends conversation history to backend `/v1/search/chat` through `/api/proxy/v1/search/chat`.
-- Search chat retrieves relevant video chunks, attaches overlapping transcript segments, and asks Modal-hosted Gemma E4B through Modal remote functions, not HTTP model endpoints.
+- Search chat retrieves relevant video chunks, attaches overlapping transcript segments, and asks the server-side Vivadeo Auto answer service.
 - Search answers return transcript citations with video filename, source URI, and timestamp ranges.
 - Chat messages persist as a selected conversation branch; assistant answers can be regenerated or retried without overwriting earlier answers.
-- Chat generation supports Vivadeo Auto through Modal Gemma, Pro workspaces through server-side Azure OpenAI GPT-5.6 Luna, and user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints.
+- Chat generation supports Vivadeo Auto through server-side Azure OpenAI GPT-5.6 Luna, plus user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints. Vivadeo Pro is not an active answer option.
 - Chat chooses one bounded evidence operation per question: spoken-content search, visual-moment search, or focused-moment inspection. The backend retains workspace authorization and cost limits; video or model content cannot widen source scope.
 - Generated answers stream from the selected answer service and persist partial content on the chat job so reconnecting clients can resume.
 - BYOK provider keys are encrypted in PostgreSQL when configured in Settings; transient chat keys are held only in Redis while a generation job runs.
-- Free workspaces retain the Modal Qwen video embedding path. Pro workspaces use NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions, with Qwen fallback for legacy rows until reindexing populates NVIDIA vectors.
+- Vivadeo prioritizes NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions when configured, with Modal Qwen visual embeddings and fallback retrieval for legacy transcript rows until reindexing populates NVIDIA vectors.
 - Search is text-only for the current phase; image-query UI is intentionally removed until a later phase.
 - Recent searches are client-only in `localStorage` under `vivadeo.recent-searches`; there is no server sync or workspace scoping yet.
 - Workspace value in search is derived from the `vivadeo_workspace` cookie on the client.
