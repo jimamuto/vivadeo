@@ -90,7 +90,10 @@ def _update_job(job_id: str, **values) -> None:
             }
     if payload is None:
         return
-    logger.info("job_progress %s", json.dumps(payload, separators=(",", ":")))
+    logger.info(
+        "job_progress job_id=%s kind=%s status=%s progress=%.2f",
+        payload["id"], payload["kind"], payload["status"], payload["progress"],
+    )
     try:
         progress_bus.publish(f"vivadeo:job:{job_id}", json.dumps(payload, separators=(",", ":")))
     except Exception:

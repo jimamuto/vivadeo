@@ -3227,7 +3227,9 @@ main { width: 100%; }
 .sidebar-recent-chats-head { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: .68rem; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 .sidebar-recent-chats-head button { width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 1rem; }
 .sidebar-recent-chats-head button:hover, .sidebar-recent-chats-head button:focus-visible { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
-.sidebar-recent-chats-list { display: grid; gap: 3px; }
+.sidebar-recent-chats-list { display: grid; gap: 12px; }
+.sidebar-chat-timeline { display: grid; gap: 3px; }
+.sidebar-chat-timeline > h3 { margin: 0 8px 3px; color: var(--muted); font-size: .62rem; font-weight: 650; letter-spacing: .04em; }
 .sidebar-recent-chat { position: relative; display: flex; align-items: center; min-width: 0; border-radius: 7px; }
 .sidebar-recent-chat.menu-open { z-index: 10; }
 .sidebar-recent-chat-open { min-width: 0; flex: 1; overflow: hidden; padding: 7px 4px 7px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--color-content); text-align: left; cursor: pointer; font: inherit; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
