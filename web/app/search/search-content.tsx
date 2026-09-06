@@ -514,6 +514,18 @@ export function SearchContent({
   }, [threadMenuId]);
 
   useEffect(() => {
+    if (!modelOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeDrawer = (event: KeyboardEvent) => { if (event.key === "Escape") setModelOpen(false); };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeDrawer);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeDrawer);
+    };
+  }, [modelOpen]);
+
+  useEffect(() => {
     void fetch("/api/proxy/v1/workspaces", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return;
@@ -1292,97 +1304,48 @@ export function SearchContent({
                   <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" data-tooltip="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
                   <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" data-tooltip="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
                   <div className="chat-model-control">
-                    <button className="chat-model-trigger" type="button" aria-label="Choose chat model" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen((open) => !open); }}>
-                      <strong>{chatModel === "vivadeo-pro" ? "Vivadeo Pro" : chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                    <button className="chat-model-trigger" type="button" aria-label="Open chat settings" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen(true); }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 4v6 M6 14v6" /></svg>
+                      <strong>Settings · {chatModel === "vivadeo-pro" ? "Vivadeo Pro" : chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
                     </button>
                     {modelOpen && typeof document !== "undefined" ? createPortal(
-                      <div className="chat-model-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setModelOpen(false); }}>
-                        <section className="chat-model-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-model-title">
+                      <div className="chat-settings-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setModelOpen(false); }}>
+                        <section className="chat-settings-drawer" role="dialog" aria-modal="true" aria-labelledby="chat-settings-title">
                           <header>
-                            <div>
-                              <h2 id="chat-model-title">Choose an answer service</h2>
-                              <p>Select Vivadeo or connect your own provider.</p>
-                            </div>
-                            <button autoFocus type="button" className="chat-model-close" onClick={() => setModelOpen(false)} aria-label="Close answer service picker">×</button>
+                            <div><h2 id="chat-settings-title">Chat settings</h2><p>Tune how Vivadeo searches and shapes this answer.</p></div>
+                            <button autoFocus type="button" className="chat-model-close" onClick={() => setModelOpen(false)} aria-label="Close chat settings">×</button>
                           </header>
-                          {!customModelView ? <div className="chat-model-options">
-                            <p>Vivadeo</p>
-                            <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-auto"); setModelOpen(false); }}><span>Vivadeo Auto</span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
-                            {["pro", "enterprise"].includes(workspacePlan) ? <button type="button" className={chatModel === "vivadeo-pro" ? "is-selected" : ""} onClick={() => { setChatModel("vivadeo-pro"); setModelOpen(false); }}><span>Vivadeo Pro</span><span aria-hidden="true">{chatModel === "vivadeo-pro" ? "✓" : ""}</span></button> : null}
-                            <p>Your provider</p>
-                            <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setCustomModelView(true)}><span>Custom endpoint</span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "openai" ? "is-selected" : ""} onClick={() => { setChatModel("openai"); setModelOpen(false); }}><span>OpenAI-compatible</span><span aria-hidden="true">{chatModel === "openai" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "anthropic" ? "is-selected" : ""} onClick={() => { setChatModel("anthropic"); setModelOpen(false); }}><span>Anthropic</span><span aria-hidden="true">{chatModel === "anthropic" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "ollama" ? "is-selected" : ""} onClick={() => { setChatModel("ollama"); setModelOpen(false); }}><span>Ollama</span><span aria-hidden="true">{chatModel === "ollama" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "gemini" ? "is-selected" : ""} onClick={() => { setChatModel("gemini"); setModelOpen(false); }}><span>Gemini-compatible</span><span aria-hidden="true">{chatModel === "gemini" ? "✓" : ""}</span></button>
-                            <button type="button" className={chatModel === "nvidia" ? "is-selected" : ""} onClick={() => { setChatModel("nvidia"); setModelOpen(false); }}><span>NVIDIA-compatible</span><span aria-hidden="true">{chatModel === "nvidia" ? "✓" : ""}</span></button>
-                          </div> : null}
-                          {customModelView ? <div className="chat-model-custom">
-                            <button type="button" className="chat-model-back" onClick={() => setCustomModelView(false)}>← Back to answer services</button>
-                            <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
-                            <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
-                            <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
-                            <small>Your key is used only for your requests and is never displayed again.</small>
-                            <button type="button" className="chat-model-done" onClick={() => { setChatModel("custom"); setModelOpen(false); }}>Done</button>
-                          </div> : null}
+                          <div className="chat-settings-body">
+                            <section className="chat-settings-section">
+                              <h3>Answer service</h3><p>Choose Vivadeo or a service you configured.</p>
+                              {!customModelView ? <div className="chat-model-options">
+                                <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => setChatModel("vivadeo-auto")}><span><strong>Vivadeo Auto</strong><small>Balanced for everyday archive questions</small></span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
+                                {["pro", "enterprise"].includes(workspacePlan) ? <button type="button" className={chatModel === "vivadeo-pro" ? "is-selected" : ""} onClick={() => setChatModel("vivadeo-pro")}><span><strong>Vivadeo Pro</strong><small>Enhanced answers for this workspace</small></span><span aria-hidden="true">{chatModel === "vivadeo-pro" ? "✓" : ""}</span></button> : null}
+                                <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setCustomModelView(true)}><span><strong>Custom endpoint</strong><small>Connect a compatible answer service</small></span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
+                                {[["openai", "OpenAI-compatible"], ["anthropic", "Anthropic"], ["ollama", "Ollama"], ["gemini", "Gemini-compatible"], ["nvidia", "NVIDIA-compatible"]].map(([value, label]) => <button key={value} type="button" className={chatModel === value ? "is-selected" : ""} onClick={() => setChatModel(value)}><span><strong>{label}</strong><small>Use your saved connection</small></span><span aria-hidden="true">{chatModel === value ? "✓" : ""}</span></button>)}
+                              </div> : <div className="chat-model-custom">
+                                <button type="button" className="chat-model-back" onClick={() => setCustomModelView(false)}>← Back to answer services</button>
+                                <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
+                                <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
+                                <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
+                                <small>Your key is used only for your requests and is never displayed again.</small>
+                                <button type="button" className="chat-model-done" onClick={() => { setChatModel("custom"); setCustomModelView(false); }}>Use custom endpoint</button>
+                              </div>}
+                            </section>
+                            <section className="chat-settings-section"><h3>Evidence</h3><p>Control which parts of your videos Vivadeo examines.</p>
+                              <label>Evidence type<ComposerSelect label="Evidence type" value={modalityOverride} options={[{ value: "auto", label: "Auto" }, { value: "visual", label: "Visual" }, { value: "transcript", label: "Transcript" }, { value: "hybrid", label: "Both" }]} onChange={(value) => setModalityOverride(value as typeof modalityOverride)} /></label>
+                              <label>Search depth<ComposerSelect label="Search depth" value={momentContext ? "focused" : searchMode} disabled={Boolean(momentContext)} options={[{ value: "top", label: "Best matches" }, { value: "all", label: "Find every occurrence" }, { value: "focused", label: "Focused moment", disabled: !momentContext }]} onChange={(value) => setSearchMode(value as typeof searchMode)} /></label>
+                            </section>
+                            <section className="chat-settings-section"><h3>Response</h3><p>Choose how the answer is organized.</p>
+                              <label>Answer format<ComposerSelect label="Answer format" value={outputFormat} options={[{ value: "answer", label: "Answer" }, { value: "rows", label: "Extract rows" }, { value: "comparison", label: "Compare videos", disabled: threadSources.length < 2 }]} onChange={(value) => setOutputFormat(value as typeof outputFormat)} /></label>
+                              {outputFormat === "rows" ? <label>Extraction type<ComposerSelect label="Extraction type" value={extractionType} options={[{ value: "claims", label: "Claims" }, { value: "action_items", label: "Action items" }, { value: "people", label: "People" }, { value: "appearances", label: "Appearances" }, { value: "objections", label: "Objections" }, { value: "chapters", label: "Chapters" }, { value: "visual_events", label: "Visual events" }]} onChange={setExtractionType} /></label> : null}
+                              {outputFormat === "comparison" && threadSources.length > 1 ? <label>Videos to compare<select className="chat-comparison-picker" aria-label="Videos to compare" multiple value={comparisonVideoIds} onChange={(event) => setComparisonVideoIds(Array.from(event.target.selectedOptions, (option) => option.value))}>{threadSources.map((source) => <option key={source.video_id} value={source.video_id}>{source.filename}</option>)}</select></label> : null}
+                            </section>
+                          </div>
+                          <footer><button type="button" onClick={() => setModelOpen(false)}>Done</button></footer>
                         </section>
-                      </div>,
-                      document.body,
-                    ) : null}
+                      </div>, document.body) : null}
                   </div>
-                  <div className="chat-accuracy-controls" aria-label="Evidence search controls">
-                    <span className="chat-evidence-label">Evidence</span>
-                    <ComposerSelect
-                      label="Evidence type"
-                      value={modalityOverride}
-                      options={[
-                        { value: "auto", label: "Auto" },
-                        { value: "visual", label: "Visual" },
-                        { value: "transcript", label: "Transcript" },
-                        { value: "hybrid", label: "Both" },
-                      ]}
-                      onChange={(value) => setModalityOverride(value as typeof modalityOverride)}
-                    />
-                    <ComposerSelect
-                      label="Search depth"
-                      value={momentContext ? "focused" : searchMode}
-                      disabled={Boolean(momentContext)}
-                      options={[
-                        { value: "top", label: "Best matches" },
-                        { value: "all", label: "Find every occurrence" },
-                        { value: "focused", label: "Focused moment", disabled: !momentContext },
-                      ]}
-                      onChange={(value) => setSearchMode(value as typeof searchMode)}
-                    />
-                    <ComposerSelect
-                      label="Answer format"
-                      value={outputFormat}
-                      options={[
-                        { value: "answer", label: "Answer" },
-                        { value: "rows", label: "Extract rows" },
-                        { value: "comparison", label: "Compare videos", disabled: threadSources.length < 2 },
-                      ]}
-                      onChange={(value) => setOutputFormat(value as typeof outputFormat)}
-                    />
-                    {outputFormat === "rows" ? <ComposerSelect
-                      label="Extraction type"
-                      value={extractionType}
-                      options={[
-                        { value: "claims", label: "Claims" },
-                        { value: "action_items", label: "Action items" },
-                        { value: "people", label: "People" },
-                        { value: "appearances", label: "Appearances" },
-                        { value: "objections", label: "Objections" },
-                        { value: "chapters", label: "Chapters" },
-                        { value: "visual_events", label: "Visual events" },
-                      ]}
-                      onChange={setExtractionType}
-                    /> : null}
-                  </div>
-                  {outputFormat === "comparison" && threadSources.length > 1 ? <select className="chat-comparison-picker" aria-label="Videos to compare" multiple value={comparisonVideoIds} onChange={(event) => setComparisonVideoIds(Array.from(event.target.selectedOptions, (option) => option.value))}>
-                    {threadSources.map((source) => <option key={source.video_id} value={source.video_id}>{source.filename}</option>)}
-                  </select> : null}
                 </div>
                 <div className="chat-message-attachments" aria-live="polite" aria-label="Attached video preparation">
                   {threadSources.map((source) => <span key={source.video_id} className="chat-message-attachment">
