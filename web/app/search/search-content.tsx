@@ -473,6 +473,10 @@ export function SearchContent({
   const [turns, setTurns] = useState<ChatTurn[]>(initialThreads[0]?.turns || []);
   const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
   const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
+  const [activeSourceIds, setActiveSourceIds] = useState<string[]>(() => {
+    const latest = initialThreads[0]?.sources.at(-1);
+    return latest ? [latest.video_id] : initialVideoIds;
+  });
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [streamedAnswer, setStreamedAnswer] = useState("");
@@ -773,6 +777,7 @@ export function SearchContent({
       });
       if (!response.ok) throw new Error(`URL ingest failed (${response.status})`);
       const job = (await response.json()) as { id: string; video_id?: string };
+      if (job.video_id) setActiveSourceIds([job.video_id]);
       setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
       await refreshThreadSources(threadId);
       void watchUploadJob(itemId, job.id).then(() => refreshThreadSources(threadId));
@@ -798,6 +803,7 @@ export function SearchContent({
       return;
     }
     await refreshThreadSources(threadId);
+    setActiveSourceIds([videoIdToAttach]);
     setBrowseOpen(false);
     setStatus("Video added to this chat.");
   }
@@ -851,6 +857,7 @@ export function SearchContent({
           request.send(form);
         });
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, jobId: job.id, videoId: job.video_id, status: "queued" } : item));
+        if (job.video_id) setActiveSourceIds([job.video_id]);
         await refreshThreadSources(threadId);
         void watchUploadJob(itemId, job.id).then(() => refreshThreadSources(threadId));
         setVideosLoaded(true);
@@ -858,6 +865,17 @@ export function SearchContent({
         setUploadItems((current) => current.map((item) => item.id === itemId ? { ...item, status: "failed", error: cause instanceof Error ? cause.message : "Upload failed" } : item));
       }
     }
+  }
+
+  async function retryUpload(item: UploadItem) {
+    if (!item.jobId) return;
+    setUploadItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, status: "queued", progress: 0, message: "Retry queued", error: null } : candidate));
+    const response = await fetch(`/api/proxy/v1/jobs/${item.jobId}/retry`, { method: "POST" });
+    if (!response.ok) {
+      setUploadItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, status: "failed", error: "Could not retry video preparation." } : candidate));
+      return;
+    }
+    void watchUploadJob(item.id, item.jobId).then(() => activeThreadId ? refreshThreadSources(activeThreadId) : undefined);
   }
 
   function evidenceKey(citation: Citation) {
@@ -987,6 +1005,15 @@ export function SearchContent({
       const shouldRefreshSources = Boolean(linkedVideoId || uploadItems.length || knownSources.length);
       const currentSources = shouldRefreshSources ? await refreshThreadSources(threadId) : [];
       if (!currentSources) throw new Error("Could not check the attached videos. Please try again.");
+      const availableSourceIds = new Set(currentSources.map((source) => source.video_id));
+      const selectedSourceIds = activeSourceIds.filter((sourceId) => availableSourceIds.has(sourceId));
+      const defaultSourceId = currentSources.at(-1)?.video_id;
+      const promptSourceIds = Array.from(new Set([
+        ...videoIds.filter((sourceId) => availableSourceIds.has(sourceId)),
+        ...selectedSourceIds,
+        ...(linkedVideoId ? [linkedVideoId] : []),
+        ...(!videoIds.length && !selectedSourceIds.length && !linkedVideoId && defaultSourceId ? [defaultSourceId] : []),
+      ]));
       setStatus("Preparing a reply...");
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {
         method: "POST",
@@ -1007,7 +1034,7 @@ export function SearchContent({
           custom_api_key: chatModel === "custom" ? customApiKey || null : null,
           custom_model: chatModel === "custom" ? customModel || null : null,
           video_id: videoId || null,
-          video_ids: Array.from(new Set([...videoIds, ...currentSources.map((source) => source.video_id), ...(linkedVideoId ? [linkedVideoId] : [])])),
+          video_ids: promptSourceIds,
           focus_video_id: momentContext?.videoId || null,
           focus_start_time: momentContext?.startTime ?? null,
           focus_end_time: momentContext?.endTime ?? null,
@@ -1085,6 +1112,8 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setMomentContext(null);
+    setActiveSourceIds([]);
+    setUploadItems([]);
   }
 
   function openThread(thread: ChatThread) {
@@ -1097,6 +1126,9 @@ export function SearchContent({
     setQuestion("");
     setStatus(null);
     setMomentContext(null);
+    const latestSource = thread.sources.at(-1);
+    setActiveSourceIds(latestSource ? [latestSource.video_id] : []);
+    setUploadItems([]);
     setThreadMenuId(null);
   }
 
@@ -1167,6 +1199,8 @@ export function SearchContent({
     return groups;
   }, []);
   const threadSources = activeThread?.sources || [];
+  const activeSources = threadSources.filter((source) => activeSourceIds.includes(source.video_id));
+  const visibleUploadItems = uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status) || !threadSources.some((source) => source.video_id === item.videoId));
   const sourceCount = threadSources.length + uploadItems.filter((item) => !["succeeded", "ready", "failed", "canceled", "rejected"].includes(item.status) && !threadSources.some((source) => source.video_id === item.videoId)).length;
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
@@ -1259,6 +1293,22 @@ export function SearchContent({
                 if (selectedFiles.length) void uploadVideos(selectedFiles);
               }}
             />
+            {visibleUploadItems.length ? <div className="chat-upload-list" aria-label="Video preparation status">
+              {visibleUploadItems.map((item) => {
+                const failed = ["failed", "canceled", "rejected"].includes(item.status);
+                const label = item.status === "uploading" ? "Uploading" : item.status === "queued" ? "Waiting to prepare" : item.message || (failed ? "Preparation interrupted" : "Preparing video");
+                return <div key={item.id} className={`chat-upload-card${failed ? " is-failed" : ""}`}>
+                  <span className="chat-upload-icon" aria-hidden="true" />
+                  <div className="chat-upload-copy"><strong title={item.filename}>{item.filename}</strong><span>{item.error || label}</span></div>
+                  {!failed ? <span className="chat-upload-progress" aria-label={`${Math.round(item.progress * 100)}% complete`}><span style={{ width: `${Math.max(6, Math.round(item.progress * 100))}%` }} /></span> : null}
+                  {failed && item.jobId ? <button type="button" onClick={() => void retryUpload(item)}>Retry</button> : null}
+                  <button type="button" className="chat-upload-remove" onClick={() => setUploadItems((current) => current.filter((candidate) => candidate.id !== item.id))} aria-label={`Dismiss ${item.filename}`}>×</button>
+                </div>;
+              })}
+            </div> : null}
+            {!momentContext && activeSources.length ? <div className="chat-active-sources" aria-label="Videos used for the next question">
+              {activeSources.map((source) => <button key={source.video_id} type="button" onClick={() => setActiveSourceIds((current) => current.filter((sourceId) => sourceId !== source.video_id))} title="Remove from next question"><span>Using:</span> {source.filename} <b aria-hidden="true">×</b></button>)}
+            </div> : null}
             <form className="chat-composer" onSubmit={submit}>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
@@ -1336,7 +1386,7 @@ export function SearchContent({
                   </div>
                 </div>
                 <div className="chat-composer-meta">
-                  {sourceCount ? <span className="chat-source-count">{sourceCount} {sourceCount === 1 ? "attachment" : "attachments"}</span> : null}
+                  {activeSources.length ? <span className="chat-source-count">{activeSources.length} selected</span> : sourceCount ? <span className="chat-source-count">Latest video</span> : null}
                   <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
                 </div>
               </div>
@@ -1351,7 +1401,8 @@ export function SearchContent({
                   <div className="chat-video-picker">
                     {videos.map((video) => {
                       const attached = threadSources.some((source) => source.video_id === video.id);
-                      return <button key={video.id} type="button" className="chat-video-picker-item" disabled={attached} onClick={() => void attachExistingVideo(video.id)}><span>{video.filename}</span><small>{attached ? "Already attached" : video.status}</small></button>;
+                      const selected = activeSourceIds.includes(video.id);
+                      return <button key={video.id} type="button" className={`chat-video-picker-item${selected ? " is-selected" : ""}`} onClick={() => attached ? setActiveSourceIds([video.id]) : void attachExistingVideo(video.id)}><span>{video.filename}</span><small>{selected ? "Using next" : attached ? "Use in next question" : video.status}</small></button>;
                     })}
                   </div>
                 ) : <p className="muted">No videos are available yet. Attach a file or add a URL first.</p>}

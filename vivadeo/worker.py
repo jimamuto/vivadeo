@@ -599,7 +599,7 @@ def generate_chat_task(
     request_payload: dict,
 ) -> None:
     from celery.exceptions import Retry
-    from .preparation import ensure_chat_evidence, plan_chat_evidence
+    from .preparation import EvidencePreparationError, ensure_chat_evidence, plan_chat_evidence
 
     try:
         _raise_if_canceled(job_id)
@@ -654,6 +654,13 @@ def generate_chat_task(
         _update_job(job_id, status="succeeded", progress=1.0, message="Answer ready")
     except Retry:
         raise
+    except EvidencePreparationError as exc:
+        with session_scope() as session:
+            message = session.get(ChatThreadMessage, message_id)
+            if message:
+                message.status = "failed"
+                message.error = str(exc)
+        _update_job(job_id, status="failed", error=str(exc), message="Video preparation interrupted")
     except JobCanceled:
         with session_scope() as session:
             message = session.get(ChatThreadMessage, message_id)

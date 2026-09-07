@@ -127,8 +127,14 @@ class ObjectStore:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         if self.backend == "azure":
+            blob = self.container.get_blob_client(key)
+            total = int(blob.get_blob_properties().size)
+            chunk_size = 4 * 1024 * 1024
             with path.open("wb") as target:
-                self.container.download_blob(key).readinto(target)
+                for offset in range(0, total, chunk_size):
+                    downloader = blob.download_blob(offset=offset, length=min(chunk_size, total - offset))
+                    for chunk in downloader.chunks():
+                        target.write(chunk)
         else:
             self.client.download_file(self.bucket, key, str(path))
         return str(path)
