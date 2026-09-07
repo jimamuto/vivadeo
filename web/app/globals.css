@@ -4072,6 +4072,8 @@ main { width: 100%; }
   .dashboard-command-bar { padding-inline: 16px; }
   .dashboard-command-search { width: min(32vw, 220px); }
   .dashboard-command-search kbd { display: none; }
+  .dashboard-wrap:not(.sidebar-collapsed) .dashboard-command-search { width: 36px; min-width: 36px; flex: 0 0 36px; justify-content: center; gap: 0; padding: 0; }
+  .dashboard-wrap:not(.sidebar-collapsed) .dashboard-command-search > span { display: none; }
   .dashboard-command-profile strong { display: none; }
   .dashboard-sidebar { position: sticky; top: 0; width: auto; height: 100vh; margin: 0; border-width: 0 1px 0 0; border-radius: 0; box-shadow: none; }
   .dashboard-wrap:not(.sidebar-collapsed) .dashboard-sidebar { overflow-y: auto; }
