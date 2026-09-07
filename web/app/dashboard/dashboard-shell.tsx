@@ -209,7 +209,7 @@ export function DashboardShell({
             </nav>
           </div>
           <nav aria-label="Workspace actions">
-            <button className="dashboard-command-search" type="button" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog" aria-controls="command-palette" aria-expanded={paletteOpen}>
+            <button className="dashboard-command-search" type="button" onClick={() => setPaletteOpen(true)} aria-label="Search workspace" aria-haspopup="dialog" aria-controls="command-palette" aria-expanded={paletteOpen}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 20-4.5-4.5m2-5.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" /></svg>
               <span>Search anything...</span>
               <kbd aria-label="Command or Control plus K">⌘ K</kbd>
