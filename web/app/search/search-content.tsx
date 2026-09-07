@@ -276,7 +276,8 @@ function CitationPreview({
   previewEnd: number;
   preload: boolean;
 }) {
-  const posterCacheKey = `vivadeo.citation-poster:${citation.video_id}:${citation.start_time.toFixed(3)}`;
+  const posterCacheBucket = Math.round(citation.start_time / 5) * 5;
+  const posterCacheKey = `vivadeo.citation-poster:${citation.video_id}:${posterCacheBucket}`;
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterStatus, setPosterStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const [playing, setPlaying] = useState(false);
@@ -353,8 +354,8 @@ function CitationPreview({
   const showSkeleton = !posterUrl && posterStatus !== "unavailable";
 
   return (
-    <div ref={previewRef} className={`search-citation-preview${showSkeleton ? " is-loading" : ""}`}>
-      {sourceUrl && !showSkeleton ? (
+    <div ref={previewRef} className={`search-citation-preview${showSkeleton && !sourceUrl ? " is-loading" : ""}`}>
+      {sourceUrl ? (
         <video
           playsInline
           preload="metadata"
@@ -376,7 +377,7 @@ function CitationPreview({
       ) : (
         <span className="search-citation-preview-empty">Preview unavailable</span>
       )}
-      {sourceUrl && !showSkeleton ? <span className="search-citation-play" aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span> : null}
+      {sourceUrl ? <span className="search-citation-play" aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span> : null}
       <span className="search-citation-time">{fmt(citation.start_time)}–{fmt(citation.end_time)}</span>
     </div>
   );
@@ -1439,7 +1440,17 @@ export function SearchContent({
             <form className="chat-composer" onSubmit={submit}>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
-                {momentContext ? <button type="button" className="chat-moment-context" onClick={() => setMomentContext(null)}>Focused on {momentContext.filename} · {fmt(momentContext.startTime)} ×</button> : null}
+                {momentContext ? <button
+                  type="button"
+                  className="chat-moment-context"
+                  onClick={() => { setMomentContext(null); setParentSearchRunId(null); setSearchMode("top"); setModalityOverride("auto"); }}
+                  title={`Clear focused moment from ${momentContext.filename}`}
+                  aria-label={`Clear focused moment ${fmt(momentContext.startTime)} to ${fmt(momentContext.endTime)} from ${momentContext.filename}`}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></svg>
+                  <span><small>Source moment</small><strong>{fmt(momentContext.startTime)}–{fmt(momentContext.endTime)}</strong></span>
+                  <b aria-hidden="true">×</b>
+                </button> : null}
                 <textarea
                   ref={questionInputRef}
                   id="query"
@@ -1568,6 +1579,7 @@ export function SearchContent({
                   const branchIndex = turn.id ? branchMessages.findIndex((candidate) => candidate.id === turn.id) : -1;
                   const isFailed = turn.status === "failed";
                   const visibleCitations = citations;
+                  const isFocusedAnswer = turn.intent?.search_mode === "focused";
                   const chronologicalCitations = [...citations].sort((left, right) => left.start_time - right.start_time);
                   const unifiedCitations = chronologicalCitations.length > 1
                     && chronologicalCitations.every((citation) => citation.video_id === chronologicalCitations[0].video_id)
@@ -1637,7 +1649,12 @@ export function SearchContent({
                           setSavingSearchName(turns.find((item) => item.id === turn.parentId)?.content.slice(0, 80) || "Verified video search");
                         }}>Save search</button> : null}
                       </div> : null}
-                      {citations.length ? (
+                      {citations.length && isFocusedAnswer ? (
+                        <div className="chat-focused-evidence" aria-label="Evidence used for this focused answer">
+                          <span>Source moment</span>
+                          {chronologicalCitations.map((citation) => <time key={`${citation.video_id}-${citation.start_time.toFixed(3)}`}>{fmt(citation.start_time)}–{fmt(citation.end_time)}</time>)}
+                        </div>
+                      ) : citations.length ? (
                         <div className="search-citations">
                           <div className="search-citation-head">
                             <span>{unifiedCitations ? "Summary source" : "Evidence moments"}</span>

@@ -3221,16 +3221,30 @@ main { width: 100%; }
 .chat-video-picker-item small { flex: 0 0 auto; color: var(--muted); font-size: .7rem; }
 .chat-moment-context {
   display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
   margin: 7px 18px 0;
-  padding: 5px 8px;
-  border: 1px solid rgba(118, 50, 63, .18);
-  border-radius: 999px;
-  background: rgba(118, 50, 63, .06);
-  color: var(--oxblood);
+  padding: 6px 8px 6px 7px;
+  border: 1px solid rgba(86, 86, 86, .14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .72);
+  color: var(--blackboard);
   font: inherit;
   font-size: .75rem;
+  text-align: left;
   cursor: pointer;
 }
+.chat-moment-context:hover { border-color: rgba(118, 50, 63, .3); background: var(--color-action-subtle); }
+.chat-moment-context svg { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: var(--oxblood); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.chat-moment-context span { display: grid; line-height: 1.05; }
+.chat-moment-context small { color: var(--muted); font-size: .61rem; letter-spacing: .035em; text-transform: uppercase; }
+.chat-moment-context strong { margin-top: 3px; color: var(--blackboard); font-size: .75rem; font-weight: 650; }
+.chat-moment-context b { margin-left: 2px; color: var(--muted); font-size: .9rem; font-weight: 400; }
+
+.chat-focused-evidence { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 12px; color: var(--muted); font-size: .75rem; }
+.chat-focused-evidence span { margin-right: 2px; }
+.chat-focused-evidence time { padding: 4px 7px; border-radius: 6px; background: rgba(215, 206, 199, .38); color: var(--oxblood); font-weight: 650; }
 
 .search-preview {
   position: sticky;
