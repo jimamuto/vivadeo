@@ -169,7 +169,7 @@ export function DashboardShell({
     <div className={`shell page dashboard-wrap${collapsed ? " sidebar-collapsed" : ""}`}>
       <aside id="dashboard-sidebar" className="dashboard-sidebar">
         <div className="dashboard-sidebar-brand">
-          <Link href="/" className="dashboard-brand-mark">
+          <Link href="/" className="dashboard-brand-mark" aria-label="Go to home" data-tooltip="Go to home">
             {collapsed
               ? <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="Vivadeo" />
               : <BrandLogo className="dashboard-brand-logo" />}
