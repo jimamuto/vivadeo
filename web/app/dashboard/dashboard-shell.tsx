@@ -174,6 +174,9 @@ export function DashboardShell({
               ? <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="Vivadeo" />
               : <BrandLogo className="dashboard-brand-logo" />}
           </Link>
+          {!collapsed ? <button className="dashboard-sidebar-close" type="button" onClick={toggleSidebar} aria-label="Close sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+          </button> : null}
         </div>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">General</span>
@@ -183,6 +186,7 @@ export function DashboardShell({
         </nav>
         {sidebarContent ? <div className="dashboard-sidebar-content">{sidebarContent}</div> : null}
       </aside>
+      {!collapsed ? <button className="dashboard-sidebar-backdrop" type="button" onClick={toggleSidebar} aria-label="Close sidebar" /> : null}
       <div className="dashboard-frame">
         <header className="dashboard-command-bar">
           <div className="dashboard-command-leading">
