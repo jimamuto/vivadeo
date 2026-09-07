@@ -398,6 +398,13 @@ function UnifiedCitationPlayer({
   const end = Math.max(duration || 0, citations[citations.length - 1].end_time);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(start);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    const updateFullscreen = () => setFullscreen(document.fullscreenElement === videoRef.current);
+    document.addEventListener("fullscreenchange", updateFullscreen);
+    return () => document.removeEventListener("fullscreenchange", updateFullscreen);
+  }, []);
 
   function togglePlayback() {
     const video = videoRef.current;
@@ -414,12 +421,21 @@ function UnifiedCitationPlayer({
     if (play) void video.play().catch(() => undefined);
   }
 
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    await videoRef.current?.requestFullscreen().catch(() => undefined);
+  }
+
   return (
     <section className="search-evidence-player" aria-label={`Evidence from ${citations[0].filename}`}>
       <div className="search-evidence-video">
         <video
           ref={videoRef}
           playsInline
+          controls={fullscreen}
           preload="metadata"
           src={`${sourceUrl}#t=${start},${end}`}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }}
@@ -445,6 +461,10 @@ function UnifiedCitationPlayer({
           aria-label="Video playback position"
         />
         <span>{fmt(currentTime)} / {fmt(end)}</span>
+        <button type="button" className="search-evidence-fullscreen" onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "Exit full screen" : "View video in full screen"}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d={fullscreen ? "M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5" : "M9 4H4v5 M15 4h5v5 M9 20H4v-5 M15 20h5v-5"} /></svg>
+          <span>{fullscreen ? "Exit full screen" : "Full screen"}</span>
+        </button>
       </div>
       <div className="search-evidence-chapters" aria-label="Evidence chapters">
         {citations.map((citation, index) => {
@@ -541,6 +561,8 @@ export function SearchContent({
   const [extractionType, setExtractionType] = useState("claims");
   const [comparisonVideoIds, setComparisonVideoIds] = useState<string[]>(initialVideoIds);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [savingSearchRunId, setSavingSearchRunId] = useState<string | null>(null);
+  const [savingSearchName, setSavingSearchName] = useState("");
   const [parentSearchRunId, setParentSearchRunId] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const [customModelView, setCustomModelView] = useState(false);
@@ -986,9 +1008,8 @@ export function SearchContent({
     setStatus(feedback === "relevant" ? "Marked as relevant." : "Marked as not relevant. Refine the question to search again.");
   }
 
-  async function saveCurrentSearch(turn: ChatTurn) {
-    const name = window.prompt("Name this saved search", turns.find((item) => item.role === "user" && item.id && item.id === turn.parentId)?.content.slice(0, 80) || "Verified video search");
-    if (!name?.trim()) return;
+  async function saveCurrentSearch(turn: ChatTurn, name: string) {
+    if (!name.trim()) return;
     const response = await fetch("/api/proxy/v1/search/saved", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1007,6 +1028,8 @@ export function SearchContent({
     }
     const saved = await response.json() as SavedSearch;
     setSavedSearches((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+    setSavingSearchRunId(null);
+    setSavingSearchName("");
     setStatus("Saved search added.");
   }
 
@@ -1039,8 +1062,31 @@ export function SearchContent({
   function focusMoment(citation: Citation, prompt = "What is happening in this moment?", runId?: string | null) {
     setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time });
     setParentSearchRunId(runId || null);
+    setModalityOverride(citation.modality === "visual" ? "visual" : citation.modality === "hybrid" ? "hybrid" : "transcript");
     setSearchMode("focused");
     setQuestion(prompt);
+  }
+
+  function useSuggestedRefinement(turn: ChatTurn, suggestion: string) {
+    const firstCitation = turn.citations?.[0];
+    const parentPrompt = turns.find((item) => item.id === turn.parentId)?.content || "";
+    if ((suggestion === "Show nearby context" || suggestion === "Ask about this moment") && firstCitation) {
+      focusMoment(
+        firstCitation,
+        suggestion === "Show nearby context" ? "Show nearby context around this moment." : "What is happening in this moment?",
+        turn.search_run_id,
+      );
+      return;
+    }
+    setParentSearchRunId(turn.search_run_id || null);
+    if (suggestion === "Find every mention") {
+      setSearchMode("all");
+      setQuestion(/summari[sz]e/i.test(parentPrompt)
+        ? "List every major topic discussed in this video, with timestamps."
+        : `Find every mention relevant to this earlier question: ${parentPrompt || "the previous answer"}`);
+      return;
+    }
+    setQuestion(suggestion);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -1568,8 +1614,8 @@ export function SearchContent({
                                   </button>
                                 </div>
                               </>}
-                              {turn.attachments?.length ? <div className="chat-message-attachments" aria-label="Videos attached to this question">
-                                {turn.attachments.map((attachment) => <span key={attachment.video_id} className={`chat-message-attachment chat-message-attachment-${attachment.status}`}><span aria-hidden="true" />{attachment.filename}</span>)}
+                              {turn.attachments?.length ? <div className="chat-message-attachments" aria-label={`${turn.attachments.length} video ${turn.attachments.length === 1 ? "source" : "sources"} attached`} title={turn.attachments.map((attachment) => attachment.filename).join(", ")}>
+                                <span className="chat-message-attachment"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z M9 9l6 3-6 3z" /></svg>{turn.attachments.length === 1 ? "Video source" : `${turn.attachments.length} video sources`}</span>
                               </div> : null}
                             </>
                           )}
@@ -1577,10 +1623,19 @@ export function SearchContent({
                       </div>
                       {turn.role === "assistant" && (turn.search_run_id || turn.suggested_refinements?.length) ? <div className="chat-answer-actions">
                         {turn.suggested_refinements?.length ? <div className="chat-refinement-row" aria-label="Suggested follow-ups">
-                          <span>Follow up</span>
-                          {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => { setParentSearchRunId(turn.search_run_id || null); setQuestion(suggestion); }}>{suggestion}</button>)}
+                          <span>Try next</span>
+                          {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => useSuggestedRefinement(turn, suggestion)}>{suggestion}</button>)}
                         </div> : null}
-                        {turn.search_run_id ? <button type="button" className="chat-save-search" onClick={() => void saveCurrentSearch(turn)}>Save search</button> : null}
+                        {turn.search_run_id ? savingSearchRunId === turn.search_run_id ? (
+                          <form className="chat-save-search-form" onSubmit={(event) => { event.preventDefault(); void saveCurrentSearch(turn, savingSearchName); }}>
+                            <input autoFocus value={savingSearchName} maxLength={120} onChange={(event) => setSavingSearchName(event.currentTarget.value)} aria-label="Saved search name" />
+                            <button type="submit" disabled={!savingSearchName.trim()}>Save</button>
+                            <button type="button" onClick={() => { setSavingSearchRunId(null); setSavingSearchName(""); }}>Cancel</button>
+                          </form>
+                        ) : <button type="button" className="chat-save-search" onClick={() => {
+                          setSavingSearchRunId(turn.search_run_id!);
+                          setSavingSearchName(turns.find((item) => item.id === turn.parentId)?.content.slice(0, 80) || "Verified video search");
+                        }}>Save search</button> : null}
                       </div> : null}
                       {citations.length ? (
                         <div className="search-citations">
