@@ -1161,6 +1161,63 @@ main { width: 100%; }
   .landing-hero h1 { font-size: clamp(3rem, 15vw, 4.6rem); }
 }
 
+@media (max-width: 960px) {
+  .landing-page .topbar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .landing-page .topbar-shell {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: clamp(12px, 2vw, 24px);
+  }
+
+  .landing-page .nav-center {
+    display: flex;
+    width: auto;
+    flex: 1;
+    justify-content: center;
+    gap: clamp(16px, 3vw, 38px);
+  }
+
+  .landing-page .nav-actions {
+    width: auto;
+    margin-left: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .landing-page .nav-actions .button,
+  .landing-page .nav-actions .button-secondary {
+    width: auto;
+    min-height: 44px;
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    font-size: .82rem;
+  }
+
+  .landing-page .brand { min-width: 0; }
+  .landing-page .brand-logo {
+    width: clamp(84px, 24vw, 118px);
+    height: 30px;
+  }
+}
+
+@media (max-width: 680px) {
+  .landing-page .nav-center { display: none; }
+  .landing-page .nav-actions { margin-left: auto; }
+
+  .landing-page .nav-actions .button,
+  .landing-page .nav-actions .button-secondary {
+    padding-inline: 9px;
+    font-size: .78rem;
+  }
+}
+
 .landing-solutions {
   padding: clamp(88px, 10vw, 150px) 24px;
   background: #f7f3ee;
