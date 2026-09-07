@@ -269,18 +269,17 @@ function CitationPreview({
   previewStart,
   previewEnd,
   preload,
-  onPlay,
 }: {
   citation: Citation;
   sourceUrl: string | null | undefined;
   previewStart: number;
   previewEnd: number;
   preload: boolean;
-  onPlay: () => void;
 }) {
   const posterCacheKey = `vivadeo.citation-poster:${citation.video_id}:${citation.start_time.toFixed(3)}`;
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterStatus, setPosterStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
+  const [playing, setPlaying] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   useClientLayoutEffect(() => {
@@ -364,7 +363,8 @@ function CitationPreview({
           aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`}
           src={`${sourceUrl}#t=${previewStart},${previewEnd}`}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = citation.start_time; }}
-          onPlay={onPlay}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
           onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined); else event.currentTarget.pause(); }}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined); else event.currentTarget.pause(); } }}
           onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }}
@@ -376,9 +376,90 @@ function CitationPreview({
       ) : (
         <span className="search-citation-preview-empty">Preview unavailable</span>
       )}
-      {sourceUrl && !showSkeleton ? <span className="search-citation-play" aria-hidden="true">▶</span> : null}
+      {sourceUrl && !showSkeleton ? <span className="search-citation-play" aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span> : null}
       <span className="search-citation-time">{fmt(citation.start_time)}–{fmt(citation.end_time)}</span>
     </div>
+  );
+}
+
+function UnifiedCitationPlayer({
+  citations,
+  sourceUrl,
+  duration,
+  onFocus,
+}: {
+  citations: Citation[];
+  sourceUrl: string;
+  duration?: number | null;
+  onFocus: (citation: Citation, prompt: string) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const start = Math.max(0, citations[0].start_time);
+  const end = Math.max(duration || 0, citations[citations.length - 1].end_time);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(start);
+
+  function togglePlayback() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => undefined);
+    else video.pause();
+  }
+
+  function seek(time: number, play = false) {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = time;
+    setCurrentTime(time);
+    if (play) void video.play().catch(() => undefined);
+  }
+
+  return (
+    <section className="search-evidence-player" aria-label={`Evidence from ${citations[0].filename}`}>
+      <div className="search-evidence-video">
+        <video
+          ref={videoRef}
+          playsInline
+          preload="metadata"
+          src={`${sourceUrl}#t=${start},${end}`}
+          onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onClick={togglePlayback}
+        />
+        <button type="button" className={`search-evidence-play${playing ? " is-playing" : ""}`} onClick={togglePlayback} aria-label={playing ? "Pause evidence video" : "Play evidence video"}>
+          <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>
+        </button>
+      </div>
+      <div className="search-evidence-transport">
+        <button type="button" onClick={togglePlayback}>{playing ? "Pause" : "Play"}</button>
+        <input
+          type="range"
+          min={start}
+          max={Math.max(start + 1, end)}
+          step="0.1"
+          value={Math.min(end, Math.max(start, currentTime))}
+          onChange={(event) => seek(Number(event.currentTarget.value))}
+          aria-label="Video playback position"
+        />
+        <span>{fmt(currentTime)} / {fmt(end)}</span>
+      </div>
+      <div className="search-evidence-chapters" aria-label="Evidence chapters">
+        {citations.map((citation, index) => {
+          const active = currentTime >= citation.start_time && currentTime < citation.end_time;
+          return <div className={`search-evidence-chapter${active ? " is-active" : ""}`} key={`${citation.video_id}-${citation.start_time.toFixed(3)}`}>
+            <button type="button" className="search-evidence-chapter-time" onClick={() => seek(citation.start_time, true)} aria-current={active ? "true" : undefined}>
+              <span>Chapter {index + 1}</span>
+              <strong>{fmt(citation.start_time)}–{fmt(citation.end_time)}</strong>
+            </button>
+            <span className="search-evidence-chapter-reason">{citation.match_reason || "Transcript evidence"}</span>
+            <button type="button" className="search-evidence-chapter-ask" onClick={() => onFocus(citation, "What is happening in this moment?")}>Ask about this</button>
+          </div>;
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1441,6 +1522,15 @@ export function SearchContent({
                   const branchIndex = turn.id ? branchMessages.findIndex((candidate) => candidate.id === turn.id) : -1;
                   const isFailed = turn.status === "failed";
                   const visibleCitations = citations;
+                  const chronologicalCitations = [...citations].sort((left, right) => left.start_time - right.start_time);
+                  const unifiedCitations = chronologicalCitations.length > 1
+                    && chronologicalCitations.every((citation) => citation.video_id === chronologicalCitations[0].video_id)
+                    && chronologicalCitations.slice(1).every((citation, citationIndex) => citation.start_time <= chronologicalCitations[citationIndex].end_time + 4)
+                    ? chronologicalCitations
+                    : null;
+                  const unifiedSource = unifiedCitations
+                    ? videos.find((video) => video.id === unifiedCitations[0].video_id) || threadSources.find((source) => source.video_id === unifiedCitations[0].video_id)
+                    : null;
 
                   return (
                     <article key={citationKey} className={`search-result chat-message ${turn.role === "assistant" ? "search-result-answer chat-message-assistant" : "chat-message-user"}`}>
@@ -1495,10 +1585,17 @@ export function SearchContent({
                       {citations.length ? (
                         <div className="search-citations">
                           <div className="search-citation-head">
-                            <span>Evidence moments</span>
-                            <strong>{citations.length} found</strong>
+                            <span>{unifiedCitations ? "Summary source" : "Evidence moments"}</span>
+                            <strong>{unifiedCitations ? `${citations.length} chapters` : `${citations.length} found`}</strong>
                           </div>
-                          <div className="search-citation-scroller" aria-label="Relevant video moments">
+                          {unifiedCitations && unifiedSource?.url ? (
+                            <UnifiedCitationPlayer
+                              citations={unifiedCitations}
+                              sourceUrl={unifiedSource.url}
+                              duration={unifiedSource.duration}
+                              onFocus={(citation, prompt) => focusMoment(citation, prompt, turn.search_run_id)}
+                            />
+                          ) : <div className="search-citation-scroller" aria-label="Relevant video moments">
                             <div className={`search-citation-filmstrip ${citations.length === 1 ? "is-single" : ""}`}>
                               <span className="search-citation-sprockets" aria-hidden="true" />
                               <div className="search-citation-filmstrip-frames">
@@ -1516,7 +1613,6 @@ export function SearchContent({
                                     previewStart={previewStart}
                                     previewEnd={previewEnd}
                                     preload={index === turns.length - 1 && citationIndex < 3}
-                                    onPlay={() => setMomentContext({ videoId: citation.video_id, filename: citation.filename, startTime: citation.start_time, endTime: citation.end_time })}
                                   />
                                   <div className="chat-evidence-actions">
                                     <div className="chat-evidence-summary-row">
@@ -1536,7 +1632,7 @@ export function SearchContent({
                               </div>
                               <span className="search-citation-sprockets" aria-hidden="true" />
                             </div>
-                          </div>
+                          </div>}
                         </div>
                       ) : null}
                       {turn.rows?.length ? <section className="chat-extraction-results" aria-label="Extracted evidence rows">
