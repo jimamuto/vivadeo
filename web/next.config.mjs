@@ -8,6 +8,15 @@ const nextConfig = {
     // before they reach the /api/proxy route handler.
     proxyClientMaxBodySize: "2gb",
   },
+  async redirects() {
+    return [
+      {
+        source: "/dashboard",
+        destination: "/chat",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

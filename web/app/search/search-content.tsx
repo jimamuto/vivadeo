@@ -601,9 +601,29 @@ export function SearchContent({
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const uploadTransfersRef = useRef<Promise<void>>(Promise.resolve());
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [newChatMotionKey, setNewChatMotionKey] = useState(0);
   const chatFeedRef = useRef<HTMLElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
+
+  useClientLayoutEffect(() => {
+    const input = questionInputRef.current;
+    if (!input) return;
+    const resize = () => {
+      input.style.height = "auto";
+      input.style.height = input.value ? `${Math.min(input.scrollHeight, 180)}px` : "";
+    };
+    resize();
+    let width = input.parentElement?.getBoundingClientRect().width;
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.borderBoxSize[0]?.inlineSize;
+      if (nextWidth !== width) { width = nextWidth; resize(); }
+    });
+    const parent = input.parentElement;
+    if (parent) observer.observe(parent, { box: "border-box" });
+    return () => observer.disconnect();
+  }, [question]);
 
   useClientLayoutEffect(() => {
     const feed = chatFeedRef.current;
@@ -1235,6 +1255,10 @@ export function SearchContent({
   }
 
   function startNewThread() {
+    setNewChatMotionKey((current) => current + 1);
+    setComposerFocused(false);
+    setBrowseOpen(false);
+    setModelOpen(false);
     setActiveThreadId("");
     setTurns([]);
     setQuestion("");
@@ -1329,6 +1353,7 @@ export function SearchContent({
   const threadSources = activeThread?.sources || [];
   const activeSources = threadSources.filter((source) => activeSourceIds.includes(source.video_id));
   const visibleUploadItems = uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status) || !threadSources.some((source) => source.video_id === item.videoId));
+  const composerExpanded = turns.length > 0 || composerFocused || question.length > 0 || loading || modelOpen || browseOpen || activeSources.length > 0 || visibleUploadItems.length > 0 || !!momentContext;
   const sourceCount = threadSources.length + uploadItems.filter((item) => !["succeeded", "ready", "failed", "canceled", "rejected"].includes(item.status) && !threadSources.some((source) => source.video_id === item.videoId)).length;
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
@@ -1408,7 +1433,7 @@ export function SearchContent({
         </aside>
 
         <div className={`search-main ${turns.length ? "chat-main-active" : "chat-main-empty"}`}>
-          <section className="surface-section search-query">
+          <section key={`composer-${newChatMotionKey}`} className={`surface-section search-query${turns.length === 0 ? " chat-new-composer-enter" : ""}`}>
             <input
               ref={uploadInputRef}
               className="visually-hidden"
@@ -1437,7 +1462,10 @@ export function SearchContent({
             {!momentContext && activeSources.length ? <div className="chat-active-sources" aria-label="Videos used for the next question">
               {activeSources.map((source) => <button key={source.video_id} type="button" onClick={() => setActiveSourceIds((current) => current.filter((sourceId) => sourceId !== source.video_id))} title="Remove from next question"><span>Using:</span> {source.filename} <b aria-hidden="true">×</b></button>)}
             </div> : null}
-            <form className="chat-composer" onSubmit={submit}>
+            <form className={`chat-composer${composerExpanded ? " is-expanded" : " is-compact"}`} onSubmit={submit}
+              onFocus={(event) => { if (event.currentTarget.contains(event.target)) setComposerFocused(true); }}
+              onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setComposerFocused(false); }}>
+              <button type="button" className="chat-quick-attach" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg></button>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
                 {momentContext ? <button
@@ -1463,7 +1491,7 @@ export function SearchContent({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  placeholder={turns.length ? "Ask Vivadeo about your videos…" : DEFAULT_CHAT_PROMPT}
+                  placeholder="Ask Vivadeo…"
                   disabled={loading}
                 />
               </div>
@@ -1476,6 +1504,7 @@ export function SearchContent({
               >
                 {loading ? <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" /></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" /></svg>}
               </button>
+              <div className="chat-composer-reveal" inert={!composerExpanded} aria-hidden={!composerExpanded}>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
                   <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" data-tooltip="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
@@ -1528,6 +1557,7 @@ export function SearchContent({
                   <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
                 </div>
               </div>
+              </div>
             </form>
             {browseOpen ? (
               <div className="chat-tool-panel" role="dialog" aria-label="Browse workspace videos">
@@ -1552,7 +1582,7 @@ export function SearchContent({
           <section className="search-layout">
             <section ref={chatFeedRef} className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
               {turns.length === 0 ? (
-                <article className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"}`}>
+                <article key={`empty-${newChatMotionKey}`} className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"} chat-new-copy-enter`}>
                   <h3 className="chat-greeting">{showGreeting ? <TypedText text={`${greeting}, ${firstName}`} className="chat-greeting-typed" /> : "New chat"}</h3>
                   <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this chat."}</p>
                   {showOnboarding ? <div className="chat-starters">
