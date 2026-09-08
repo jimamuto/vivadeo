@@ -128,12 +128,23 @@ jobs:
           set -euo pipefail
           tag="sha-${GITHUB_SHA::7}"
           az extension add --name containerapp --upgrade --yes
-          az containerapp update --resource-group rg-vivadeo --name vivadeo-api --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command /bin/sh --args=-c --args="alembic upgrade head && exec opentelemetry-instrument uvicorn vivadeo.api:app --host 0.0.0.0 --port 8000" --revision-suffix "otel-${tag#sha-}" --output none
-          az containerapp update --resource-group rg-vivadeo --name vivadeo-worker --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command /bin/sh --args=-c --args="exec opentelemetry-instrument celery -A vivadeo.worker.celery_app worker --loglevel=INFO --concurrency 2 --max-tasks-per-child=100" --revision-suffix "otel-${tag#sha-}" --output none
+          az containerapp update --resource-group rg-vivadeo --name vivadeo-api --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command "" --args "" --revision-suffix "otel-${tag#sha-}" --output none
+          az containerapp update --resource-group rg-vivadeo --name vivadeo-worker --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command /usr/local/bin/vivadeo-worker --args "" --revision-suffix "otel-${tag#sha-}" --output none
           az containerapp update --resource-group rg-vivadeo --name vivadeo-web --image "ghcr.io/jimamuto/vivadeo-web:${tag}" --output none
 
           for app in vivadeo-api vivadeo-worker; do
             test "$(az containerapp show --resource-group rg-vivadeo --name "$app" --query properties.template.containers[0].image --output tsv)" = "ghcr.io/jimamuto/vivadeo-api:${tag}"
+
+            revision="$(az containerapp show --resource-group rg-vivadeo --name "$app" --query properties.latestRevisionName --output tsv)"
+            health=""
+            for attempt in {1..30}; do
+              health="$(az containerapp revision show --resource-group rg-vivadeo --name "$app" --revision "$revision" --query properties.healthState --output tsv)"
+              if [ "$health" = "Healthy" ]; then
+                break
+              fi
+              sleep 10
+            done
+            test "$health" = "Healthy"
           done
           test "$(az containerapp show --resource-group rg-vivadeo --name vivadeo-web --query properties.template.containers[0].image --output tsv)" = "ghcr.io/jimamuto/vivadeo-web:${tag}"
 

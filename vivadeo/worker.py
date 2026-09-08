@@ -674,7 +674,7 @@ def generate_chat_task(
             message = session.get(ChatThreadMessage, message_id)
             if message:
                 message.status = "canceled" if canceled else "failed"
-                message.error = "Canceled by user" if canceled else "Vivadeo could not prepare an answer. Retry any interrupted video preparation first."
+                message.error = "Canceled by user" if canceled else "Vivadeo could not finish the answer. Please try again."
         progress_bus.delete(f"vivadeo:chat-key:{job_id}")
         if canceled:
             return

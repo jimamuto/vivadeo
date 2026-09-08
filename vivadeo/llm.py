@@ -2,11 +2,18 @@
 
 import base64
 import json
+import logging
 import re
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, urlunparse
 from urllib.request import Request, urlopen
+
+
+logger = logging.getLogger(__name__)
+_TRANSIENT_HTTP_STATUSES = {408, 409, 429, 500, 502, 503, 504}
+_MAX_TRANSIENT_ATTEMPTS = 3
 
 
 GENERAL_CHAT_INSTRUCTION = (
@@ -261,13 +268,36 @@ class OpenAICompatibleChat:
             },
             method="POST",
         )
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                if on_delta is not None:
-                    return _read_answer_stream(response, on_delta, "openai")
-                result = json.load(response)
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
-            raise OpenAICompatibleError("The configured AI endpoint could not generate an answer.") from exc
+        result = None
+        for attempt in range(1, _MAX_TRANSIENT_ATTEMPTS + 1):
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    if on_delta is not None:
+                        return _read_answer_stream(response, on_delta, "openai")
+                    result = json.load(response)
+                break
+            except HTTPError as exc:
+                retryable = exc.code in _TRANSIENT_HTTP_STATUSES
+                logger.warning(
+                    "answer_service_http_error status=%s attempt=%s retryable=%s",
+                    exc.code,
+                    attempt,
+                    retryable,
+                )
+                if retryable and attempt < _MAX_TRANSIENT_ATTEMPTS:
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+                raise OpenAICompatibleError("The configured AI endpoint could not generate an answer.") from exc
+            except (URLError, TimeoutError, OSError) as exc:
+                logger.warning(
+                    "answer_service_connection_error error_type=%s attempt=%s",
+                    type(exc).__name__,
+                    attempt,
+                )
+                if attempt < _MAX_TRANSIENT_ATTEMPTS:
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+                raise OpenAICompatibleError("The configured AI endpoint could not generate an answer.") from exc
         try:
             content = result["choices"][0]["message"]["content"]
             if isinstance(content, list):

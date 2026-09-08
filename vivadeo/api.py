@@ -1734,7 +1734,7 @@ def _complete_chat_message(
         session.refresh(assistant)
         if assistant.status != "canceled":
             assistant.status = "failed"
-            assistant.error = "Vivadeo could not prepare an answer."
+            assistant.error = "Vivadeo could not finish the answer. Please try again."
         assistant.updated_at = utcnow()
         thread.current_message_id = assistant.id
         thread.updated_at = utcnow()
@@ -2642,11 +2642,11 @@ def search_chat(
                     content="",
                     parent_id=user_message.id if user_message is not None else None,
                     status="failed",
-                    error="Vivadeo could not prepare an answer.",
+                    error="Vivadeo could not finish the answer. Please try again.",
                 )
             else:
                 assistant_message.status = "failed"
-                assistant_message.error = "Vivadeo could not prepare an answer."
+                assistant_message.error = "Vivadeo could not finish the answer. Please try again."
             session.commit()
         raise HTTPException(status_code=502, detail="Answer generation failed. Please try again.") from exc
     _finish_search_run(search_run, status="completed", summary=verification_summary)
@@ -2999,14 +2999,14 @@ def regenerate_chat_message(
         )
     except HTTPException as exc:
         replacement.status = "failed"
-        replacement.error = "Vivadeo could not prepare an answer."
+        replacement.error = "Vivadeo could not finish the answer. Please try again."
         thread.current_message_id = replacement.id
         thread.updated_at = utcnow()
         session.commit()
         raise exc
     except Exception as exc:
         replacement.status = "failed"
-        replacement.error = "Vivadeo could not prepare an answer."
+        replacement.error = "Vivadeo could not finish the answer. Please try again."
         thread.current_message_id = replacement.id
         thread.updated_at = utcnow()
         session.commit()

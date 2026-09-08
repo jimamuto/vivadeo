@@ -13,9 +13,11 @@ COPY pyproject.toml README.md uv.lock ./
 COPY vivadeo ./vivadeo
 COPY alembic.ini ./
 COPY alembic ./alembic
+COPY docker/worker-entrypoint.sh /usr/local/bin/vivadeo-worker
 
 RUN pip install --no-cache-dir uv \
-    && uv pip install --system .
+    && uv pip install --system . \
+    && chmod +x /usr/local/bin/vivadeo-worker
 
 EXPOSE 8000
 

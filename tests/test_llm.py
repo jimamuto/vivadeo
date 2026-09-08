@@ -1,4 +1,7 @@
 import json
+from io import BytesIO
+from urllib.error import HTTPError
+
 import pytest
 
 from vivadeo.llm import OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models, validate_base_url
@@ -76,3 +79,25 @@ def test_openai_compatible_chat_knows_vivadeo_without_video_evidence(monkeypatch
     system_prompt = captured["messages"][0]["content"]
     assert "video archive and search product" in system_prompt
     assert "never confuse Vivadeo with VivaVideo" in system_prompt
+
+
+def test_openai_compatible_chat_retries_transient_http_errors(monkeypatch):
+    attempts = []
+
+    def respond(request, timeout):
+        attempts.append(request.full_url)
+        if len(attempts) < 3:
+            raise HTTPError(request.full_url, 429, "Too Many Requests", {}, BytesIO(b""))
+        return _Response({"choices": [{"message": {"content": "recovered answer"}}]})
+
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
+    monkeypatch.setattr("vivadeo.llm.time.sleep", lambda _seconds: None)
+
+    answer = OpenAICompatibleChat(
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="test-model",
+    ).answer([{"role": "user", "content": "Question"}], [])
+
+    assert answer == "recovered answer"
+    assert len(attempts) == 3
