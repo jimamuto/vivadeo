@@ -128,7 +128,7 @@ jobs:
           set -euo pipefail
           tag="sha-${GITHUB_SHA::7}"
           az extension add --name containerapp --upgrade --yes
-          az containerapp update --resource-group rg-vivadeo --name vivadeo-api --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command "" --args "" --revision-suffix "otel-${tag#sha-}" --output none
+          az containerapp update --resource-group rg-vivadeo --name vivadeo-api --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command /usr/local/bin/vivadeo-api --args "" --revision-suffix "otel-${tag#sha-}" --output none
           az containerapp update --resource-group rg-vivadeo --name vivadeo-worker --image "ghcr.io/jimamuto/vivadeo-api:${tag}" --command /usr/local/bin/vivadeo-worker --args "" --revision-suffix "otel-${tag#sha-}" --output none
           az containerapp update --resource-group rg-vivadeo --name vivadeo-web --image "ghcr.io/jimamuto/vivadeo-web:${tag}" --output none
 
