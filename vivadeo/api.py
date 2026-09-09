@@ -1,6 +1,7 @@
 """FastAPI production API."""
 
 from pathlib import Path
+from datetime import timedelta
 import logging
 import re
 import tempfile
@@ -938,9 +939,26 @@ def request_evidence_frame(
     job_id = None
     if frame is not None and frame.status == "queued":
         jobs = session.scalars(select(Job).where(Job.organization_id == organization_id, Job.kind == "extract_evidence_frame", Job.video_id == video_id).order_by(Job.created_at.desc()).limit(10)).all()
-        job_id = next((job.id for job in jobs if (job.payload or {}).get("frame_id") == frame.id and job.status not in {"failed", "canceled", "succeeded"}), None)
+        stale_before = utcnow() - timedelta(minutes=10)
+        active_job = next((
+            job for job in jobs
+            if (job.payload or {}).get("frame_id") == frame.id
+            and job.status not in {"failed", "canceled", "succeeded"}
+            and job.updated_at >= stale_before
+        ), None)
+        job_id = active_job.id if active_job else None
         if job_id:
             return _evidence_frame_response(frame, job_id=job_id)
+
+        for job in jobs:
+            if (
+                (job.payload or {}).get("frame_id") == frame.id
+                and job.status not in {"failed", "canceled", "succeeded"}
+            ):
+                job.status = "failed"
+                job.error = "Frame extraction was interrupted."
+                job.message = "Frame extraction interrupted"
+                job.updated_at = utcnow()
 
     if frame is None:
         frame = EvidenceFrame(

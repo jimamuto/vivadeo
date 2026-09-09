@@ -121,6 +121,42 @@ function writeCachedPoster(key: string, url: string) {
   }
 }
 
+const posterRequests = new Map<string, Promise<string | null>>();
+
+function requestPoster(videoId: string, timestamp: number, cacheKey: string) {
+  const cached = readCachedPoster(cacheKey);
+  if (cached) return Promise.resolve(cached);
+  const existing = posterRequests.get(cacheKey);
+  if (existing) return existing;
+
+  const request = (async () => {
+    try {
+      const response = await fetch(`/api/proxy/v1/videos/${videoId}/frames`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timestamp }),
+      });
+      if (!response.ok) return null;
+      let frame = await response.json() as { id: string; status: string; url?: string | null };
+      for (let attempt = 0; attempt < 30 && frame.status === "queued"; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        const refreshed = await fetch(`/api/proxy/v1/videos/${videoId}/frames/${frame.id}`, { cache: "no-store" });
+        if (!refreshed.ok) return null;
+        frame = await refreshed.json() as { id: string; status: string; url?: string | null };
+      }
+      if (frame.status !== "ready" || !frame.url) return null;
+      writeCachedPoster(cacheKey, frame.url);
+      return frame.url;
+    } catch {
+      return null;
+    } finally {
+      posterRequests.delete(cacheKey);
+    }
+  })();
+  posterRequests.set(cacheKey, request);
+  return request;
+}
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -298,36 +334,11 @@ function CitationPreview({
     const loadPoster = async () => {
       if (requested || cancelled) return;
       requested = true;
-      const cached = readCachedPoster(posterCacheKey);
-      if (cached) {
-        setPosterUrl(cached);
-        setPosterStatus("ready");
-        return;
-      }
       setPosterStatus("loading");
-      try {
-        const response = await fetch(`/api/proxy/v1/videos/${citation.video_id}/frames`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ timestamp: citation.start_time }),
-        });
-        if (!response.ok) throw new Error("Poster request failed");
-        let frame = await response.json() as { id: string; status: string; url?: string | null };
-        for (let attempt = 0; attempt < 30 && frame.status === "queued" && !cancelled; attempt += 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1000));
-          const refreshed = await fetch(`/api/proxy/v1/videos/${citation.video_id}/frames/${frame.id}`, { cache: "no-store" });
-          if (!refreshed.ok) break;
-          frame = await refreshed.json() as { id: string; status: string; url?: string | null };
-        }
-        if (!cancelled && frame.status === "ready" && frame.url) {
-          writeCachedPoster(posterCacheKey, frame.url);
-          setPosterUrl(frame.url);
-          setPosterStatus("ready");
-        } else if (!cancelled) {
-          setPosterStatus("unavailable");
-        }
-      } catch {
-        if (!cancelled) setPosterStatus("unavailable");
+      const url = await requestPoster(citation.video_id, citation.start_time, posterCacheKey);
+      if (!cancelled) {
+        setPosterUrl(url);
+        setPosterStatus(url ? "ready" : "unavailable");
       }
     };
 
@@ -395,11 +406,43 @@ function UnifiedCitationPlayer({
   onFocus: (citation: Citation, prompt: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const videoId = citations[0].video_id;
   const start = Math.max(0, citations[0].start_time);
   const end = Math.max(duration || 0, citations[citations.length - 1].end_time);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(start);
   const [fullscreen, setFullscreen] = useState(false);
+  const posterCacheBucket = Math.round(start / 5) * 5;
+  const posterCacheKey = `vivadeo.citation-poster:${videoId}:${posterCacheBucket}`;
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [posterStatus, setPosterStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+
+  useClientLayoutEffect(() => {
+    const cached = readCachedPoster(posterCacheKey);
+    if (cached) {
+      setPosterUrl(cached);
+      setPosterStatus("ready");
+    } else {
+      setPosterUrl(null);
+      setPosterStatus("loading");
+    }
+  }, [posterCacheKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPoster = async () => {
+      setPosterStatus("loading");
+      const url = await requestPoster(videoId, start, posterCacheKey);
+      if (!cancelled) {
+        setPosterUrl(url);
+        setPosterStatus(url ? "ready" : "unavailable");
+      }
+    };
+
+    void loadPoster();
+    return () => { cancelled = true; };
+  }, [posterCacheKey, start, videoId]);
 
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(document.fullscreenElement === videoRef.current);
@@ -432,13 +475,16 @@ function UnifiedCitationPlayer({
 
   return (
     <section className="search-evidence-player" aria-label={`Evidence from ${citations[0].filename}`}>
-      <div className="search-evidence-video">
+      <div className={`search-evidence-video${posterStatus === "loading" ? " is-loading" : ""}`}>
+        {posterStatus === "loading" ? <span className="search-evidence-video-skeleton" aria-hidden="true" /> : null}
         <video
           ref={videoRef}
           playsInline
           controls={fullscreen}
-          preload="metadata"
+          preload={posterStatus === "ready" ? "metadata" : "none"}
+          poster={posterUrl || undefined}
           src={`${sourceUrl}#t=${start},${end}`}
+          className={posterStatus === "loading" ? "is-awaiting-poster" : undefined}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
