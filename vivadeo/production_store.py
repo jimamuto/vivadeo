@@ -19,8 +19,12 @@ class PostgresVideoStore:
         organization_id: str,
         start_time: float,
         end_time: float,
-        embedding: list[float],
+        embedding: list[float] | None,
         metadata: dict | None = None,
+        *,
+        embedding_backend: str = "modal",
+        embedding_model: str = "Qwen/Qwen3-VL-Embedding-2B",
+        visual_embedding: list[float] | None = None,
     ) -> str:
         existing = self.session.scalar(
             select(VideoChunk).where(
@@ -31,6 +35,9 @@ class PostgresVideoStore:
         if existing:
             existing.end_time = float(end_time)
             existing.embedding = embedding
+            existing.visual_embedding = visual_embedding
+            existing.embedding_backend = embedding_backend
+            existing.embedding_model = embedding_model
             existing.chunk_metadata = metadata or {}
             return existing.id
 
@@ -41,8 +48,9 @@ class PostgresVideoStore:
             start_time=float(start_time),
             end_time=float(end_time),
             embedding=embedding,
-            embedding_backend="modal",
-            embedding_model="Qwen/Qwen3-VL-Embedding-2B",
+            visual_embedding=visual_embedding,
+            embedding_backend=embedding_backend,
+            embedding_model=embedding_model,
             chunk_metadata=metadata or {},
         )
         self.session.add(chunk)
@@ -61,6 +69,56 @@ class PostgresVideoStore:
         stmt = (
             select(VideoChunk, Video, distance)
             .join(Video, Video.id == VideoChunk.video_id)
+            .where(VideoChunk.embedding.is_not(None))
+            .order_by(distance)
+            .limit(n_results)
+        )
+        if organization_id:
+            stmt = stmt.where(Video.organization_id == organization_id, VideoChunk.organization_id == organization_id)
+        if video_ids:
+            stmt = stmt.where(VideoChunk.video_id.in_(video_ids))
+        elif video_id:
+            stmt = stmt.where(VideoChunk.video_id == video_id)
+        rows = self.session.execute(stmt).all()
+        return [
+            {
+                "chunk_id": chunk.id,
+                "organization_id": chunk.organization_id,
+                "video_id": video.id,
+                "filename": video.filename,
+                "source_uri": video.source_uri,
+                "object_key": video.object_key,
+                "start_time": chunk.start_time,
+                "end_time": chunk.end_time,
+                "similarity_score": 1.0 - float(dist),
+                "distance": float(dist),
+            }
+            for chunk, video, dist in rows
+        ]
+
+    def visual_embeddings_ready(self, organization_id: str, video_ids: list[str]) -> bool:
+        """Return whether the requested scope has NVIDIA visual vectors available."""
+        stmt = select(func.count(VideoChunk.id), func.count(VideoChunk.visual_embedding)).where(
+            VideoChunk.organization_id == organization_id,
+        )
+        if video_ids:
+            stmt = stmt.where(VideoChunk.video_id.in_(video_ids))
+        total, embedded = self.session.execute(stmt).one()
+        return total > 0 and total == embedded
+
+    def search_visual_embeddings(
+        self,
+        query_embedding: list[float],
+        n_results: int = 5,
+        organization_id: str | None = None,
+        video_id: str | None = None,
+        video_ids: list[str] | None = None,
+    ) -> list[dict]:
+        distance = VideoChunk.visual_embedding.cosine_distance(query_embedding).label("distance")
+        stmt = (
+            select(VideoChunk, Video, distance)
+            .join(Video, Video.id == VideoChunk.video_id)
+            .where(VideoChunk.visual_embedding.is_not(None))
             .order_by(distance)
             .limit(n_results)
         )

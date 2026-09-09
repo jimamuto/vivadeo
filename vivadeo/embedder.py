@@ -2,40 +2,42 @@
 
 from .base_embedder import BaseEmbedder
 
-_current_embedder: BaseEmbedder | None = None
+_current_embedders: dict[tuple, BaseEmbedder] = {}
 
 
 def get_embedder(backend: str = "modal", **kwargs) -> BaseEmbedder:
     """Factory to get or create the active embedder."""
-    global _current_embedder
+    key = (backend, kwargs.get("app_name"), kwargs.get("cls_name"), kwargs.get("model"), kwargs.get("base_url"))
+    cached = _current_embedders.get(key)
+    if cached is not None:
+        return cached
     if backend == "modal":
-        if _current_embedder is None:
-            from .modal_embedder import ModalEmbedder
+        from .modal_embedder import ModalEmbedder
 
-            _current_embedder = ModalEmbedder(
-                app_name=kwargs.get("app_name", "vivadeo-qwen3-vl-embedding-2b"),
-                cls_name=kwargs.get("cls_name", "QwenEmbedder"),
-                timeout=kwargs.get("timeout", 600),
-            )
-        return _current_embedder
+        embedder = ModalEmbedder(
+            app_name=kwargs.get("app_name", "vivadeo-qwen3-vl-embedding-2b"),
+            cls_name=kwargs.get("cls_name", "QwenEmbedder"),
+            timeout=kwargs.get("timeout", 600),
+        )
+        _current_embedders[key] = embedder
+        return embedder
     if backend == "nvidia":
-        if _current_embedder is None:
-            from .nvidia_embedder import NvidiaEmbedder
+        from .nvidia_embedder import NvidiaEmbedder
 
-            _current_embedder = NvidiaEmbedder(
-                api_key=kwargs["api_key"],
-                base_url=kwargs.get("base_url", "https://integrate.api.nvidia.com/v1"),
-                model=kwargs.get("model", "nvidia/nemotron-3-embed-1b"),
-                timeout=kwargs.get("timeout", 120),
-            )
-        return _current_embedder
+        embedder = NvidiaEmbedder(
+            api_key=kwargs["api_key"],
+            base_url=kwargs.get("base_url", "https://integrate.api.nvidia.com/v1"),
+            model=kwargs.get("model", "nvidia/nemotron-3-embed-1b"),
+            timeout=kwargs.get("timeout", 120),
+        )
+        _current_embedders[key] = embedder
+        return embedder
     raise ValueError(f"Unknown backend: {backend}")
 
 
 def reset_embedder():
     """Reset the cached embedder."""
-    global _current_embedder
-    _current_embedder = None
+    _current_embedders.clear()
 
 
 def embed_video_chunk(chunk_path: str, verbose: bool = False) -> list[float]:

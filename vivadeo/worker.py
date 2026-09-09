@@ -368,11 +368,24 @@ def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id
 
 def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
     settings = get_settings()
-    embedder = get_embedder(
-        app_name=settings.modal_app,
-        cls_name=settings.modal_class,
-        timeout=settings.modal_timeout,
-    )
+    visual_backend = settings.visual_embedding_backend
+    if visual_backend == "nvidia" and settings.nvidia_embedding_api_key:
+        embedder = get_embedder(
+            backend="nvidia",
+            api_key=settings.nvidia_embedding_api_key,
+            base_url=settings.nvidia_embedding_base_url,
+            model=settings.nvidia_visual_embedding_model,
+            timeout=settings.nvidia_embedding_timeout,
+        )
+        visual_model = settings.nvidia_visual_embedding_model
+    else:
+        visual_backend = "modal"
+        embedder = get_embedder(
+            app_name=settings.modal_app,
+            cls_name=settings.modal_class,
+            timeout=settings.modal_timeout,
+        )
+        visual_model = "Qwen/Qwen3-VL-Embedding-2B"
     chunks = chunk_video(
         file_path,
         chunk_duration=settings.chunk_duration,
@@ -389,12 +402,12 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
             nonlocal stored_count
             if not batch:
                 return 0
-            logger.info("modal_embedding_start job_id=%s video_id=%s batch=%s", job_id, video_id, len(batch))
+            logger.info("visual_embedding_start backend=%s job_id=%s video_id=%s batch=%s", visual_backend, job_id, video_id, len(batch))
             embeddings = embedder.embed_video_chunks(
                 [item["embed_path"] for item in batch],
                 verbose=False,
             )
-            logger.info("modal_embedding_complete job_id=%s video_id=%s batch=%s", job_id, video_id, len(embeddings))
+            logger.info("visual_embedding_complete backend=%s job_id=%s video_id=%s batch=%s", visual_backend, job_id, video_id, len(embeddings))
             with session_scope() as session:
                 store = PostgresVideoStore(session)
                 for item, embedding in zip(batch, embeddings):
@@ -403,8 +416,11 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                         organization_id=organization_id,
                         start_time=item["start_time"],
                         end_time=item["end_time"],
-                        embedding=embedding,
+                        embedding=embedding if visual_backend == "modal" else None,
                         metadata={"source_file": file_path},
+                        embedding_backend=visual_backend,
+                        embedding_model=visual_model,
+                        visual_embedding=embedding if visual_backend == "nvidia" else None,
                     )
             stored = len(batch)
             stored_count += stored

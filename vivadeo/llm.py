@@ -5,6 +5,8 @@ import json
 import logging
 import re
 import time
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, urlunparse
@@ -14,6 +16,24 @@ from urllib.request import Request, urlopen
 logger = logging.getLogger(__name__)
 _TRANSIENT_HTTP_STATUSES = {408, 409, 429, 500, 502, 503, 504}
 _MAX_TRANSIENT_ATTEMPTS = 3
+_MAX_RETRY_DELAY_SECONDS = 60
+
+
+def _retry_delay(error: HTTPError, attempt: int) -> float:
+    """Honor provider backoff advice, falling back to bounded exponential delay."""
+    value = error.headers.get("Retry-After") if error.headers else None
+    if value:
+        try:
+            return min(_MAX_RETRY_DELAY_SECONDS, max(1.0, float(value)))
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(value)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                return min(_MAX_RETRY_DELAY_SECONDS, max(1.0, (retry_at - datetime.now(timezone.utc)).total_seconds()))
+            except (TypeError, ValueError, OverflowError):
+                pass
+    return min(_MAX_RETRY_DELAY_SECONDS, float(2 ** attempt))
 
 
 GENERAL_CHAT_INSTRUCTION = (
@@ -214,8 +234,7 @@ class OpenAICompatibleChat:
         payload = json.dumps({
             "model": self.model,
             "messages": [{"role": "user", "content": content}],
-            "temperature": 0,
-            "max_tokens": 512,
+            "max_completion_tokens": 512,
         }).encode("utf-8")
         request = Request(
             f"{self.base_url}/chat/completions",
@@ -227,9 +246,23 @@ class OpenAICompatibleChat:
             },
             method="POST",
         )
+        result = None
+        for attempt in range(1, _MAX_TRANSIENT_ATTEMPTS + 1):
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    result = json.load(response)
+                break
+            except HTTPError as exc:
+                if exc.code in _TRANSIENT_HTTP_STATUSES and attempt < _MAX_TRANSIENT_ATTEMPTS:
+                    time.sleep(_retry_delay(exc, attempt))
+                    continue
+                raise
+            except (URLError, TimeoutError, OSError):
+                if attempt < _MAX_TRANSIENT_ATTEMPTS:
+                    time.sleep(2 ** (attempt - 1))
+                    continue
+                raise
         try:
-            with urlopen(request, timeout=self.timeout) as response:
-                result = json.load(response)
             content = result["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
@@ -285,7 +318,7 @@ class OpenAICompatibleChat:
                     retryable,
                 )
                 if retryable and attempt < _MAX_TRANSIENT_ATTEMPTS:
-                    time.sleep(2 ** (attempt - 1))
+                    time.sleep(_retry_delay(exc, attempt))
                     continue
                 raise OpenAICompatibleError("The configured AI endpoint could not generate an answer.") from exc
             except (URLError, TimeoutError, OSError) as exc:

@@ -186,6 +186,7 @@ def _visual_rerank_hits(
                     })
             ranked = rank_frame_candidates(query_embedding, candidates)
             if verifier is not None and ranked:
+                verifier_failed = False
                 verification_candidates: list[dict] = []
                 if exhaustive:
                     verification_candidates = ranked
@@ -205,21 +206,37 @@ def _visual_rerank_hits(
                         verification_candidates.append(candidate)
                         if len(verification_candidates) >= 5:
                             break
+                    # One full-resolution frame is enough for the normal answer path;
+                    # keeping the rest as possible matches avoids bursting the vision quota.
+                    verification_candidates = verification_candidates[:1]
                 verified_keys: dict[tuple[str, float], dict] = {}
-                for index, candidate in enumerate(verification_candidates, 1):
-                    result = verifier.verify_visual_candidates(question, [candidate])
-                    decision = result[0] if result else {}
-                    confidence = float(decision.get("confidence", 0.0)) if isinstance(decision, dict) else 0.0
-                    if isinstance(decision, dict) and decision.get("relevant") and confidence >= 0.55:
-                        verified_keys[(candidate["video_id"], candidate["timestamp"])] = {
-                            "verification_confidence": confidence,
-                            "match_reason": str(decision.get("reason") or "Visible evidence supports the question"),
-                        }
-                ranked = [
-                    {**candidate, "visual_verified": True, **verified_keys[(candidate["video_id"], candidate["timestamp"])]}
-                    for candidate in ranked
-                    if (candidate["video_id"], candidate["timestamp"]) in verified_keys
-                ]
+                for batch_start in range(0, len(verification_candidates), 8):
+                    batch = verification_candidates[batch_start:batch_start + 8]
+                    try:
+                        result = verifier.verify_visual_candidates(question, batch)
+                    except Exception:
+                        verifier_failed = True
+                        logger.exception("visual_candidate_verification_failed batch=%s", batch_start // 8 + 1)
+                        break
+                    for decision in result or []:
+                        if not isinstance(decision, dict) or not isinstance(decision.get("index"), int):
+                            continue
+                        local_index = decision["index"] - 1
+                        if local_index < 0 or local_index >= len(batch):
+                            continue
+                        candidate = batch[local_index]
+                        confidence = float(decision.get("confidence", 0.0))
+                        if decision.get("relevant") and confidence >= 0.55:
+                            verified_keys[(candidate["video_id"], candidate["timestamp"])] = {
+                                "verification_confidence": confidence,
+                                "match_reason": str(decision.get("reason") or "Visible evidence supports the question"),
+                            }
+                if not verifier_failed:
+                    ranked = [
+                        {**candidate, "visual_verified": True, **verified_keys[(candidate["video_id"], candidate["timestamp"])]}
+                        for candidate in ranked
+                        if (candidate["video_id"], candidate["timestamp"]) in verified_keys
+                    ]
     except HTTPException:
         raise
     except Exception:
@@ -2380,9 +2397,27 @@ def search_chat(
         )
     try:
         # Spoken-content questions never depend on the visual index.
-        embedding_backend = get_embedder() if visual_question else None
-        embedding = embedding_backend.embed_query(question) if embedding_backend else None
         store = PostgresVideoStore(session)
+        visual_scope_ids = list(scope_video_ids)
+        if not visual_scope_ids:
+            visual_scope_ids = [request.focus_video_id or request.video_id] if (request.focus_video_id or request.video_id) else []
+        use_nvidia_visual = bool(
+            visual_question
+            and use_nvidia
+            and getattr(runtime_settings, "visual_embedding_backend", "modal") == "nvidia"
+            and getattr(store, "visual_embeddings_ready", lambda *_: False)(organization_id, visual_scope_ids)
+        )
+        if visual_question and use_nvidia_visual:
+            embedding_backend = get_embedder(
+                backend="nvidia",
+                api_key=runtime_settings.nvidia_embedding_api_key,
+                base_url=runtime_settings.nvidia_embedding_base_url,
+                model=runtime_settings.nvidia_visual_embedding_model,
+                timeout=runtime_settings.nvidia_embedding_timeout,
+            )
+        else:
+            embedding_backend = get_embedder() if visual_question else None
+        embedding = embedding_backend.embed_query(question) if embedding_backend else None
         source_scopes = comparison_video_ids if request.output_format == "comparison" else [None]
         scope_limit = max(1, (result_limit + len(source_scopes) - 1) // len(source_scopes))
         chunk_hits = []
@@ -2405,7 +2440,11 @@ def search_chat(
                     "end_time": min(request.focus_end_time or request.focus_start_time + 15, video.duration) if video.duration is not None else request.focus_end_time or request.focus_start_time + 15,
                 }]
             elif visual_question:
-                source_hits = store.search(embedding, **search_kwargs)
+                source_hits = (
+                    store.search_visual_embeddings(embedding, **search_kwargs)
+                    if use_nvidia_visual
+                    else store.search(embedding, **search_kwargs)
+                )
             else:
                 transcript_scope = [source_id or request.focus_video_id or request.video_id] if source_id or request.focus_video_id or request.video_id else scope_video_ids
                 if use_nvidia and not overview and request.focus_start_time is None and store.transcript_embeddings_ready(organization_id, transcript_scope):

@@ -1,4 +1,5 @@
 import json
+from email.message import Message
 from io import BytesIO
 from urllib.error import HTTPError
 
@@ -101,3 +102,50 @@ def test_openai_compatible_chat_retries_transient_http_errors(monkeypatch):
 
     assert answer == "recovered answer"
     assert len(attempts) == 3
+
+
+def test_openai_compatible_chat_honors_retry_after(monkeypatch):
+    attempts = []
+    delays = []
+    headers = Message()
+    headers["Retry-After"] = "7"
+
+    def respond(request, timeout):
+        attempts.append(request.full_url)
+        if len(attempts) == 1:
+            raise HTTPError(request.full_url, 429, "Too Many Requests", headers, BytesIO(b""))
+        return _Response({"choices": [{"message": {"content": "recovered after provider delay"}}]})
+
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
+    monkeypatch.setattr("vivadeo.llm.time.sleep", delays.append)
+
+    answer = OpenAICompatibleChat(
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="test-model",
+    ).answer([{"role": "user", "content": "Question"}], [])
+
+    assert answer == "recovered after provider delay"
+    assert delays == [7.0]
+
+
+def test_visual_verifier_uses_completion_token_parameter_for_gpt5(monkeypatch, tmp_path):
+    frame = tmp_path / "frame.jpg"
+    frame.write_bytes(b"jpeg")
+    captured = {}
+
+    def respond(request, timeout):
+        captured.update(json.loads(request.data))
+        return _Response({"choices": [{"message": {"content": '{"candidates":[{"index":1,"relevant":true}]}'}}]})
+
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
+    result = OpenAICompatibleChat(
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="gpt-5.6-luna",
+    ).verify_visual_candidates("What is happening?", [{"path": str(frame), "timestamp": 1.0}])
+
+    assert result[0]["relevant"] is True
+    assert captured["max_completion_tokens"] == 512
+    assert "max_tokens" not in captured
+    assert "temperature" not in captured

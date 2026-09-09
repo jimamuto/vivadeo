@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     nvidia_embedding_api_key: str | None = Field(None, alias="VIVADEO_NVIDIA_EMBEDDING_API_KEY")
     nvidia_embedding_base_url: str = Field("https://integrate.api.nvidia.com/v1", alias="VIVADEO_NVIDIA_EMBEDDING_BASE_URL")
     nvidia_embedding_model: str = Field("nvidia/nemotron-3-embed-1b", alias="VIVADEO_NVIDIA_EMBEDDING_MODEL")
+    nvidia_visual_embedding_model: str = Field("nvidia/llama-nemotron-embed-vl-1b-v2", alias="VIVADEO_NVIDIA_VISUAL_EMBEDDING_MODEL")
+    visual_embedding_backend: Literal["nvidia", "modal"] = Field("nvidia", alias="VIVADEO_VISUAL_EMBEDDING_BACKEND")
     nvidia_embedding_timeout: int = Field(120, alias="VIVADEO_NVIDIA_EMBEDDING_TIMEOUT")
 
     chunk_duration: int = Field(30, alias="VIVADEO_CHUNK_DURATION")
