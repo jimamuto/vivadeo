@@ -37,6 +37,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Chat generation supports Vivadeo Auto through server-side Azure OpenAI GPT-5.6 Luna, plus user-configured OpenAI, Anthropic, Ollama, Gemini-compatible, NVIDIA-compatible, or custom endpoints. Vivadeo Pro is not an active answer option.
 - Chat chooses one bounded evidence operation per question: spoken-content search, visual-moment search, or focused-moment inspection. The backend retains workspace authorization and cost limits; video or model content cannot widen source scope.
 - Generated answers stream from the selected answer service and persist partial content on the chat job so reconnecting clients can resume.
+- `/agent-lab` is an authenticated preview of the durable agent experience. Its agent may orchestrate questions, but all video retrieval, workspace scope, verification, and citations remain authoritative in the existing FastAPI evidence service.
 - BYOK provider keys are encrypted in PostgreSQL when configured in Settings; transient chat keys are held only in Redis while a generation job runs.
 - Ollama settings can detect models installed on the local Ollama service; containerized development routes local Ollama requests through the host.
 - Vivadeo prioritizes NVIDIA `nvidia/nemotron-3-embed-1b` transcript embeddings at 2048 dimensions when configured, with Modal Qwen visual embeddings and fallback retrieval for legacy transcript rows until reindexing populates NVIDIA vectors.

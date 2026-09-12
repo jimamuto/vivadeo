@@ -2,6 +2,8 @@ __pycache__/
 .env
 .modal.toml
 .next/
+.eve/
+.output/
 node_modules/
 *.tsbuildinfo
 

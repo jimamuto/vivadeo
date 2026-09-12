@@ -1,4 +1,4 @@
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 
 WORKDIR /app
 
@@ -13,6 +13,7 @@ COPY styles ./styles
 COPY app ./app
 COPY components ./components
 COPY lib ./lib
+COPY agent ./agent
 COPY public ./public
 
 RUN npm run build

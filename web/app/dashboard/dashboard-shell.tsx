@@ -6,12 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 
-type NavIcon = "chat" | "ingest" | "library" | "jobs";
+type NavIcon = "chat" | "agent" | "ingest" | "library" | "jobs";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 
 const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "chat", keywords: "search ask answer new chat footage" },
+  { label: "Agent preview", description: "Try durable multi-step video research", href: "/agent-lab", group: "Quick actions", icon: "agent", keywords: "agent preview research evidence" },
   { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
   { label: "Job history", description: "Review uploads, imports, and processing", href: "/dashboard/jobs", group: "Workspace", icon: "jobs", keywords: "history status progress failed jobs processing" },
@@ -25,6 +26,7 @@ const PALETTE_COMMANDS: PaletteCommand[] = [
 function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
   const paths: Record<PaletteIcon, string> = {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
+    agent: "M12 3v3 M7 8h10a3 3 0 0 1 3 3v7H4v-7a3 3 0 0 1 3-3z M8 13h.01 M16 13h.01 M9 17h6",
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
@@ -39,6 +41,7 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
 function NavGlyph({ icon }: { icon: NavIcon }) {
   const paths: Record<NavIcon, string> = {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
+    agent: "M12 3v3 M7 8h10a3 3 0 0 1 3 3v7H4v-7a3 3 0 0 1 3-3z M8 13h.01 M16 13h.01 M9 17h6",
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
@@ -89,7 +92,9 @@ export function DashboardShell({
           ? "Settings"
           : pathname.startsWith("/jobs")
             ? "Job progress"
-            : "Chat";
+            : pathname.startsWith("/agent-lab")
+              ? "Agent preview"
+              : "Chat";
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
@@ -181,6 +186,7 @@ export function DashboardShell({
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">General</span>
           <NavItem href="/chat" label="Chat" icon="chat" />
+          <NavItem href="/agent-lab" label="Agent preview" icon="agent" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>

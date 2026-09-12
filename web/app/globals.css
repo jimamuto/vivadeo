@@ -2969,6 +2969,29 @@ main { width: 100%; }
   .search-evidence-video video { transition: none; }
 }
 
+.agent-lab { width: min(960px, calc(100% - 40px)); min-height: calc(100dvh - 110px); margin: 28px auto; display: grid; grid-template-rows: auto 1fr auto; gap: 22px; }
+.agent-lab-heading { max-width: 720px; }
+.agent-lab-heading h1 { margin: 4px 0 8px; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.02; color: var(--color-content); }
+.agent-lab-heading p:last-child { margin: 0; color: var(--color-content-muted); line-height: 1.55; }
+.agent-lab-feed { min-height: 320px; display: flex; flex-direction: column; gap: 14px; padding: 24px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 22px; background: rgba(255, 255, 255, .42); box-shadow: 0 12px 36px rgba(86, 86, 86, .07); }
+.agent-lab-empty { margin: auto; display: grid; gap: 6px; text-align: center; color: var(--color-content-muted); }
+.agent-lab-empty strong { color: var(--color-content); font-size: 1.08rem; }
+.agent-lab-message { max-width: 78%; padding: 14px 17px; border-radius: 18px; line-height: 1.55; }
+.agent-lab-message small { display: block; margin-bottom: 5px; color: var(--color-content-muted); font-weight: 700; }
+.agent-lab-message p { margin: 0 0 8px; }
+.agent-lab-message p:last-child { margin-bottom: 0; }
+.agent-lab-message-user { align-self: flex-end; color: white; background: var(--color-oxblood); border-bottom-right-radius: 5px; }
+.agent-lab-message-user small { color: rgba(255,255,255,.72); }
+.agent-lab-message-assistant { align-self: flex-start; background: var(--color-grain); border-bottom-left-radius: 5px; }
+.agent-lab-activity, .agent-lab-status { color: var(--color-content-muted); font-size: .9rem; }
+.agent-lab-error { color: var(--color-oxblood); }
+.agent-lab-composer { overflow: hidden; border: 1px solid var(--color-border); border-radius: 20px; background: white; box-shadow: 0 10px 30px rgba(86, 86, 86, .1); }
+.agent-lab-composer textarea { width: 100%; min-height: 86px; padding: 17px 18px 8px; resize: none; border: 0; outline: 0; background: transparent; color: var(--color-content); font: inherit; }
+.agent-lab-composer > div { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px 18px; color: var(--color-content-muted); font-size: .82rem; }
+.agent-lab-composer button { min-width: 82px; padding: 9px 16px; border: 0; border-radius: 999px; color: white; background: var(--color-oxblood); font-weight: 700; cursor: pointer; }
+.agent-lab-composer button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 720px) { .agent-lab { width: min(100% - 20px, 960px); margin: 18px auto; } .agent-lab-feed { padding: 14px; } .agent-lab-message { max-width: 92%; } }
+
 .search-evidence-play:hover,
 .search-evidence-play:focus-visible {
   background: var(--color-oxblood);

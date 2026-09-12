@@ -21,6 +21,8 @@ The current product is the browser app. It includes:
 ```text
 browser
   -> Next.js web app (:3000)
+     -> Eve durable research agent (authenticated preview)
+        -> workspace-scoped FastAPI evidence tool
      -> auth and workspace-aware proxy routes
         -> FastAPI API (private)
            -> Postgres + pgvector
@@ -104,6 +106,7 @@ open the console. The main product routes are:
 | Route | Purpose |
 | --- | --- |
 | `/chat` (also `/search`) | Ask questions and inspect timestamped evidence |
+| `/agent-lab` | Preview the durable video research agent |
 | `/dashboard/ingest` | Upload a file or import a URL |
 | `/dashboard/library` | Browse and manage workspace videos |
 | `/dashboard/jobs` and `/jobs` | Review job history and live ingest progress |
@@ -147,6 +150,13 @@ docker compose -f docker-compose.dev.yml restart worker chat-worker evidence-wor
 The development stack is configured for Docker-hosted Postgres and Redis. Its
 source mounts are intended for local iteration; use the production-style file
 when you need the complete credential-mounted deployment path.
+
+The agent preview requires Node.js 24. It uses the existing Vivadeo Auto
+endpoint when `VIVADEO_AUTO_LLM_BASE_URL` and `VIVADEO_AUTO_LLM_API_KEY` are
+available to the web service. Otherwise it uses `VIVADEO_EVE_MODEL` through
+the configured `AI_GATEWAY_API_KEY`. Open `/agent-lab` after signing in and
+selecting a workspace. The normal `/chat` experience remains available for
+side-by-side testing.
 
 Stop the stack with:
 
@@ -268,6 +278,7 @@ Run the web checks from `web/`:
 npm.cmd ci
 npm.cmd run typecheck
 npm.cmd run build
+npx.cmd eve info
 ```
 
 For focused API iteration, use a targeted test such as:

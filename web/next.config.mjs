@@ -1,3 +1,5 @@
+import { withEve } from "eve/next";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -19,4 +21,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withEve(nextConfig);
