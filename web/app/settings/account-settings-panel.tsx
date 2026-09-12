@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { applyTheme, type ThemePreference } from "@/app/theme-sync";
 
 type AccountSettingsPanelProps = {
   email: string;
@@ -24,6 +25,7 @@ export function AccountSettingsPanel({
   const [city, setCity] = useState("Nairobi");
   const [timezone, setTimezone] = useState("Africa/Nairobi");
   const [dateFormat, setDateFormat] = useState("dd/MM/yyyy HH:mm");
+  const [theme, setTheme] = useState<ThemePreference>("system");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [profileStatus, setProfileStatus] = useState<FetchStatus>({ state: "idle" });
@@ -38,10 +40,14 @@ export function AccountSettingsPanel({
     void fetch("/api/profile/preferences", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return;
-        const preferences = await response.json() as { city?: string; timezone?: string; date_format?: string };
+        const preferences = await response.json() as { city?: string; timezone?: string; date_format?: string; theme?: ThemePreference };
         if (preferences.city !== undefined) setCity(preferences.city);
         if (preferences.timezone) setTimezone(preferences.timezone);
         if (preferences.date_format) setDateFormat(preferences.date_format);
+        if (preferences.theme) {
+          setTheme(preferences.theme);
+          applyTheme(preferences.theme);
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -123,13 +129,13 @@ export function AccountSettingsPanel({
     setAvatarStatus({ state: "ok", message: "Photo removed." });
   }
 
-  async function savePreferences(next: { city?: string; timezone?: string; date_format?: string }) {
+  async function savePreferences(next: { city?: string; timezone?: string; date_format?: string; theme?: ThemePreference }) {
     setPreferencesStatus({ state: "loading" });
     try {
       const response = await fetch("/api/profile/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city, timezone, date_format: dateFormat, ...next }),
+        body: JSON.stringify({ city, timezone, date_format: dateFormat, theme, ...next }),
       });
       if (!response.ok) throw new Error("Could not save preferences");
       setPreferencesStatus({ state: "ok", message: "Preferences saved." });
@@ -255,6 +261,33 @@ export function AccountSettingsPanel({
           </div>
         </div>
         {preferencesStatus.state !== "idle" ? <p className="muted settings-preferences-status">{preferencesStatus.state === "loading" ? "Saving preferences..." : preferencesStatus.message}</p> : null}
+      </div>
+
+      <div className="preference-settings-grid appearance-settings-grid">
+        <div className="profile-section-copy">
+          <h2>Appearance</h2>
+          <p className="muted">Choose how Vivadeo looks on this account.</p>
+        </div>
+        <fieldset className="theme-options">
+          <legend className="visually-hidden">Color theme</legend>
+          {(["light", "dark", "system"] as ThemePreference[]).map((option) => (
+            <label className="theme-option" key={option}>
+              <input
+                type="radio"
+                name="theme"
+                value={option}
+                checked={theme === option}
+                onChange={() => {
+                  setTheme(option);
+                  applyTheme(option);
+                  void savePreferences({ theme: option });
+                }}
+              />
+              <span className={`theme-preview theme-preview-${option}`} aria-hidden="true"><i /><i /><i /></span>
+              <span>{option[0].toUpperCase() + option.slice(1)}</span>
+            </label>
+          ))}
+        </fieldset>
       </div>
 
       <div id="security" className="form settings-subsection">

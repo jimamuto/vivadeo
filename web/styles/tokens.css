@@ -107,3 +107,35 @@
   --radius: var(--radius-lg);
   --max: var(--content-max);
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-surface-solid: #211C1A;
+  --color-cream-50: #392F2C;
+  --color-cream-100: #211C1A;
+  --color-cream-200: #292321;
+  --color-cream-300: #302826;
+  --color-ink-900: #F2ECE7;
+  --color-ink-700: #C2B6AE;
+
+  --color-background: #211C1A;
+  --color-background-subtle: #292321;
+  --color-surface: #302826;
+  --color-surface-strong: #392F2C;
+  --color-surface-translucent: rgba(48, 40, 38, 0.94);
+  --color-surface-rail: #1D1917;
+  --color-content: #F2ECE7;
+  --color-content-muted: #C2B6AE;
+  --color-content-inverse: #211C1A;
+  --color-border: rgba(215, 206, 199, 0.14);
+  --color-border-strong: rgba(215, 206, 199, 0.26);
+
+  --color-action-hover: #8B3E4D;
+  --color-action-subtle: rgba(192, 159, 128, 0.14);
+  --color-focus: rgba(192, 159, 128, 0.48);
+
+  --shadow-sm: 0 8px 20px rgba(20, 14, 12, 0.3);
+  --shadow-md: 0 14px 34px rgba(20, 14, 12, 0.4);
+  --shadow-lg: 0 24px 80px rgba(20, 14, 12, 0.55);
+}
