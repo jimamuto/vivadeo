@@ -6,6 +6,10 @@ export type ThemePreference = "light" | "dark" | "system";
 
 const AUTH_ROUTE_PATTERN = /^\/(?:sign-in|sign-up|forgot-password|reset-password|verify-email|invite)(?:\/|$)/;
 
+function usesFixedLightTheme(pathname: string) {
+  return pathname === "/" || AUTH_ROUTE_PATTERN.test(pathname);
+}
+
 export function applyTheme(preference: ThemePreference) {
   const dark = preference === "dark" || (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
@@ -16,7 +20,7 @@ export function ThemeSync() {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
 
-    if (AUTH_ROUTE_PATTERN.test(window.location.pathname)) {
+    if (usesFixedLightTheme(window.location.pathname)) {
       document.documentElement.dataset.theme = "light";
       return;
     }
