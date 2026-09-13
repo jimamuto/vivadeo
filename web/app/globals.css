@@ -1995,6 +1995,16 @@ main { width: 100%; }
 .dashboard-breadcrumb a:hover { color: var(--color-oxblood); }
 .dashboard-breadcrumb svg { width: 14px; height: 14px; fill: none; stroke: var(--muted); stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .dashboard-breadcrumb span { overflow: hidden; color: var(--color-content); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-breadcrumb .dashboard-breadcrumb-detail { max-width: min(32vw, 360px); font-weight: 500; }
+.dashboard-breadcrumb .dashboard-breadcrumb-actions { position: relative; display: inline-flex; flex: 0 0 auto; overflow: visible; }
+.dashboard-breadcrumb .chat-breadcrumb-menu { position: relative; display: inline-flex; overflow: visible; }
+.chat-breadcrumb-menu .chat-thread-more { width: 28px; height: 28px; flex-basis: 28px; border-radius: 7px; line-height: 1; }
+.chat-breadcrumb-menu .chat-thread-more:hover, .chat-breadcrumb-menu .chat-thread-more:focus-visible { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
+.chat-breadcrumb-menu .chat-thread-menu { top: calc(100% + 7px); right: 0; z-index: 30; }
+.chat-breadcrumb-rename { display: flex; align-items: center; gap: 4px; width: min(32vw, 360px); }
+.chat-breadcrumb-rename input { min-width: 80px; width: 100%; padding: 5px 8px; border: 1px solid var(--color-border-strong); border-radius: 7px; background: var(--color-surface-solid); color: var(--color-content); font: inherit; }
+.chat-breadcrumb-rename input:focus { border-color: var(--color-oxblood); outline: 2px solid color-mix(in srgb, var(--color-oxblood) 22%, transparent); outline-offset: 1px; }
+.chat-breadcrumb-rename button { width: 28px; height: 28px; flex: 0 0 28px; border: 0; border-radius: 7px; background: var(--color-action-subtle); color: var(--color-oxblood); cursor: pointer; }
 .dashboard-command-date { gap: 9px; color: var(--color-content); font-size: .78rem; }
 .dashboard-command-date svg, .dashboard-command-bar nav > button svg, .dashboard-command-bar nav > a > svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
 .dashboard-command-bar nav { gap: 8px; }

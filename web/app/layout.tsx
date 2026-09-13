@@ -10,8 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){var m=document.cookie.match(/(?:^|; )vivadeo_theme=([^;]+)/);var p=m?decodeURIComponent(m[1]):'system';var a=location.pathname==='/'||/^\\/(?:sign-in|sign-up|forgot-password|reset-password|verify-email|invite)(?:\\/|$)/.test(location.pathname);var d=!a&&(p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches));document.documentElement.dataset.theme=d?'dark':'light';document.documentElement.dataset.themePreference=p;}())` }} />
+      </head>
+      <body>
         <ThemeSync />
         <main>{children}</main>
       </body>

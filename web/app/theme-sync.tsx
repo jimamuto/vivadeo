@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
+import { usePathname } from "next/navigation";
 
 export type ThemePreference = "light" | "dark" | "system";
 
@@ -17,12 +18,19 @@ export function applyTheme(preference: ThemePreference) {
 }
 
 export function ThemeSync() {
-  useEffect(() => {
+  const pathname = usePathname();
+
+  useLayoutEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
 
-    if (usesFixedLightTheme(window.location.pathname)) {
+    if (usesFixedLightTheme(pathname)) {
       document.documentElement.dataset.theme = "light";
       return;
+    }
+
+    const savedPreference = document.documentElement.dataset.themePreference;
+    if (savedPreference === "light" || savedPreference === "dark" || savedPreference === "system") {
+      applyTheme(savedPreference);
     }
 
     const syncSystemTheme = () => {
@@ -44,7 +52,7 @@ export function ThemeSync() {
       .catch(() => undefined);
 
     return () => media.removeEventListener("change", syncSystemTheme);
-  }, []);
+  }, [pathname]);
 
   return null;
 }

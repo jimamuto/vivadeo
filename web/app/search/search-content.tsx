@@ -1372,6 +1372,7 @@ export function SearchContent({
   }
 
   async function deleteThread(thread: ChatThread) {
+    if (!window.confirm(`Delete “${thread.title}”? This cannot be undone.`)) return;
     const response = await fetch(`/api/proxy/v1/chat/threads/${thread.id}`, { method: "DELETE" });
     if (!response.ok) return;
     const remaining = threads.filter((item) => item.id !== thread.id);
@@ -1410,6 +1411,25 @@ export function SearchContent({
       workspace={activeWorkspace}
       profileInitial={profileInitial}
       profileName={profileName}
+      breadcrumbDetail={activeThread?.turns.length ? (
+        renamingThreadId === activeThread.id ? (
+          <form className="chat-breadcrumb-rename" onSubmit={(event) => { event.preventDefault(); void saveThreadRename(activeThread); }}>
+            <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
+            <button type="submit" aria-label="Save chat name">✓</button>
+          </form>
+        ) : activeThread.title
+      ) : undefined}
+      breadcrumbActions={activeThread?.turns.length ? (
+        <span className={`chat-breadcrumb-menu${threadMenuId === `breadcrumb:${activeThread.id}` ? " menu-open" : ""}`}>
+          <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === `breadcrumb:${activeThread.id}` ? null : `breadcrumb:${activeThread.id}`); }} aria-label={`More actions for ${activeThread.title}`} aria-expanded={threadMenuId === `breadcrumb:${activeThread.id}`}>•••</button>
+          {threadMenuId === `breadcrumb:${activeThread.id}` ? <span className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
+            <button type="button" onClick={() => beginRenameThread(activeThread)}>Rename chat</button>
+            <button type="button" onClick={() => void updateThreadMetadata(activeThread, { pinned: !activeThread.pinned })}>{activeThread.pinned ? "Unpin chat" : "Pin chat"}</button>
+            <button type="button" onClick={() => void updateThreadMetadata(activeThread, { archived: true })}>Archive chat</button>
+            <button type="button" onClick={() => void deleteThread(activeThread)}>Delete chat</button>
+          </span> : null}
+        </span>
+      ) : undefined}
       sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recent chats">
         <div className="sidebar-recent-chats-head"><span>Recent chats</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
         <div className="sidebar-recent-chats-list">
@@ -1417,15 +1437,15 @@ export function SearchContent({
             <section className="sidebar-chat-timeline" key={group.label}>
               <h3>{group.label}</h3>
               {group.threads.slice(0, 8).map((thread) => (
-                <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === thread.id ? "menu-open" : ""}`}>
+                <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === `sidebar:${thread.id}` ? "menu-open" : ""}`}>
                   {renamingThreadId === thread.id ? (
                     <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
                       <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
                       <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
                     </div>
                   ) : <button type="button" className="sidebar-recent-chat-open" onClick={() => openThread(thread)} title={thread.title}><TypedText text={thread.title} className="chat-greeting-typed" /></button>}
-                  <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} aria-expanded={threadMenuId === thread.id}>•••</button>
-                  {threadMenuId === thread.id ? <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
+                  <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === `sidebar:${thread.id}` ? null : `sidebar:${thread.id}`); }} aria-label={`More actions for ${thread.title}`} aria-expanded={threadMenuId === `sidebar:${thread.id}`}>•••</button>
+                  {threadMenuId === `sidebar:${thread.id}` ? <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
                     <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
                     <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
                     <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
@@ -1837,7 +1857,7 @@ export function SearchContent({
                     <h3>{group.label}</h3>
                     <div className="chat-history-group-list">
                     {group.threads.map((thread) => (
-                      <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === thread.id ? "menu-open" : ""}`}>
+                      <div key={thread.id} className={`chat-history-row ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === `history:${thread.id}` ? "menu-open" : ""}`}>
                     {renamingThreadId === thread.id ? (
                       <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
                         <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
@@ -1848,9 +1868,9 @@ export function SearchContent({
                         <span>{thread.pinned ? "★ " : ""}{thread.title}</span><small>{thread.id === activeThreadId ? "Current chat" : thread.turns.length ? `${thread.turns.length} messages` : "Empty chat"}{thread.read === false ? " · Unread" : ""}</small>
                       </button>
                     )}
-                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === thread.id ? null : thread.id); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage chat">•••</button>
+                    <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === `history:${thread.id}` ? null : `history:${thread.id}`); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage chat">•••</button>
                     <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete chat">×</button>
-                    {threadMenuId === thread.id ? (
+                    {threadMenuId === `history:${thread.id}` ? (
                       <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => openThread(thread)}>Open chat</button>
                         <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>

@@ -63,6 +63,8 @@ export function DashboardShell({
   profileName,
   profileImage,
   sidebarContent,
+  breadcrumbDetail,
+  breadcrumbActions,
   children,
 }: Readonly<{
   workspace: string;
@@ -70,6 +72,8 @@ export function DashboardShell({
   profileName?: string;
   profileImage?: string | null;
   sidebarContent?: ReactNode;
+  breadcrumbDetail?: ReactNode;
+  breadcrumbActions?: ReactNode;
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
@@ -236,7 +240,18 @@ export function DashboardShell({
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
                   <span aria-current="page">{settingsSectionLabel}</span>
                 </>
-              ) : <span aria-current="page">{pageLabel}</span>}
+              ) : (
+                <>
+                  <span aria-current={breadcrumbDetail ? undefined : "page"}>{pageLabel}</span>
+                  {breadcrumbDetail ? (
+                    <>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                      <span className="dashboard-breadcrumb-detail" aria-current="page">{breadcrumbDetail}</span>
+                      {breadcrumbActions ? <span className="dashboard-breadcrumb-actions">{breadcrumbActions}</span> : null}
+                    </>
+                  ) : null}
+                </>
+              )}
             </nav>
           </div>
           <nav aria-label="Workspace actions">
