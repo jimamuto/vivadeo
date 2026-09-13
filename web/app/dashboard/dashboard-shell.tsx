@@ -87,6 +87,7 @@ export function DashboardShell({
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const isSettingsPage = pathname.startsWith("/settings");
   const settingsSection = pathname.startsWith("/settings/") ? pathname.split("/")[2] : "";
   const settingsSectionLabel = getSettingsSectionLabel(settingsSection);
   const pageLabel = pathname.startsWith("/dashboard/library")
@@ -95,7 +96,7 @@ export function DashboardShell({
       ? "History"
       : pathname.startsWith("/dashboard/ingest")
         ? "Ingest"
-        : pathname.startsWith("/settings")
+        : isSettingsPage
           ? "Settings"
           : pathname.startsWith("/jobs")
             ? "Job progress"
@@ -215,7 +216,7 @@ export function DashboardShell({
             <button className="dash-nav-item" type="button" onClick={onStartNewChat} aria-label="New chat" data-tooltip="New chat">
               <NavGlyph icon="chat" /><span>New chat</span>
             </button>
-          ) : <NavItem href="/chat" label="New chat" icon="chat" showActive={false} />}
+          ) : <NavItem href="/chat" label={isSettingsPage ? "Back to chats" : "New chat"} icon="chat" showActive={false} />}
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>

@@ -664,6 +664,8 @@ export function SearchContent({
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [activeChatJobId, setActiveChatJobId] = useState<string | null>(null);
   const [threadMenuId, setThreadMenuId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatThread | null>(null);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
   const [renamingTitle, setRenamingTitle] = useState("");
   const [threadSearch, setThreadSearch] = useState("");
@@ -1428,12 +1430,23 @@ export function SearchContent({
     }
   }
 
+  function requestDeleteThread(thread: ChatThread) {
+    setThreadMenuId(null);
+    setDeleteTarget(thread);
+  }
+
   async function deleteThread(thread: ChatThread) {
-    if (!window.confirm(`Delete “${thread.title}”? This cannot be undone.`)) return;
+    setDeletingThreadId(thread.id);
     const response = await fetch(`/api/proxy/v1/chat/threads/${thread.id}`, { method: "DELETE" });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setDeletingThreadId(null);
+      setStatus("Could not delete that chat. Please try again.");
+      return;
+    }
     const remaining = threads.filter((item) => item.id !== thread.id);
     setThreads(remaining);
+    setDeleteTarget(null);
+    setDeletingThreadId(null);
     if (thread.id === activeThreadId) {
       if (remaining[0]) openThread(remaining[0]);
       else startNewThread();
@@ -1483,7 +1496,7 @@ export function SearchContent({
             <button type="button" onClick={() => beginRenameThread(activeThread)}>Rename chat</button>
             <button type="button" onClick={() => void updateThreadMetadata(activeThread, { pinned: !activeThread.pinned })}>{activeThread.pinned ? "Unpin chat" : "Pin chat"}</button>
             <button type="button" onClick={() => void updateThreadMetadata(activeThread, { archived: true })}>Archive chat</button>
-            <button type="button" onClick={() => void deleteThread(activeThread)}>Delete chat</button>
+            <button type="button" onClick={() => requestDeleteThread(activeThread)}>Delete chat</button>
           </span> : null}
         </span>
       ) : undefined}
@@ -1503,7 +1516,7 @@ export function SearchContent({
                 <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
                 <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
                 <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
-                <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
+                <button type="button" onClick={() => requestDeleteThread(thread)}>Delete chat</button>
               </div> : null}
             </div>
           ))}
@@ -1932,7 +1945,7 @@ export function SearchContent({
                       </button>
                     )}
                     <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === `history:${thread.id}` ? null : `history:${thread.id}`); }} aria-label={`More actions for ${thread.title}`} data-tooltip="Manage chat">•••</button>
-                    <button type="button" className="chat-thread-delete" onClick={() => void deleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete chat">×</button>
+                    <button type="button" className="chat-thread-delete" onClick={() => requestDeleteThread(thread)} aria-label={`Delete ${thread.title}`} data-tooltip="Delete chat">×</button>
                     {threadMenuId === `history:${thread.id}` ? (
                       <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => openThread(thread)}>Open chat</button>
@@ -1940,7 +1953,7 @@ export function SearchContent({
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { read: thread.read === false })}>{thread.read === false ? "Mark read" : "Mark unread"}</button>
                         <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
-                        <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
+                        <button type="button" onClick={() => requestDeleteThread(thread)}>Delete chat</button>
                       </div>
                     ) : null}
                       </div>
@@ -1951,6 +1964,42 @@ export function SearchContent({
               </div>
             </aside> : null}
       </section>
+
+      {deleteTarget && typeof document !== "undefined" ? createPortal(
+        <div
+          className="chat-delete-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deletingThreadId) setDeleteTarget(null);
+          }}
+        >
+          <section
+            className="chat-delete-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="chat-delete-title"
+            aria-describedby="chat-delete-description"
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !deletingThreadId) setDeleteTarget(null);
+            }}
+          >
+            <span className="chat-delete-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" /></svg>
+            </span>
+            <div className="chat-delete-copy">
+              <h2 id="chat-delete-title">Delete this chat?</h2>
+              <p id="chat-delete-description">“{deleteTarget.title}” and its conversation history will be permanently removed.</p>
+            </div>
+            <div className="chat-delete-actions">
+              <button type="button" className="chat-delete-cancel" autoFocus disabled={Boolean(deletingThreadId)} onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button type="button" className="chat-delete-confirm" disabled={Boolean(deletingThreadId)} aria-busy={deletingThreadId === deleteTarget.id} onClick={() => void deleteThread(deleteTarget)}>
+                {deletingThreadId === deleteTarget.id ? "Deleting…" : "Delete chat"}
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.body,
+      ) : null}
     </DashboardShell>
   );
 }
