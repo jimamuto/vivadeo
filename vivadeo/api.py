@@ -511,6 +511,20 @@ def _slugify(value: str) -> str:
     return slug or "workspace"
 
 
+def _chat_title_from_prompt(prompt: str) -> str:
+    """Create a compact sentence-case title from a chat's first user prompt."""
+    contained_url = bool(re.search(r"https?://\S+", prompt, flags=re.IGNORECASE))
+    title = re.sub(r"https?://\S+", " ", prompt, flags=re.IGNORECASE)
+    title = " ".join(title.split()).strip(" -–—:;,.")
+    if not title:
+        return "Video conversation" if contained_url else "New chat"
+    title = title[0].upper() + title[1:]
+    if len(title) <= 80:
+        return title
+    shortened = title[:80].rsplit(" ", 1)[0].rstrip(" -–—:;,.")
+    return f"{shortened or title[:80].rstrip()}…"
+
+
 def _unique_workspace_slug(session: Session, base_slug: str) -> str:
     slug = base_slug
     suffix = 2
@@ -1799,7 +1813,7 @@ def _complete_chat_message(
     assistant.error = None
     assistant.updated_at = utcnow()
     if thread.title == "New thread":
-        thread.title = " ".join(parent.content.split())[:255] or "New thread"
+        thread.title = _chat_title_from_prompt(parent.content)
     thread.current_message_id = assistant.id
     thread.updated_at = utcnow()
     session.commit()
@@ -2624,7 +2638,7 @@ def search_chat(
         _finish_search_run(search_run, status="completed", summary=verification_summary)
         if thread is not None:
             if thread.title == "New thread":
-                thread.title = " ".join(question.split())[:255] or "New thread"
+                thread.title = _chat_title_from_prompt(question)
             assistant = _append_chat_message(
                 thread,
                 session=session,
@@ -2655,7 +2669,7 @@ def search_chat(
     assistant_message: ChatThreadMessage | None = None
     try:
         if thread is not None and thread.title == "New thread":
-            thread.title = " ".join(question.split())[:255] or "New thread"
+            thread.title = _chat_title_from_prompt(question)
         if thread is not None:
             assistant_message = _append_chat_message(
                 thread,
@@ -3074,7 +3088,7 @@ def regenerate_chat_message(
     replacement.status = "completed"
     replacement.error = None
     if thread.title == "New thread":
-        thread.title = " ".join(parent.content.split())[:255] or "New thread"
+        thread.title = _chat_title_from_prompt(parent.content)
     thread.current_message_id = replacement.id
     thread.updated_at = utcnow()
     session.commit()

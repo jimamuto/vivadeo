@@ -337,6 +337,20 @@ def test_append_chat_message_updates_current_branch_pointer():
     assert thread.messages == [message]
 
 
+def test_chat_title_uses_meaningful_prompt_text_instead_of_url():
+    title = api._chat_title_from_prompt(
+        "https://youtu.be/XRKjMvfYV0o?si=example tell me features about this iphone duo"
+    )
+
+    assert title == "Tell me features about this iphone duo"
+
+
+def test_chat_title_is_capitalized_and_bounded():
+    assert api._chat_title_from_prompt("who are you?") == "Who are you?"
+    assert api._chat_title_from_prompt("https://example.com/video") == "Video conversation"
+    assert len(api._chat_title_from_prompt("word " * 40)) <= 81
+
+
 def test_editing_chat_prompt_branches_before_the_edited_message(monkeypatch):
     edited = SimpleNamespace(id="user-old", parent_id="answer-before", role="user")
     thread = SimpleNamespace(id="thread-1", sources=[], messages=[edited], current_message_id="answer-after")

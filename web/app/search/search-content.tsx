@@ -1487,8 +1487,8 @@ export function SearchContent({
           </span> : null}
         </span>
       ) : undefined}
-      sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recent chats">
-        <div className="sidebar-recent-chats-head"><span>Recent chats</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
+      sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recents">
+        <div className="sidebar-recent-chats-head"><span>Recents</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
         <div className="sidebar-recent-chats-list">
           {filteredThreads.slice(0, 8).map((thread) => (
             <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === `sidebar:${thread.id}` ? "menu-open" : ""}`}>
