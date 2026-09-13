@@ -628,6 +628,7 @@ export function SearchContent({
   const [turns, setTurns] = useState<ChatTurn[]>(initialThread?.turns || []);
   const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
   const [activeThreadId, setActiveThreadId] = useState(initialThread?.id || "");
+  const [restoringThread, setRestoringThread] = useState(Boolean(initialThreadId && (!initialThread || initialThread.turns.length === 0)));
   const [activeSourceIds, setActiveSourceIds] = useState<string[]>(() => {
     const latest = initialThread?.sources.at(-1);
     return latest ? [latest.video_id] : initialVideoIds;
@@ -746,27 +747,36 @@ export function SearchContent({
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load chats");
         const payload = (await response.json()) as Array<Parameters<typeof normalizeThread>[0]>;
-        const loadedThreads = payload.map(normalizeThread).filter((thread) => thread.turns.length > 0);
+        const loadedThreads = payload.map(normalizeThread);
         if (loadedThreads.length) {
           setThreads(loadedThreads);
-          const selectedId = loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
+          const selectedId = initialThreadId && loadedThreads.some((thread) => thread.id === initialThreadId)
+            ? initialThreadId
+            : loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
           setActiveThreadId(selectedId);
           setTurns(loadedThreads.find((thread) => thread.id === selectedId)?.turns || []);
+          setRestoringThread(false);
           return;
         }
         if (threads.length) return;
         setActiveThreadId("");
         setTurns([]);
+        setRestoringThread(false);
       })
-      .catch(() => undefined);
+      .catch(() => setRestoringThread(false));
   }, []);
 
   useEffect(() => {
-    if (!initialThreadId || initialThreadId === activeThreadId) return;
-    const requestedThread = threads.find((thread) => thread.id === initialThreadId && !thread.archived);
-    if (!requestedThread) return;
+    if (!initialThreadId) { setRestoringThread(false); return; }
+    const requestedThread = threads.find((thread) => thread.id === initialThreadId && !thread.archived)
+      || initialThreads.find((thread) => thread.id === initialThreadId && !thread.archived);
+    if (!requestedThread) { setRestoringThread(true); return; }
+    if (!threads.some((thread) => thread.id === requestedThread.id)) {
+      setThreads((current) => [requestedThread, ...current]);
+    }
     setActiveThreadId(requestedThread.id);
     setTurns(requestedThread.turns);
+    if (requestedThread.turns.length > 0) setRestoringThread(false);
     setQuestion("");
     setStatus(null);
     setMomentContext(null);
@@ -774,7 +784,7 @@ export function SearchContent({
     setActiveSourceIds(latestSource ? [latestSource.video_id] : []);
     setUploadItems([]);
     setThreadMenuId(null);
-  }, [initialThreadId]);
+  }, [initialThreadId, initialThreads]);
 
   useEffect(() => {
     window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches));
@@ -803,7 +813,7 @@ export function SearchContent({
         setThreads((current) => current.some((item) => item.id === nextThread.id) ? current : [nextThread, ...current]);
         setActiveThreadId(nextThread.id);
         setTurns(nextThread.turns);
-        router.replace(`/chat?thread=${encodeURIComponent(nextThread.id)}`, { scroll: false });
+        window.history.replaceState(null, "", `/chat?thread=${encodeURIComponent(nextThread.id)}`);
         return nextThread.id;
       })
       .catch((cause) => {
@@ -1521,7 +1531,7 @@ export function SearchContent({
           ) : null}
         </aside>
 
-        <div className={`search-main ${turns.length ? "chat-main-active" : "chat-main-empty"}`}>
+        <div className={`search-main ${turns.length || restoringThread ? "chat-main-active" : "chat-main-empty"}`}>
           <section key={`composer-${newChatMotionKey}`} className={`surface-section search-query${turns.length === 0 ? " chat-new-composer-enter" : ""}`}>
             <input
               ref={uploadInputRef}
@@ -1670,7 +1680,14 @@ export function SearchContent({
 
           <section className="search-layout">
             <section ref={chatFeedRef} className={`search-feed ${turns.length ? "chat-feed-active" : "chat-feed-empty"}`} aria-busy={loading}>
-              {turns.length === 0 ? (
+              {restoringThread ? (
+                <article className="search-result chat-thread-restoring" aria-live="polite" aria-label="Opening conversation">
+                  <span>Opening conversation</span>
+                  <i aria-hidden="true" />
+                  <i aria-hidden="true" />
+                  <i aria-hidden="true" />
+                </article>
+              ) : turns.length === 0 ? (
                 <article key={`empty-${newChatMotionKey}`} className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"} chat-new-copy-enter`}>
                   <h3 className="chat-greeting">{showGreeting ? <TypedText text={`${greeting}, ${firstName}`} className="chat-greeting-typed" /> : "New chat"}</h3>
                   <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this chat."}</p>

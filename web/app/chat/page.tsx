@@ -4,6 +4,33 @@ import { auth } from "@/lib/auth";
 import { SearchContent, type ChatThread } from "@/app/search/search-content";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 
+type BackendThread = {
+  id: string;
+  title: string;
+  updated_at: string;
+  current_message_id?: string | null;
+  pinned?: boolean;
+  archived?: boolean;
+  read?: boolean;
+  messages: ChatThread["turns"];
+  sources?: ChatThread["sources"];
+};
+
+function toChatThread(thread: BackendThread): ChatThread {
+  return {
+    id: thread.id,
+    title: thread.title === "New thread" ? "New chat" : thread.title,
+    updatedAt: thread.updated_at,
+    messages: thread.messages,
+    turns: thread.messages,
+    currentMessageId: thread.current_message_id,
+    pinned: thread.pinned,
+    archived: thread.archived,
+    read: thread.read,
+    sources: thread.sources || [],
+  };
+}
+
 export default async function ChatPage({
   searchParams,
 }: {
@@ -16,24 +43,24 @@ export default async function ChatPage({
   let initialThreads: ChatThread[] = [];
   let onboardingCompleted = false;
   try {
-    const [threadsResponse, onboardingResponse] = await Promise.all([
+    const [threadsResponse, onboardingResponse, requestedThreadResponse] = await Promise.all([
       fetch(getBackendUrl("/v1/chat/threads"), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" }),
       fetch(getBackendUrl("/v1/chat/onboarding"), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" }),
+      params.thread
+        ? fetch(getBackendUrl(`/v1/chat/threads/${encodeURIComponent(params.thread)}`), { headers: getBackendHeaders(undefined, workspace), cache: "no-store" })
+        : Promise.resolve(null),
     ]);
     if (threadsResponse.ok) {
-      const payload = (await threadsResponse.json()) as Array<{ id: string; title: string; updated_at: string; current_message_id?: string | null; pinned?: boolean; archived?: boolean; read?: boolean; messages: ChatThread["turns"]; sources?: ChatThread["sources"] }>;
-      initialThreads = payload.map((thread) => ({
-        id: thread.id,
-        title: thread.title,
-        updatedAt: thread.updated_at,
-        messages: thread.messages,
-        turns: thread.messages,
-        currentMessageId: thread.current_message_id,
-        pinned: thread.pinned,
-        archived: thread.archived,
-        read: thread.read,
-        sources: thread.sources || [],
-      }));
+      const payload = (await threadsResponse.json()) as BackendThread[];
+      initialThreads = payload.map(toChatThread);
+    }
+    if (requestedThreadResponse?.ok) {
+      const requestedThread = toChatThread(await requestedThreadResponse.json() as BackendThread);
+      const listedThread = initialThreads.find((thread) => thread.id === requestedThread.id);
+      const hydratedThread = listedThread && listedThread.turns.length > requestedThread.turns.length
+        ? listedThread
+        : requestedThread;
+      initialThreads = [hydratedThread, ...initialThreads.filter((thread) => thread.id !== requestedThread.id)];
     }
     if (onboardingResponse.ok) onboardingCompleted = Boolean((await onboardingResponse.json()).completed);
   } catch {
@@ -50,7 +77,7 @@ export default async function ChatPage({
         initialVideoIds={params.video_ids ? params.video_ids.split(",").filter(Boolean) : []}
         initialWorkspace={workspace}
         initialThreads={initialThreads}
-        initialThreadId={initialThreads.some((thread) => thread.id === params.thread) ? params.thread : undefined}
+        initialThreadId={params.thread}
         initialOnboardingCompleted={onboardingCompleted}
       />
     </Suspense>
