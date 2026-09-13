@@ -47,9 +47,9 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
 
-function NavItem({ href, label, icon, activePaths = [] }: { href: string; label: string; icon: NavIcon; activePaths?: string[] }) {
+function NavItem({ href, label, icon, activePaths = [], showActive = true }: { href: string; label: string; icon: NavIcon; activePaths?: string[]; showActive?: boolean }) {
   const pathname = usePathname();
-  const active = [href, ...activePaths].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const active = showActive && [href, ...activePaths].some((path) => pathname === path || pathname.startsWith(`${path}/`));
   return (
     <Link className={`dash-nav-item${active ? " is-active" : ""}`} href={href as any} aria-label={label} data-tooltip={label}>
       <NavGlyph icon={icon} /><span>{label}</span>
@@ -65,6 +65,7 @@ export function DashboardShell({
   sidebarContent,
   breadcrumbDetail,
   breadcrumbActions,
+  onStartNewChat,
   children,
 }: Readonly<{
   workspace: string;
@@ -74,6 +75,7 @@ export function DashboardShell({
   sidebarContent?: ReactNode;
   breadcrumbDetail?: ReactNode;
   breadcrumbActions?: ReactNode;
+  onStartNewChat?: () => void;
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
@@ -209,7 +211,11 @@ export function DashboardShell({
         </div>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">General</span>
-          <NavItem href="/chat" label="Chat" icon="chat" />
+          {onStartNewChat ? (
+            <button className="dash-nav-item" type="button" onClick={onStartNewChat} aria-label="New chat" data-tooltip="New chat">
+              <NavGlyph icon="chat" /><span>New chat</span>
+            </button>
+          ) : <NavItem href="/chat" label="New chat" icon="chat" showActive={false} />}
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>

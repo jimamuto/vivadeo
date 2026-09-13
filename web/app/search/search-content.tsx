@@ -1490,30 +1490,26 @@ export function SearchContent({
       sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recent chats">
         <div className="sidebar-recent-chats-head"><span>Recent chats</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
         <div className="sidebar-recent-chats-list">
-          {groupedThreads.map((group) => (
-            <section className="sidebar-chat-timeline" key={group.label}>
-              <h3>{group.label}</h3>
-              {group.threads.slice(0, 8).map((thread) => (
-                <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === `sidebar:${thread.id}` ? "menu-open" : ""}`}>
-                  {renamingThreadId === thread.id ? (
-                    <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
-                      <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
-                      <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
-                    </div>
-                  ) : <button type="button" className="sidebar-recent-chat-open" onClick={() => openThread(thread)} title={thread.title}><TypedText text={thread.title} className="chat-greeting-typed" /></button>}
-                  <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === `sidebar:${thread.id}` ? null : `sidebar:${thread.id}`); }} aria-label={`More actions for ${thread.title}`} aria-expanded={threadMenuId === `sidebar:${thread.id}`}>•••</button>
-                  {threadMenuId === `sidebar:${thread.id}` ? <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
-                    <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
-                    <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
-                    <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
-                    <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
-                  </div> : null}
+          {filteredThreads.slice(0, 8).map((thread) => (
+            <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === `sidebar:${thread.id}` ? "menu-open" : ""}`}>
+              {renamingThreadId === thread.id ? (
+                <div className="chat-thread-rename" onPointerDown={(event) => event.stopPropagation()}>
+                  <input autoFocus value={renamingTitle} onChange={(event) => setRenamingTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveThreadRename(thread); } if (event.key === "Escape") { setRenamingThreadId(null); setRenamingTitle(""); } }} aria-label="Chat name" />
+                  <button type="button" onClick={() => void saveThreadRename(thread)} aria-label="Save chat name">✓</button>
                 </div>
-              ))}
-            </section>
+              ) : <button type="button" className="sidebar-recent-chat-open" onClick={() => openThread(thread)} title={thread.title}><TypedText text={thread.title} className="chat-greeting-typed" /></button>}
+              <button type="button" className="chat-thread-more" onClick={(event) => { event.stopPropagation(); setThreadMenuId((current) => current === `sidebar:${thread.id}` ? null : `sidebar:${thread.id}`); }} aria-label={`More actions for ${thread.title}`} aria-expanded={threadMenuId === `sidebar:${thread.id}`}>•••</button>
+              {threadMenuId === `sidebar:${thread.id}` ? <div className="chat-thread-menu" onPointerDown={(event) => event.stopPropagation()}>
+                <button type="button" onClick={() => beginRenameThread(thread)}>Rename chat</button>
+                <button type="button" onClick={() => void updateThreadMetadata(thread, { pinned: !thread.pinned })}>{thread.pinned ? "Unpin chat" : "Pin chat"}</button>
+                <button type="button" onClick={() => void updateThreadMetadata(thread, { archived: true })}>Archive chat</button>
+                <button type="button" onClick={() => void deleteThread(thread)}>Delete chat</button>
+              </div> : null}
+            </div>
           ))}
         </div>
       </section> : null}
+      onStartNewChat={startNewThread}
     >
       <section className="search-shell chat-shell fade-in">
         <aside className="search-filters surface-section">
