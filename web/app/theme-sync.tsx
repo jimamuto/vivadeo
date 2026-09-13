@@ -5,16 +5,25 @@ import { usePathname } from "next/navigation";
 
 export type ThemePreference = "light" | "dark" | "system";
 
+let transitionTimer: number | undefined;
+
 const AUTH_ROUTE_PATTERN = /^\/(?:sign-in|sign-up|forgot-password|reset-password|verify-email|invite)(?:\/|$)/;
 
 function usesFixedLightTheme(pathname: string) {
   return pathname === "/" || AUTH_ROUTE_PATTERN.test(pathname);
 }
 
-export function applyTheme(preference: ThemePreference) {
+export function applyTheme(preference: ThemePreference, animate = false) {
+  const root = document.documentElement;
+  if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.clearTimeout(transitionTimer);
+    root.classList.add("theme-transitioning");
+    void getComputedStyle(root).color;
+    transitionTimer = window.setTimeout(() => root.classList.remove("theme-transitioning"), 220);
+  }
   const dark = preference === "dark" || (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
-  document.documentElement.dataset.themePreference = preference;
+  root.dataset.theme = dark ? "dark" : "light";
+  root.dataset.themePreference = preference;
 }
 
 export function ThemeSync() {

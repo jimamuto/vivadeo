@@ -248,7 +248,7 @@ export function AccountSettingsPanel({
                 checked={theme === option}
                 onChange={() => {
                   setTheme(option);
-                  applyTheme(option);
+                  applyTheme(option, true);
                   void savePreferences({ theme: option });
                 }}
               />
