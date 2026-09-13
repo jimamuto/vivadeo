@@ -77,6 +77,7 @@ export function DashboardShell({
   const [activeCommand, setActiveCommand] = useState(0);
   const paletteRef = useRef<HTMLDialogElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
+  const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const pageLabel = pathname.startsWith("/dashboard/library")
@@ -117,6 +118,27 @@ export function DashboardShell({
   }, [paletteOpen]);
 
   useEffect(() => setActiveCommand(0), [paletteQuery]);
+
+  useEffect(() => {
+    function closeAccountMenu(event: PointerEvent) {
+      const menu = accountMenuRef.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    }
+
+    function closeAccountMenuWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape" && accountMenuRef.current?.open) {
+        accountMenuRef.current.open = false;
+        accountMenuRef.current.querySelector<HTMLElement>("summary")?.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", closeAccountMenu);
+    document.addEventListener("keydown", closeAccountMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeAccountMenu);
+      document.removeEventListener("keydown", closeAccountMenuWithKeyboard);
+    };
+  }, []);
 
   function closePalette() {
     setPaletteOpen(false);
@@ -217,7 +239,7 @@ export function DashboardShell({
             <Link href="/dashboard/jobs" aria-label="View activity">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
             </Link>
-            <details className="dashboard-command-account">
+            <details ref={accountMenuRef} className="dashboard-command-account">
               <summary className="dashboard-command-profile" aria-label="Open account menu">
                 <span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
                 <strong>{profileName || profileInitial}</strong>
