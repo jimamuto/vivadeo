@@ -1832,7 +1832,7 @@ export function SearchContent({
                               onFocus={(citation, prompt) => focusMoment(citation, prompt, turn.search_run_id)}
                             />
                           ) : <div className="search-citation-scroller" aria-label="Relevant video moments">
-                            <div className={`search-citation-filmstrip ${citations.length === 1 ? "is-single" : ""}`}>
+                            <div className={`search-citation-filmstrip ${citations.length <= 2 ? "is-short" : ""}`}>
                               <span className="search-citation-sprockets" aria-hidden="true" />
                               <div className="search-citation-filmstrip-frames">
                             {visibleCitations.map((citation, citationIndex) => {
@@ -1853,7 +1853,6 @@ export function SearchContent({
                                   <div className="chat-evidence-actions">
                                     <div className="chat-evidence-summary-row">
                                       <span className={`chat-evidence-status chat-evidence-status-${verification}`} aria-label={`Evidence status: ${verification}`}>{verification === "verified" ? "Verified" : verification === "possible" ? "Possible match" : "Not relevant"}</span>
-                                      {citation.match_reason ? <span className="chat-evidence-reason">{citation.match_reason}</span> : null}
                                     </div>
                                     <div className="chat-evidence-controls">
                                       <button type="button" className={feedback === "relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "relevant")}>Relevant</button>
