@@ -5,6 +5,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
+import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
 type NavIcon = "chat" | "ingest" | "library" | "jobs";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
@@ -16,10 +17,10 @@ const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
   { label: "Job history", description: "Review uploads, imports, and processing", href: "/dashboard/jobs", group: "Workspace", icon: "jobs", keywords: "history status progress failed jobs processing" },
   { label: "Workspace", description: "Manage members and workspace access", href: "/dashboard/workspace", group: "Workspace", icon: "workspace", keywords: "organization team members roles invites" },
-  { label: "Profile settings", description: "Update your profile and preferences", href: "/settings#account", group: "Settings", icon: "profile", keywords: "account name avatar timezone preferences" },
-  { label: "Security", description: "Manage password and active sessions", href: "/settings#security", group: "Settings", icon: "shield", keywords: "password sessions login security" },
-  { label: "Data and privacy", description: "Review privacy and account controls", href: "/settings#privacy", group: "Settings", icon: "shield", keywords: "privacy data delete account" },
-  { label: "Answer service", description: "Configure how Vivadeo answers questions", href: "/settings#ai", group: "Settings", icon: "settings", keywords: "answer service provider model settings" },
+  { label: "Profile settings", description: "Update your profile and preferences", href: "/settings/account", group: "Settings", icon: "profile", keywords: "account name avatar timezone preferences" },
+  { label: "Security", description: "Manage your password", href: "/settings/security", group: "Settings", icon: "shield", keywords: "password login security" },
+  { label: "Data and privacy", description: "Review privacy and account controls", href: "/settings/privacy", group: "Settings", icon: "shield", keywords: "privacy data delete account" },
+  { label: "Answer service", description: "Configure how Vivadeo answers questions", href: "/settings/ai-providers", group: "Settings", icon: "settings", keywords: "answer service provider model settings" },
 ];
 
 function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
@@ -80,6 +81,8 @@ export function DashboardShell({
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const settingsSection = pathname.startsWith("/settings/") ? pathname.split("/")[2] : "";
+  const settingsSectionLabel = getSettingsSectionLabel(settingsSection);
   const pageLabel = pathname.startsWith("/dashboard/library")
     ? "Library"
     : pathname.startsWith("/dashboard/jobs")
@@ -227,7 +230,13 @@ export function DashboardShell({
             <nav className="dashboard-breadcrumb" aria-label="Breadcrumb">
               <Link href="/chat">Workspace</Link>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-              <span aria-current="page">{pageLabel}</span>
+              {settingsSectionLabel ? (
+                <>
+                  <Link href="/settings/account">Settings</Link>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                  <span aria-current="page">{settingsSectionLabel}</span>
+                </>
+              ) : <span aria-current="page">{pageLabel}</span>}
             </nav>
           </div>
           <nav aria-label="Workspace actions">
@@ -246,8 +255,8 @@ export function DashboardShell({
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
               </summary>
               <div className="dashboard-command-menu">
-                <Link href="/settings">Settings</Link>
-                <Link href="/settings#help">Help &amp; Feedback</Link>
+                <Link href="/settings/account">Settings</Link>
+                <Link href="/settings/account#help">Help &amp; Feedback</Link>
                 <form action="/api/auth/sign-out" method="post"><button type="submit">Log out</button></form>
               </div>
             </details>

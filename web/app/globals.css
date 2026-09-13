@@ -5462,3 +5462,126 @@ html[data-theme="dark"] .dashboard-wrap .chat-evidence-actions button:focus-visi
 html[data-theme="dark"] .dashboard-wrap .chat-evidence-actions button.is-active {
   color: var(--color-tan);
 }
+
+html[data-theme="dark"] .dashboard-wrap .chat-refinement-row {
+  color: var(--color-content-muted);
+}
+
+html[data-theme="dark"] .dashboard-wrap .chat-refinement-row > span {
+  color: var(--color-content);
+}
+
+html[data-theme="dark"] .dashboard-wrap .chat-refinement-row button,
+html[data-theme="dark"] .dashboard-wrap .chat-save-search,
+html[data-theme="dark"] .dashboard-wrap .chat-save-search-form button {
+  border-color: rgba(215, 206, 199, 0.22);
+  background: var(--color-surface);
+  color: var(--color-grain);
+}
+
+html[data-theme="dark"] .dashboard-wrap .chat-refinement-row button:hover,
+html[data-theme="dark"] .dashboard-wrap .chat-refinement-row button:focus-visible,
+html[data-theme="dark"] .dashboard-wrap .chat-save-search:hover,
+html[data-theme="dark"] .dashboard-wrap .chat-save-search:focus-visible,
+html[data-theme="dark"] .dashboard-wrap .chat-save-search-form button:hover,
+html[data-theme="dark"] .dashboard-wrap .chat-save-search-form button:focus-visible {
+  border-color: rgba(242, 236, 231, 0.72);
+  background: color-mix(in srgb, var(--color-grain) 8%, var(--color-surface));
+  color: var(--color-tan);
+  outline: 1px solid rgba(242, 236, 231, 0.72);
+  outline-offset: 2px;
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-player {
+  border-color: rgba(215, 206, 199, 0.2);
+  background: var(--color-surface);
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-transport {
+  border-color: rgba(215, 206, 199, 0.2);
+  background: var(--color-surface-rail);
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-transport button,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-time strong,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-ask {
+  color: var(--color-grain) !important;
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-transport > span,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-time span,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-reason {
+  color: color-mix(in srgb, var(--color-grain) 82%, var(--color-surface));
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter + .search-evidence-chapter {
+  border-color: rgba(215, 206, 199, 0.2);
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter.is-active {
+  background: color-mix(in srgb, var(--color-tan) 10%, var(--color-surface));
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter.is-active .search-evidence-chapter-time strong,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-transport button:hover,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-transport button:focus-visible,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-time:hover strong,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-time:focus-visible strong,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-ask:hover,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-ask:focus-visible {
+  color: var(--color-tan) !important;
+}
+
+html[data-theme="dark"] .dashboard-wrap .search-evidence-transport button:focus-visible,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-time:focus-visible,
+html[data-theme="dark"] .dashboard-wrap .search-evidence-chapter-ask:focus-visible {
+  border-radius: 4px;
+  outline: 1px solid rgba(242, 236, 231, 0.72);
+  outline-offset: 3px;
+}
+
+/* Settings routes render one focused section at a time. */
+.dashboard-wrap .settings-content .settings-section {
+  padding-block: 24px;
+}
+
+.dashboard-wrap .settings-content .profile-settings-grid,
+.dashboard-wrap .settings-content .preference-settings-grid {
+  grid-template-columns: minmax(180px, 220px) minmax(0, 920px);
+  gap: 28px;
+}
+
+.dashboard-wrap .settings-content .profile-details-layout {
+  grid-template-columns: minmax(0, 760px) 132px;
+  gap: 24px;
+}
+
+.dashboard-wrap .settings-content .field input,
+.dashboard-wrap .settings-content .field select {
+  height: 44px;
+  min-height: 44px;
+  padding-block: 9px;
+}
+
+.dashboard-wrap .settings-content .settings-standalone-section {
+  max-width: 900px;
+}
+
+.dashboard-wrap .settings-content .settings-compact-form {
+  max-width: 720px;
+}
+
+@media (max-width: 960px) {
+  .dashboard-wrap .settings-content .profile-settings-grid,
+  .dashboard-wrap .settings-content .preference-settings-grid {
+    grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-wrap .settings-content .profile-settings-grid,
+  .dashboard-wrap .settings-content .preference-settings-grid,
+  .dashboard-wrap .settings-content .profile-details-layout {
+    grid-template-columns: 1fr;
+  }
+}

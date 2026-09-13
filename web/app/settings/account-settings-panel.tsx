@@ -26,10 +26,7 @@ export function AccountSettingsPanel({
   const [timezone, setTimezone] = useState("Africa/Nairobi");
   const [dateFormat, setDateFormat] = useState("dd/MM/yyyy HH:mm");
   const [theme, setTheme] = useState<ThemePreference>("system");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [profileStatus, setProfileStatus] = useState<FetchStatus>({ state: "idle" });
-  const [passwordStatus, setPasswordStatus] = useState<FetchStatus>({ state: "idle" });
   const [verifyStatus, setVerifyStatus] = useState<FetchStatus>({ state: "idle" });
   const [avatarUrl, setAvatarUrl] = useState(profileImage || "");
   const [avatarStatus, setAvatarStatus] = useState<FetchStatus>({ state: "idle" });
@@ -82,7 +79,7 @@ export function AccountSettingsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          callbackURL: `${window.location.origin}/settings?verify=done`,
+          callbackURL: `${window.location.origin}/settings/account?verify=done`,
         }),
       });
       if (!response.ok) throw new Error(`Verification email failed (${response.status})`);
@@ -141,34 +138,6 @@ export function AccountSettingsPanel({
       setPreferencesStatus({ state: "ok", message: "Preferences saved." });
     } catch (cause) {
       setPreferencesStatus({ state: "error", message: cause instanceof Error ? cause.message : "Could not save preferences" });
-    }
-  }
-
-  async function changePassword() {
-    if (!currentPassword || !newPassword) {
-      setPasswordStatus({ state: "error", message: "Enter current and new password." });
-      return;
-    }
-    setPasswordStatus({ state: "loading" });
-    try {
-      const response = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-          revokeOtherSessions: false,
-        }),
-      });
-      if (!response.ok) throw new Error(`Password change failed (${response.status})`);
-      setCurrentPassword("");
-      setNewPassword("");
-      setPasswordStatus({ state: "ok", message: "Password changed." });
-    } catch (cause) {
-      setPasswordStatus({
-        state: "error",
-        message: cause instanceof Error ? cause.message : "Password change failed",
-      });
     }
   }
 
@@ -288,33 +257,6 @@ export function AccountSettingsPanel({
             </label>
           ))}
         </fieldset>
-      </div>
-
-      <div id="security" className="form settings-subsection">
-        <h3>Password</h3>
-        <p className="muted">Update your password.</p>
-        <div className="field">
-          <label htmlFor="currentPassword">Current password</label>
-          <input
-            id="currentPassword"
-            type="password"
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="newPassword">New password</label>
-          <input
-            id="newPassword"
-            type="password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-          />
-        </div>
-        <div className="dashboard-panel-links">
-          <button className="button-secondary" type="button" onClick={changePassword}>Change password</button>
-        </div>
-        {renderStatus(passwordStatus)}
       </div>
     </section>
   );
