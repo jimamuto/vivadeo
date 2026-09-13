@@ -1558,9 +1558,6 @@ export function SearchContent({
                 </div>;
               })}
             </div> : null}
-            {!momentContext && activeSources.length ? <div className="chat-active-sources" aria-label="Videos used for the next question">
-              {activeSources.map((source) => <button key={source.video_id} type="button" onClick={() => setActiveSourceIds((current) => current.filter((sourceId) => sourceId !== source.video_id))} title="Remove from next question"><span>Using:</span> {source.filename} <b aria-hidden="true">×</b></button>)}
-            </div> : null}
             <form className={`chat-composer${composerExpanded ? " is-expanded" : " is-compact"}`} onSubmit={submit}
               onFocus={(event) => { if (event.currentTarget.contains(event.target)) setComposerFocused(true); }}
               onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setComposerFocused(false); }}>
@@ -1650,9 +1647,16 @@ export function SearchContent({
                         </section>
                       </div>, document.body) : null}
                   </div>
+                  {!momentContext && activeSources.length ? <div className="chat-composer-sources" aria-label="Videos used for the next question">
+                    {activeSources.map((source) => <button key={source.video_id} type="button" onClick={() => setActiveSourceIds((current) => current.filter((sourceId) => sourceId !== source.video_id))} title={`Remove ${source.filename} from next question`}>
+                      <span className="chat-composer-source-label">Using:</span>
+                      <span className="chat-composer-source-name">{source.filename}</span>
+                      <b aria-hidden="true">×</b>
+                    </button>)}
+                  </div> : null}
                 </div>
                 <div className="chat-composer-meta">
-                  {activeSources.length ? <span className="chat-source-count">{activeSources.length} selected</span> : sourceCount ? <span className="chat-source-count">Latest video</span> : null}
+                  {!activeSources.length && sourceCount ? <span className="chat-source-count">Latest video</span> : null}
                   <span className="chat-character-count">{question.length.toLocaleString()} / 3,000</span>
                 </div>
               </div>
