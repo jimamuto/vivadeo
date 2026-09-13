@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
 
@@ -586,9 +587,11 @@ export function SearchContent({
   initialVideoIds = [],
   initialWorkspace = "default-workspace",
   initialThreads = [],
+  initialThreadId,
   initialOnboardingCompleted = false,
 }: {
   initialThreads?: ChatThread[];
+  initialThreadId?: string;
   initialOnboardingCompleted?: boolean;
   profileInitial: string;
   profileName?: string;
@@ -597,6 +600,8 @@ export function SearchContent({
   initialVideoIds?: string[];
   initialWorkspace?: string;
 }) {
+  const router = useRouter();
+  const initialThread = initialThreads.find((thread) => thread.id === initialThreadId) || initialThreads[0];
   const [activeWorkspace, setActiveWorkspace] = useState(initialWorkspace);
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
@@ -620,11 +625,11 @@ export function SearchContent({
   const [videosLoaded, setVideosLoaded] = useState(false);
   const [onboardingSeen, setOnboardingSeen] = useState(initialOnboardingCompleted);
   const [hydrated, setHydrated] = useState(false);
-  const [turns, setTurns] = useState<ChatTurn[]>(initialThreads[0]?.turns || []);
+  const [turns, setTurns] = useState<ChatTurn[]>(initialThread?.turns || []);
   const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
-  const [activeThreadId, setActiveThreadId] = useState(initialThreads[0]?.id || "");
+  const [activeThreadId, setActiveThreadId] = useState(initialThread?.id || "");
   const [activeSourceIds, setActiveSourceIds] = useState<string[]>(() => {
-    const latest = initialThreads[0]?.sources.at(-1);
+    const latest = initialThread?.sources.at(-1);
     return latest ? [latest.video_id] : initialVideoIds;
   });
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -757,6 +762,21 @@ export function SearchContent({
   }, []);
 
   useEffect(() => {
+    if (!initialThreadId || initialThreadId === activeThreadId) return;
+    const requestedThread = threads.find((thread) => thread.id === initialThreadId && !thread.archived);
+    if (!requestedThread) return;
+    setActiveThreadId(requestedThread.id);
+    setTurns(requestedThread.turns);
+    setQuestion("");
+    setStatus(null);
+    setMomentContext(null);
+    const latestSource = requestedThread.sources.at(-1);
+    setActiveSourceIds(latestSource ? [latestSource.video_id] : []);
+    setUploadItems([]);
+    setThreadMenuId(null);
+  }, [initialThreadId]);
+
+  useEffect(() => {
     window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches));
   }, [recentSearches]);
 
@@ -783,6 +803,7 @@ export function SearchContent({
         setThreads((current) => current.some((item) => item.id === nextThread.id) ? current : [nextThread, ...current]);
         setActiveThreadId(nextThread.id);
         setTurns(nextThread.turns);
+        router.replace(`/chat?thread=${encodeURIComponent(nextThread.id)}`, { scroll: false });
         return nextThread.id;
       })
       .catch((cause) => {
@@ -1312,9 +1333,10 @@ export function SearchContent({
     setMomentContext(null);
     setActiveSourceIds([]);
     setUploadItems([]);
+    router.push("/chat", { scroll: false });
   }
 
-  function openThread(thread: ChatThread) {
+  function openThread(thread: ChatThread, updateUrl = true) {
     if (thread.read === false) {
       void fetch(`/api/proxy/v1/chat/threads/${thread.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ read: true }) });
       setThreads((current) => current.map((item) => item.id === thread.id ? { ...item, read: true } : item));
@@ -1328,6 +1350,7 @@ export function SearchContent({
     setActiveSourceIds(latestSource ? [latestSource.video_id] : []);
     setUploadItems([]);
     setThreadMenuId(null);
+    if (updateUrl) router.push(`/chat?thread=${encodeURIComponent(thread.id)}`, { scroll: false });
   }
 
   function beginRenameThread(thread: ChatThread) {

@@ -7,7 +7,7 @@ import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; video_id?: string; video_ids?: string }>;
+  searchParams: Promise<{ q?: string; video_id?: string; video_ids?: string; thread?: string }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   const displayName = session?.user?.name || session?.user?.email || "V";
@@ -50,6 +50,7 @@ export default async function ChatPage({
         initialVideoIds={params.video_ids ? params.video_ids.split(",").filter(Boolean) : []}
         initialWorkspace={workspace}
         initialThreads={initialThreads}
+        initialThreadId={initialThreads.some((thread) => thread.id === params.thread) ? params.thread : undefined}
         initialOnboardingCompleted={onboardingCompleted}
       />
     </Suspense>
