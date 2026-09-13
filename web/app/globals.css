@@ -3017,6 +3017,7 @@ main { width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .search-evidence-video-skeleton::after { animation: none; }
   .search-evidence-video video { transition: none; }
+  .search-media-spinner { animation-duration: 1.4s; }
 }
 
 .search-evidence-play:hover,
@@ -3028,6 +3029,43 @@ main { width: 100%; }
 
 .search-evidence-play.is-playing:not(:hover):not(:focus-visible) {
   opacity: 0;
+}
+
+.search-evidence-play.is-loading {
+  cursor: progress;
+  opacity: 1;
+}
+
+.search-media-spinner {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(215, 206, 199, 0.42);
+  border-top-color: var(--color-grain);
+  border-radius: 50%;
+  animation: search-media-spin 700ms linear infinite;
+}
+
+@keyframes search-media-spin {
+  to { transform: rotate(360deg); }
+}
+
+.search-evidence-media-status {
+  position: absolute;
+  z-index: 2;
+  top: calc(50% + 38px);
+  left: 50%;
+  padding: 4px 7px;
+  transform: translateX(-50%);
+  border-radius: 4px;
+  background: rgba(86, 86, 86, 0.84);
+  color: var(--color-grain);
+  font-size: .72rem;
+  white-space: nowrap;
+}
+
+.search-evidence-media-status.is-error {
+  color: var(--color-tan);
 }
 
 .search-evidence-video:hover .search-evidence-play.is-playing {
@@ -3221,6 +3259,32 @@ main { width: 100%; }
   color: rgba(255, 255, 255, 0.92);
   font-size: 0.72rem;
   pointer-events: none;
+}
+
+.search-citation-play.is-loading {
+  background: rgba(86, 86, 86, 0.88);
+}
+
+.search-citation-play .search-media-spinner {
+  width: 14px;
+  height: 14px;
+}
+
+.search-citation-media-status {
+  position: absolute;
+  left: 54px;
+  bottom: 18px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: rgba(86, 86, 86, 0.84);
+  color: var(--color-grain);
+  font-size: .68rem;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.search-citation-media-status.is-error {
+  color: var(--color-tan);
 }
 
 .search-citation-preview-empty {

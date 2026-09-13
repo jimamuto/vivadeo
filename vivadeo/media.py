@@ -56,10 +56,16 @@ def stream_object(
         headers["Content-Length"] = str(response["ContentLength"])
     if response.get("ContentRange"):
         headers["Content-Range"] = response["ContentRange"]
+    resolved_content_type = headers.get("Content-Type") or "application/octet-stream"
+    headers["Cache-Control"] = (
+        "private, max-age=604800, immutable"
+        if resolved_content_type.startswith("image/")
+        else "private, max-age=86400"
+    )
 
     return StreamingResponse(
         response["Body"],
         status_code=status.HTTP_206_PARTIAL_CONTENT if response.get("ContentRange") else status.HTTP_200_OK,
-        media_type=headers.get("Content-Type") or "application/octet-stream",
+        media_type=resolved_content_type,
         headers=headers,
     )

@@ -28,6 +28,24 @@ def test_stream_object_forwards_browser_byte_range(monkeypatch):
     assert response.headers["accept-ranges"] == "bytes"
     assert response.headers["content-range"] == "bytes 100-199/1000"
     assert response.headers["content-length"] == "100"
+    assert response.headers["cache-control"] == "private, max-age=86400"
+
+
+def test_stream_object_caches_immutable_images_privately(monkeypatch):
+    class Store:
+        def get_object(self, key, range_header):
+            return {
+                "Body": BytesIO(b"image"),
+                "ContentLength": 5,
+                "ContentRange": None,
+                "ContentType": "image/jpeg",
+            }
+
+    monkeypatch.setattr(media, "ObjectStore", Store)
+
+    response = media.stream_object("frame.jpg")
+
+    assert response.headers["cache-control"] == "private, max-age=604800, immutable"
 
 
 def test_stream_object_rejects_unsatisfiable_range(monkeypatch):

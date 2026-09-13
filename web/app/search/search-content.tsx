@@ -108,7 +108,7 @@ function ComposerSelect({
 
 function readCachedPoster(key: string) {
   try {
-    return window.sessionStorage.getItem(key);
+    return window.localStorage.getItem(key);
   } catch {
     return null;
   }
@@ -116,7 +116,7 @@ function readCachedPoster(key: string) {
 
 function writeCachedPoster(key: string, url: string) {
   try {
-    window.sessionStorage.setItem(key, url);
+    window.localStorage.setItem(key, url);
   } catch {
     // Storage may be unavailable in private browsing or locked-down embeds.
   }
@@ -318,7 +318,17 @@ function CitationPreview({
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterStatus, setPosterStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const [playing, setPlaying] = useState(false);
+  const [playbackStatus, setPlaybackStatus] = useState<"idle" | "loading" | "error">("idle");
   const previewRef = useRef<HTMLDivElement>(null);
+
+  function togglePreview(video: HTMLVideoElement) {
+    if (!video.paused) {
+      video.pause();
+      return;
+    }
+    setPlaybackStatus("loading");
+    void video.play().catch(() => setPlaybackStatus("error"));
+  }
 
   useClientLayoutEffect(() => {
     const cached = readCachedPoster(posterCacheKey);
@@ -370,16 +380,19 @@ function CitationPreview({
       {sourceUrl ? (
         <video
           playsInline
-          preload="metadata"
+          preload={preload ? "auto" : "metadata"}
           poster={posterUrl || undefined}
           tabIndex={0}
           aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`}
           src={`${sourceUrl}#t=${previewStart},${previewEnd}`}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = citation.start_time; }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onClick={(event) => { if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined); else event.currentTarget.pause(); }}
-          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined); else event.currentTarget.pause(); } }}
+          onPlaying={() => { setPlaying(true); setPlaybackStatus("idle"); }}
+          onPause={() => { setPlaying(false); setPlaybackStatus("idle"); }}
+          onWaiting={(event) => { if (!event.currentTarget.paused) setPlaybackStatus("loading"); }}
+          onCanPlay={() => setPlaybackStatus("idle")}
+          onError={() => { setPlaying(false); setPlaybackStatus("error"); }}
+          onClick={(event) => togglePreview(event.currentTarget)}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); togglePreview(event.currentTarget); } }}
           onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }}
         />
       ) : posterUrl ? (
@@ -389,7 +402,8 @@ function CitationPreview({
       ) : (
         <span className="search-citation-preview-empty">Preview unavailable</span>
       )}
-      {sourceUrl ? <span className="search-citation-play" aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span> : null}
+      {sourceUrl ? <span className={`search-citation-play${playbackStatus === "loading" ? " is-loading" : ""}`} aria-hidden="true">{playbackStatus === "loading" ? <span className="search-media-spinner" /> : playing ? "Ⅱ" : "▶"}</span> : null}
+      {playbackStatus !== "idle" ? <span className={`search-citation-media-status${playbackStatus === "error" ? " is-error" : ""}`} role="status">{playbackStatus === "error" ? "Preview unavailable" : "Loading moment…"}</span> : null}
       <span className="search-citation-time">{fmt(citation.start_time)}–{fmt(citation.end_time)}</span>
     </div>
   );
@@ -417,6 +431,7 @@ function UnifiedCitationPlayer({
   const posterCacheKey = `vivadeo.citation-poster:${videoId}:${posterCacheBucket}`;
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterStatus, setPosterStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [playbackStatus, setPlaybackStatus] = useState<"idle" | "loading" | "playing" | "error">("idle");
 
   useClientLayoutEffect(() => {
     const cached = readCachedPoster(posterCacheKey);
@@ -454,8 +469,10 @@ function UnifiedCitationPlayer({
   function togglePlayback() {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) void video.play().catch(() => undefined);
-    else video.pause();
+    if (video.paused) {
+      setPlaybackStatus("loading");
+      void video.play().catch(() => setPlaybackStatus("error"));
+    } else video.pause();
   }
 
   function seek(time: number, play = false) {
@@ -463,7 +480,10 @@ function UnifiedCitationPlayer({
     if (!video) return;
     video.currentTime = time;
     setCurrentTime(time);
-    if (play) void video.play().catch(() => undefined);
+    if (play) {
+      setPlaybackStatus("loading");
+      void video.play().catch(() => setPlaybackStatus("error"));
+    }
   }
 
   async function toggleFullscreen() {
@@ -482,20 +502,24 @@ function UnifiedCitationPlayer({
           ref={videoRef}
           playsInline
           controls={fullscreen}
-          preload={posterStatus === "ready" ? "metadata" : "none"}
+          preload="metadata"
           poster={posterUrl || undefined}
           src={`${sourceUrl}#t=${start},${end}`}
-          className={posterStatus === "loading" ? "is-awaiting-poster" : undefined}
+          className={posterStatus === "loading" && playbackStatus === "idle" ? "is-awaiting-poster" : undefined}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)}
+          onPlaying={() => { setPlaying(true); setPlaybackStatus("playing"); }}
+          onPause={() => { setPlaying(false); setPlaybackStatus("idle"); }}
+          onWaiting={(event) => { if (!event.currentTarget.paused) setPlaybackStatus("loading"); }}
+          onCanPlay={(event) => { if (event.currentTarget.paused) setPlaybackStatus("idle"); }}
+          onEnded={() => { setPlaying(false); setPlaybackStatus("idle"); }}
+          onError={() => { setPlaying(false); setPlaybackStatus("error"); }}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onClick={togglePlayback}
         />
-        <button type="button" className={`search-evidence-play${playing ? " is-playing" : ""}`} onClick={togglePlayback} aria-label={playing ? "Pause evidence video" : "Play evidence video"}>
-          <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>
+        <button type="button" className={`search-evidence-play${playing ? " is-playing" : ""}${playbackStatus === "loading" ? " is-loading" : ""}`} onClick={togglePlayback} aria-label={playing ? "Pause evidence video" : "Play evidence video"}>
+          <span aria-hidden="true">{playbackStatus === "loading" ? <span className="search-media-spinner" /> : playing ? "Ⅱ" : "▶"}</span>
         </button>
+        {playbackStatus === "loading" || playbackStatus === "error" ? <span className={`search-evidence-media-status${playbackStatus === "error" ? " is-error" : ""}`} role="status">{playbackStatus === "error" ? "This moment could not be loaded." : "Loading moment…"}</span> : null}
       </div>
       <div className="search-evidence-transport">
         <button type="button" onClick={togglePlayback}>{playing ? "Pause" : "Play"}</button>
