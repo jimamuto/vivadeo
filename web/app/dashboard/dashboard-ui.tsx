@@ -113,7 +113,7 @@ function JobStages({ job }: { job: Job }) {
   );
 }
 
-export function IngestPanel({ workspace = "default-workspace" }: { workspace?: string }) {
+export function IngestPanel({ workspace = "default-workspace", videos: initialVideos = [], jobs: initialJobs = [] }: { workspace?: string; videos?: Video[]; jobs?: Job[] }) {
   const router = useRouter();
   const permissions = useWorkspacePermissions(workspace);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -123,17 +123,26 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [ingestMode, setIngestMode] = useState<"file" | "youtube">("file");
+  const [isUploadDrawerOpen, setIsUploadDrawerOpen] = useState(false);
   const [transcribe, setTranscribe] = useState(true);
   const [isDragActive, setIsDragActive] = useState(false);
-  const [interruptedJobs, setInterruptedJobs] = useState<Job[]>([]);
+  const [videos, setVideos] = useState(initialVideos);
+  const [jobs, setJobs] = useState(initialJobs);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [interruptedJobs, setInterruptedJobs] = useState<Job[]>(initialJobs.filter((job) => ["failed", "canceled"].includes(job.status)));
   const [recoveryStatus, setRecoveryStatus] = useState<FetchStatus>({ state: "idle" });
 
   useEffect(() => {
-    void (async () => {
+    let active = true;
+    async function refreshIngests() {
       try {
-        const response = await fetch("/api/proxy/v1/jobs");
-        if (!response.ok) return;
-        const payload = (await response.json()) as Job[];
+        const [videoResponse, jobResponse] = await Promise.all([fetch("/api/proxy/v1/videos"), fetch("/api/proxy/v1/jobs")]);
+        if (!videoResponse.ok || !jobResponse.ok || !active) return;
+        const nextVideos = (await videoResponse.json()) as Video[];
+        const payload = (await jobResponse.json()) as Job[];
+        setVideos(nextVideos);
+        setJobs(payload);
         setInterruptedJobs(
           payload.filter(
             (job) =>
@@ -144,8 +153,32 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
       } catch {
         return;
       }
-    })();
+    }
+    const timer = window.setInterval(() => void refreshIngests(), 4000);
+    return () => { active = false; window.clearInterval(timer); };
   }, []);
+
+  const latestJobByVideo = useMemo(() => {
+    const ordered = [...jobs].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    return new Map(ordered.filter((job) => job.video_id).map((job) => [job.video_id!, job] as const));
+  }, [jobs]);
+
+  const ingestRows = useMemo(() => videos.map((video) => {
+    const job = latestJobByVideo.get(video.id);
+    const status = job?.status === "succeeded" ? "ready" : job?.status || video.status;
+    return { video, job, status };
+  }).filter(({ video, status }) => {
+    if (statusFilter !== "all" && (statusFilter === "processing" ? !["queued", "running", "processing"].includes(status) : status !== statusFilter)) return false;
+    const needle = query.trim().toLowerCase();
+    return !needle || `${video.filename} ${video.source_uri}`.toLowerCase().includes(needle);
+  }), [videos, latestJobByVideo, query, statusFilter]);
+
+  const ingestCounts = useMemo(() => ({
+    all: videos.length,
+    processing: videos.filter((video) => ["queued", "running", "processing"].includes(latestJobByVideo.get(video.id)?.status || video.status)).length,
+    ready: videos.filter((video) => (latestJobByVideo.get(video.id)?.status === "succeeded" ? "ready" : latestJobByVideo.get(video.id)?.status || video.status) === "ready").length,
+    failed: videos.filter((video) => ["failed", "canceled"].includes(latestJobByVideo.get(video.id)?.status || video.status)).length,
+  }), [videos, latestJobByVideo]);
 
   function validateFile(file: File | undefined) {
     if (!file) return "Please select a file.";
@@ -186,7 +219,9 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
       fd.append("transcribe", String(transcribe));
       const job = await proxyPost<Job>("/v1/videos/upload", fd, false);
       appendActivity(workspace, "ingest.queued", file!.name);
-      router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
+      setJobs((current) => [job, ...current]);
+      setIsUploadDrawerOpen(false);
+      router.refresh();
       if (fileRef.current) fileRef.current.value = "";
       syncSelectedFile(undefined);
     } catch (e: unknown) {
@@ -216,7 +251,9 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
     try {
       const job = await proxyPost<Job>("/v1/videos/url", JSON.stringify({ url, transcribe }));
       appendActivity(workspace, "ingest.queued", url);
-      router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
+      setJobs((current) => [job, ...current]);
+      setIsUploadDrawerOpen(false);
+      router.refresh();
       if (urlRef.current) urlRef.current.value = "";
     } catch (e: unknown) {
       setUrlStatus({ state: "error", message: `Failed: ${(e as Error).message}` });
@@ -229,7 +266,7 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
       const job = await proxyPost<Job>(`/v1/jobs/${jobId}/retry`, "");
       setInterruptedJobs((current) => current.filter((item) => item.id !== jobId));
       setRecoveryStatus({ state: "ok", message: "Interrupted ingest re-queued." });
-      router.push(`/jobs?job=${encodeURIComponent(job.id)}`);
+      setJobs((current) => [job, ...current.filter((item) => item.id !== jobId)]);
     } catch (cause) {
       setRecoveryStatus({
         state: "error",
@@ -239,95 +276,50 @@ export function IngestPanel({ workspace = "default-workspace" }: { workspace?: s
   }
 
   return (
-    <section className="dashboard-module-grid dashboard-module-grid-ingest">
-      <article className="card dash-stack ingest-source-panel">
-        <div className="ingest-source-head">
-          <div className="ingest-mode-switch" role="tablist" aria-label="Ingest source">
-            <button type="button" className={ingestMode === "file" ? "is-active" : ""} onClick={() => setIngestMode("file")} role="tab" aria-selected={ingestMode === "file"}>Upload file</button>
-            <button type="button" className={ingestMode === "youtube" ? "is-active" : ""} onClick={() => setIngestMode("youtube")} role="tab" aria-selected={ingestMode === "youtube"}>YouTube link</button>
-          </div>
-        </div>
-        <label className="ingest-transcription-toggle"><input type="checkbox" checked={transcribe} onChange={(event) => setTranscribe(event.target.checked)} /> Transcribe audio for text search</label>
-        {ingestMode === "file" ? (
-          <div className="form">
-            <div className="field">
-              <label htmlFor="file">Video file</label>
-              {selectedFile && filePreviewUrl ? (
-                <div className="ingest-file-card">
-                  <video className="ingest-file-preview" src={filePreviewUrl} controls preload="metadata" />
-                  <div className="ingest-file-metadata">
-                    <strong>{selectedFile.name}</strong>
-                    <span>{(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</span>
-                    <span>{selectedFile.type || "Video file"}</span>
-                  </div>
-                  <button type="button" className="button-secondary" onClick={() => fileRef.current?.click()}>Choose another file</button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className={`ingest-dropzone${isDragActive ? " is-active" : ""}`}
-                  onClick={() => fileRef.current?.click()}
-                  onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }}
-                  onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }}
-                  onDragLeave={(event) => {
-                    event.preventDefault();
-                    const nextTarget = event.relatedTarget;
-                    if (!nextTarget || !(event.currentTarget as HTMLElement).contains(nextTarget as Node)) setIsDragActive(false);
-                  }}
-                  onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}
-                >
-                  <strong>{isDragActive ? "Drop video to upload" : "Drop video here"}</strong>
-                  <span>Or click to choose a local source file.</span>
-                </button>
-              )}
-              <input ref={fileRef} id="file" name="file" type="file" accept="video/*" onChange={(event) => syncSelectedFile(event.target.files?.[0])} />
+    <section className="ingest-registry">
+      <header className="ingest-registry-head">
+        <div><h1>Videos</h1><p>Track every source as it moves from upload to searchable video evidence.</p></div>
+        <button type="button" className="button" onClick={() => setIsUploadDrawerOpen(true)} disabled={!permissions.canEdit}>＋ Add videos</button>
+      </header>
+      <nav className="ingest-status-tabs" aria-label="Filter videos by processing status">
+        {([ ["all", "All", ingestCounts.all], ["processing", "Processing", ingestCounts.processing], ["ready", "Ready", ingestCounts.ready], ["failed", "Needs attention", ingestCounts.failed] ] as const).map(([value, label, count]) => <button key={value} type="button" className={statusFilter === value ? "is-active" : ""} onClick={() => setStatusFilter(value)}>{label} <span>{count}</span></button>)}
+      </nav>
+      <div className="ingest-registry-tools"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search uploaded videos" /><span>{ingestRows.length} shown</span></div>
+      <div className="ingest-registry-table-wrap">
+        <table className="ingest-registry-table">
+          <thead><tr><th>File</th><th>Added</th><th>Status</th><th>Progress</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <tbody>
+            {ingestRows.map(({ video, job, status }) => {
+              const isWorking = ["queued", "running", "processing"].includes(status);
+              const progress = status === "ready" ? 100 : Math.round((job?.progress || 0) * 100);
+              return <tr key={video.id}>
+                <td><div className="ingest-file-identity"><span aria-hidden="true">▶</span><div><strong>{video.filename}</strong><small>{sourceLabel(video.source_type)} · {video.duration ? fmt(video.duration) : "Duration pending"}</small></div></div></td>
+                <td><time dateTime={video.created_at}>{fmtDate(video.created_at)}</time></td>
+                <td><span className={`ingest-status ingest-status-${statusTone(status)}`}><i aria-hidden="true" />{status === "ready" || status === "succeeded" ? "Ready" : status === "running" || status === "processing" ? "Processing" : status === "queued" ? "Queued" : status === "canceled" ? "Canceled" : status === "failed" ? "Failed" : status}</span></td>
+                <td><div className="ingest-row-progress"><span><i style={{ width: `${progress}%` }} /></span><small>{isWorking ? `${progress}%` : job?.message || (status === "ready" ? "Searchable" : "Waiting")}</small></div></td>
+                <td><div className="ingest-row-actions">{job ? <Link href={`/jobs?job=${encodeURIComponent(job.id)}`} aria-label={`View processing details for ${video.filename}`}>Details</Link> : <Link href={`/dashboard/library?video_id=${encodeURIComponent(video.id)}`} aria-label={`Open ${video.filename} in the library`}>Open</Link>}{["failed", "canceled"].includes(status) && job ? <button type="button" onClick={() => void retryInterruptedJob(job.id)} disabled={!permissions.canEdit}>Retry</button> : null}</div></td>
+              </tr>;
+            })}
+            {ingestRows.length === 0 ? <tr><td colSpan={5}><div className="ingest-registry-empty"><strong>{videos.length ? "No videos match this view" : "Your first video starts here"}</strong><p>{videos.length ? "Try another status or search term." : "Add a file or video link to begin building searchable evidence."}</p><button type="button" className="button-secondary" onClick={() => setIsUploadDrawerOpen(true)}>Add video</button></div></td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+      <input ref={fileRef} id="file" name="file" type="file" accept="video/*" onChange={(event) => syncSelectedFile(event.target.files?.[0])} />
+      {isUploadDrawerOpen ? (
+        <div className="chat-settings-overlay ingest-drawer-layer" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setIsUploadDrawerOpen(false); }}>
+          <aside className="chat-settings-drawer ingest-upload-drawer" role="dialog" aria-modal="true" aria-labelledby="ingest-drawer-title">
+            <header><div><h2 id="ingest-drawer-title">Add videos</h2><p>Upload a local file or add a video link.</p></div><button type="button" className="chat-model-close" aria-label="Close upload drawer" onClick={() => setIsUploadDrawerOpen(false)}>×</button></header>
+            <div className="chat-settings-body ingest-drawer-body">
+              <div className="ingest-mode-switch" role="tablist" aria-label="Video source"><button type="button" className={ingestMode === "file" ? "is-active" : ""} onClick={() => setIngestMode("file")} role="tab" aria-selected={ingestMode === "file"}>Upload file</button><button type="button" className={ingestMode === "youtube" ? "is-active" : ""} onClick={() => setIngestMode("youtube")} role="tab" aria-selected={ingestMode === "youtube"}>Video link</button></div>
+              {ingestMode === "file" ? <button type="button" className={`ingest-drawer-dropzone${isDragActive ? " is-active" : ""}`} onClick={() => fileRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }} onDragLeave={(event) => { event.preventDefault(); setIsDragActive(false); }} onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}><span className="ingest-drawer-upload-icon" aria-hidden="true">↑</span><strong>{selectedFile ? selectedFile.name : isDragActive ? "Drop video to add it" : "Click or drag video to upload"}</strong><span>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB · ${selectedFile.type || "Video file"}` : "Video files up to 512 MB"}</span></button> : <form className="ingest-url-form" id="ingest-url-form" onSubmit={handleSubmit}><label htmlFor="url">Video URL</label><input ref={urlRef} id="url" name="url" placeholder="https://…" /><p>Confirm you have permission to use this source.</p><StatusLine status={urlStatus} /></form>}
+              <label className="ingest-drawer-transcription"><input type="checkbox" checked={transcribe} onChange={(event) => setTranscribe(event.target.checked)} /><span><strong>Prepare spoken content</strong><small>Make dialogue available for text search.</small></span></label>
+              <section className="ingest-drawer-guidance"><h3>What happens next</h3><ol><li><span>1</span><div><strong>Upload</strong><small>The source is secured in this workspace.</small></div></li><li><span>2</span><div><strong>Process</strong><small>Spoken and visual evidence becomes searchable.</small></div></li><li><span>3</span><div><strong>Ready</strong><small>The video appears as ready in this list.</small></div></li></ol></section>
+              <StatusLine status={fileStatus} />
             </div>
-            {!permissions.isLoading && !permissions.canEdit ? <p className="muted">Viewer role cannot upload or queue ingest jobs.</p> : null}
-            <button className="button" onClick={handleUpload} disabled={fileStatus.state === "loading" || !permissions.canEdit}>Upload video</button>
-            <StatusLine status={fileStatus} />
-          </div>
-        ) : (
-          <form className="form" onSubmit={handleSubmit}>
-            <div className="field">
-              <label htmlFor="url">YouTube URL</label>
-              <input ref={urlRef} id="url" name="url" placeholder="https://youtu.be/..." />
-            </div>
-            <p className="muted">Confirm you have permission to use the source.</p>
-            <button className="button" type="submit" disabled={urlStatus.state === "loading" || !permissions.canEdit}>Queue video</button>
-            <StatusLine status={urlStatus} />
-          </form>
-        )}
-      </article>
-      {interruptedJobs.length > 0 ? <details className="card dash-stack dash-expandable ingest-history-panel">
-        <summary className="ingest-history-summary">
-        <div>
-          <h3>Interrupted ingests</h3>
-          <p className="muted">Retry failed or canceled ingests.</p>
+            <footer><button type="button" className="button-secondary" onClick={() => setIsUploadDrawerOpen(false)}>Cancel</button>{ingestMode === "file" ? <button type="button" onClick={handleUpload} disabled={!selectedFile || fileStatus.state === "loading" || !permissions.canEdit}>{fileStatus.state === "loading" ? "Uploading…" : "Upload video"}</button> : <button type="submit" form="ingest-url-form" disabled={urlStatus.state === "loading" || !permissions.canEdit}>{urlStatus.state === "loading" ? "Adding…" : "Add link"}</button>}</footer>
+          </aside>
         </div>
-        <div className="ingest-history-meta">
-          <span className="pill">{interruptedJobs.length} queued for recovery</span>
-          <span className="pill">{recoveryStatus.state === "loading" ? "Working" : "Tap to expand"}</span>
-        </div>
-        </summary>
-        <StatusLine status={recoveryStatus} />
-        {interruptedJobs.length === 0 ? (
-          <p className="muted">No interrupted ingests found.</p>
-        ) : (
-          <div className="job-history-list ingest-history-list">
-            {interruptedJobs.map((job) => (
-              <article key={job.id} className="detail-card">
-                <span>{job.kind.replace(/_/g, " ")}</span>
-                <strong>{job.message || job.status}</strong>
-                <p className="muted">{job.status} • {job.video_id || "No video id"}</p>
-                <div className="dashboard-panel-links">
-                  <button type="button" className="button-secondary" onClick={() => void retryInterruptedJob(job.id)} disabled={!permissions.canEdit}>Retry ingest</button>
-                  <Link href={`/jobs?job=${encodeURIComponent(job.id)}`} className="button-secondary">Open job</Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </details> : null}
+      ) : null}
     </section>
   );
 }

@@ -4110,6 +4110,150 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
   animation: dropzone-pulse 1.1s ease-in-out infinite;
 }
 
+/* Ingest is intentionally composed as a quiet full-width workspace with a
+   dedicated upload drawer. These selectors are page-scoped so dashboard chrome
+   remains unchanged. */
+.ingest-page-shell { gap: 26px; max-width: 1180px; margin: 0 auto; }
+.ingest-page-head { justify-content: center; padding: 16px 0 8px; text-align: center; }
+.ingest-page-head h1 { font-size: clamp(2.3rem, 4.5vw, 3.55rem); letter-spacing: -.045em; }
+.ingest-workspace { display: block; }
+.dashboard-wrap .ingest-workspace .ingest-source-panel { gap: 26px; padding: 6px 0 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.ingest-workspace .ingest-source-head { display: block; padding: 0 0 26px; }
+.ingest-workspace .ingest-mode-switch { display: grid; grid-template-columns: 1fr 1fr; width: 100%; padding: 6px; border-color: var(--color-border-strong); background: transparent; }
+.ingest-workspace .ingest-mode-switch button { min-height: 58px; font-size: 1.05rem; cursor: pointer; }
+.ingest-workspace .ingest-transcription-toggle { width: fit-content; font-size: 1rem; }
+.ingest-workspace .ingest-transcription-toggle input { width: 18px; height: 18px; accent-color: var(--color-oxblood); }
+.ingest-file-launcher { gap: 18px; }
+.ingest-workspace .ingest-dropzone { min-height: 410px; border-radius: 28px; background: color-mix(in srgb, var(--color-tan) 8%, var(--color-surface)); }
+.ingest-workspace .ingest-dropzone strong { font-size: clamp(1.35rem, 2.3vw, 1.8rem); }
+.ingest-workspace .ingest-dropzone span { font-size: 1rem; }
+.ingest-open-drawer { justify-self: start; min-width: 150px; }
+
+.ingest-drawer-layer { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: flex-end; padding: 12px; background: rgba(40, 36, 34, .48); backdrop-filter: blur(1.5px); }
+.ingest-upload-drawer { position: relative; display: flex; flex-direction: column; width: min(520px, calc(100vw - 24px)); height: calc(100dvh - 24px); overflow-y: auto; padding: 42px 36px 28px; border: 1px solid var(--color-border); border-radius: 28px; background: var(--color-surface-solid); color: var(--color-content); box-shadow: -18px 0 54px rgba(37, 31, 29, .2); animation: ingest-drawer-in 240ms cubic-bezier(.22, .61, .36, 1) both; }
+.ingest-drawer-close { position: absolute; top: 18px; right: 20px; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--color-action-subtle); color: var(--color-content); font: inherit; font-size: 1.45rem; line-height: 1; cursor: pointer; }
+.ingest-drawer-close:hover, .ingest-drawer-close:focus-visible { background: var(--color-oxblood); color: var(--color-content-on-action); outline: none; }
+.ingest-drawer-header { padding-right: 34px; }
+.ingest-drawer-kicker { display: block; margin-bottom: 8px; color: var(--color-oxblood); font-size: .7rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.ingest-drawer-header h2 { margin: 0; font-size: 1.8rem; letter-spacing: -.035em; }
+.ingest-drawer-header p { margin: 14px 0 0; color: var(--color-content-muted); line-height: 1.55; }
+.ingest-drawer-dropzone { display: grid; place-content: center; justify-items: center; gap: 9px; min-height: 390px; width: 100%; margin-top: 28px; padding: 28px; border: 2px dashed color-mix(in srgb, var(--color-oxblood) 48%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--color-tan) 10%, var(--color-surface)); color: var(--color-content); text-align: center; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.ingest-drawer-dropzone:hover, .ingest-drawer-dropzone.is-active { border-color: var(--color-oxblood); background: color-mix(in srgb, var(--color-tan) 17%, var(--color-surface)); transform: translateY(-2px); }
+.ingest-drawer-upload-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 5px; border-radius: 50%; background: var(--color-oxblood); color: var(--color-content-on-action); font-size: 1.45rem; }
+.ingest-drawer-dropzone strong { max-width: 320px; color: var(--color-oxblood); font-size: 1rem; }
+.ingest-drawer-dropzone > span:last-child { max-width: 320px; color: var(--color-content-muted); font-size: .8rem; line-height: 1.45; }
+.ingest-drawer-transcription { display: flex; align-items: flex-start; gap: 11px; margin-top: 18px; cursor: pointer; }
+.ingest-drawer-transcription input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--color-oxblood); }
+.ingest-drawer-transcription > span { display: grid; gap: 3px; }
+.ingest-drawer-transcription small { color: var(--color-content-muted); }
+.ingest-drawer-recommendation { margin-top: 24px; }
+.ingest-drawer-recommendation > span { display: inline-flex; padding: 6px 9px; border-radius: 7px; background: var(--color-action-subtle); color: var(--color-oxblood); font-size: .72rem; font-weight: 700; }
+.ingest-drawer-recommendation p { margin: 10px 0 0; color: var(--color-content-muted); font-size: .86rem; line-height: 1.5; }
+.ingest-drawer-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: auto; padding: 28px 0 0; }
+.ingest-drawer-footer > div { display: grid; min-width: 0; gap: 4px; }
+.ingest-drawer-footer > div strong, .ingest-drawer-footer > div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ingest-drawer-footer > div strong { font-size: .85rem; }
+.ingest-drawer-footer > div span { color: var(--color-content-muted); font-size: .72rem; }
+.ingest-drawer-footer .button { flex: 0 0 auto; }
+@keyframes ingest-drawer-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+
+@media (max-width: 720px) {
+  .ingest-page-head { padding-top: 4px; }
+  .ingest-workspace .ingest-mode-switch button { min-height: 48px; font-size: .9rem; }
+  .ingest-workspace .ingest-dropzone { min-height: 320px; }
+  .ingest-drawer-layer { padding: 0; }
+  .ingest-upload-drawer { width: 100%; height: 100dvh; padding: 38px 22px 24px; border: 0; border-radius: 0; }
+  .ingest-drawer-dropzone { min-height: 300px; }
+  .ingest-drawer-footer { align-items: stretch; flex-direction: column; }
+  .ingest-drawer-footer .button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingest-upload-drawer { animation: none; }
+}
+
+.ingest-registry { display: grid; gap: 0; min-width: 0; }
+.ingest-registry-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; padding: 8px 0 30px; }
+.ingest-registry-head h1 { margin: 0; font-family: var(--font-display); font-size: 2rem; letter-spacing: -.035em; }
+.ingest-registry-head p { max-width: 620px; margin: 8px 0 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
+.ingest-status-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 16px; border-bottom: 1px solid var(--color-border); }
+.ingest-status-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 13px; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: inherit; font-size: .76rem; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.ingest-status-tabs button:hover { background: var(--color-action-subtle); color: var(--color-content); }
+.ingest-status-tabs button.is-active { border-color: var(--color-border-strong); background: var(--color-surface-solid); color: var(--color-oxblood); }
+.ingest-status-tabs button span { display: grid; min-width: 20px; height: 20px; place-items: center; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, var(--color-grain) 28%, transparent); color: inherit; font-size: .66rem; }
+.ingest-registry-tools { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 0; }
+.ingest-registry-tools input { width: min(360px, 100%); padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 0; background: var(--color-surface-solid); color: var(--color-content); font: inherit; font-size: .78rem; }
+.ingest-registry-tools span { color: var(--muted); font-size: .72rem; }
+.ingest-registry-table-wrap { min-width: 0; overflow-x: auto; border-top: 1px solid var(--color-border); }
+.ingest-registry-table { width: 100%; min-width: 820px; border-collapse: collapse; table-layout: fixed; }
+.ingest-registry-table th { padding: 13px 12px; color: var(--muted); font-size: .65rem; font-weight: 700; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
+.ingest-registry-table th:first-child { width: 34%; }
+.ingest-registry-table th:nth-child(2) { width: 20%; }
+.ingest-registry-table th:nth-child(3) { width: 14%; }
+.ingest-registry-table th:nth-child(4) { width: 23%; }
+.ingest-registry-table th:last-child { width: 9%; }
+.ingest-registry-table td { padding: 17px 12px; border-top: 1px solid var(--color-border); color: var(--color-content); font-size: .76rem; vertical-align: middle; }
+.ingest-registry-table tbody tr { transition: background 160ms cubic-bezier(.22, 1, .36, 1); }
+.ingest-registry-table tbody tr:hover { background: color-mix(in srgb, var(--color-grain) 9%, transparent); }
+.ingest-file-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ingest-file-identity > span { display: grid; width: 34px; height: 40px; flex: 0 0 34px; place-items: center; border: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-grain) 12%, var(--color-surface-solid)); color: var(--color-oxblood); font-size: .68rem; }
+.ingest-file-identity > div { display: grid; min-width: 0; gap: 5px; }
+.ingest-file-identity strong, .ingest-file-identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ingest-file-identity strong { font-size: .8rem; }
+.ingest-file-identity small, .ingest-registry-table time { color: var(--muted); font-size: .68rem; }
+.ingest-status { display: inline-flex; align-items: center; gap: 7px; font-size: .72rem; font-weight: 650; text-transform: capitalize; }
+.ingest-status i { width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; background: currentColor; }
+.ingest-status-good { color: var(--color-blackboard); }
+.ingest-status-live { color: var(--color-oxblood); }
+.ingest-status-bad { color: var(--color-oxblood); }
+.ingest-status-idle { color: var(--muted); }
+.ingest-status-live i { animation: ingest-status-pulse 1.4s ease-in-out infinite; }
+.ingest-row-progress { display: grid; gap: 6px; }
+.ingest-row-progress > span { display: block; height: 3px; overflow: hidden; background: color-mix(in srgb, var(--color-grain) 24%, transparent); }
+.ingest-row-progress > span i { display: block; height: 100%; background: var(--color-oxblood); transition: width 220ms cubic-bezier(.22, 1, .36, 1); }
+.ingest-row-progress small { overflow: hidden; color: var(--muted); font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
+.ingest-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+.ingest-row-actions a, .ingest-row-actions button { padding: 4px 0; border: 0; background: transparent; color: var(--color-oxblood); font: inherit; font-size: .7rem; font-weight: 650; cursor: pointer; }
+.ingest-row-actions a:hover, .ingest-row-actions button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ingest-registry-empty { display: grid; justify-items: center; gap: 8px; padding: 72px 20px; text-align: center; }
+.ingest-registry-empty strong { font-size: 1rem; }
+.ingest-registry-empty p { margin: 0 0 8px; color: var(--muted); }
+.ingest-registry > input[type="file"] { display: none; }
+
+.chat-settings-drawer.ingest-upload-drawer { position: static; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(440px, 100%); height: 100%; padding: 0; overflow: hidden; border: 0; border-left: 1px solid var(--color-border-strong); border-radius: 0; background: var(--color-surface-solid); box-shadow: -20px 0 60px rgba(86, 86, 86, .18); animation: chat-settings-enter 240ms cubic-bezier(.22, 1, .36, 1); }
+.ingest-drawer-layer.chat-settings-overlay { z-index: 100; padding: 0; background: rgba(86, 86, 86, .42); backdrop-filter: none; }
+.ingest-drawer-body { display: grid; align-content: start; gap: 22px; padding-top: 22px; }
+.ingest-upload-drawer .ingest-mode-switch { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-radius: 0; }
+.ingest-upload-drawer .ingest-mode-switch button { border-radius: 0; }
+.ingest-upload-drawer .ingest-drawer-dropzone { min-height: 300px; margin: 0; border-radius: 0; }
+.ingest-url-form { display: grid; gap: 9px; padding: 8px 0; }
+.ingest-url-form label { font-size: .72rem; font-weight: 650; }
+.ingest-url-form input { width: 100%; padding: 11px 12px; border: 1px solid var(--color-border-strong); border-radius: 0; background: var(--color-surface-solid); color: var(--color-content); font: inherit; }
+.ingest-url-form p { margin: 0; color: var(--muted); font-size: .7rem; }
+.ingest-drawer-guidance { padding-top: 4px; border-top: 1px solid var(--color-border); }
+.ingest-drawer-guidance h3 { margin: 18px 0 14px; font-size: .86rem; }
+.ingest-drawer-guidance ol { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.ingest-drawer-guidance li { display: flex; align-items: flex-start; gap: 11px; }
+.ingest-drawer-guidance li > span { display: grid; width: 23px; height: 23px; flex: 0 0 23px; place-items: center; border: 1px solid var(--color-border-strong); color: var(--color-oxblood); font-size: .65rem; font-weight: 700; }
+.ingest-drawer-guidance li div { display: grid; gap: 3px; }
+.ingest-drawer-guidance li strong { font-size: .74rem; }
+.ingest-drawer-guidance li small { color: var(--muted); font-size: .68rem; }
+.ingest-upload-drawer > footer { gap: 10px; }
+.ingest-upload-drawer > footer .button-secondary { border-radius: 0; }
+@keyframes ingest-status-pulse { 50% { opacity: .35; } }
+
+@media (max-width: 720px) {
+  .ingest-registry-head { align-items: stretch; flex-direction: column; padding-top: 0; }
+  .ingest-registry-head .button { width: 100%; }
+  .ingest-registry-tools { align-items: stretch; flex-direction: column; gap: 9px; }
+  .ingest-registry-tools input { width: 100%; }
+  .chat-settings-drawer.ingest-upload-drawer { width: 100%; height: 100%; padding: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ingest-status-live i { animation: none; }
+}
+
 .nav a:not(.button):not(.button-secondary) {
   padding: 10px 14px;
   border-radius: 999px;
