@@ -4000,7 +4000,7 @@ html[data-theme="dark"] .output-choice.is-selected { border-color: var(--color-t
   padding: 4px;
   border: 1px solid rgba(86, 86, 86, 0.12);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-surface-solid);
 }
 
 .ingest-mode-switch button {
@@ -4008,8 +4008,7 @@ html[data-theme="dark"] .output-choice.is-selected { border-color: var(--color-t
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #000;
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.95);
+  color: var(--color-content);
 }
 
 .ingest-mode-switch button.is-active {
@@ -4030,7 +4029,7 @@ html[data-theme="dark"] .output-choice.is-selected { border-color: var(--color-t
   padding: 16px;
   border: 1px solid rgba(86, 86, 86, 0.14);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-surface);
 }
 
 .ingest-file-preview {
@@ -4060,7 +4059,7 @@ html[data-theme="dark"] .output-choice.is-selected { border-color: var(--color-t
   padding: 32px;
   border-radius: 24px;
   border: 1.5px dashed rgba(118, 50, 63, 0.3);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--color-surface);
   color: var(--text);
   text-align: center;
   cursor: pointer;
@@ -4068,21 +4067,43 @@ html[data-theme="dark"] .output-choice.is-selected { border-color: var(--color-t
 }
 
 .ingest-dropzone strong {
-  color: #000;
+  color: var(--color-content);
   font-size: clamp(1.2rem, 2vw, 1.5rem);
 }
 
 .ingest-dropzone span {
-  color: var(--color-blackboard);
+  color: var(--color-content-muted);
   font-size: 0.92rem;
 }
 
 .ingest-dropzone:hover,
 .ingest-dropzone.is-active {
   border-color: rgba(118, 50, 63, 0.7);
-  background: rgba(255, 248, 241, 0.95);
+  background: color-mix(in srgb, var(--color-action) 8%, var(--color-surface));
   transform: translateY(-2px);
   box-shadow: 0 14px 32px rgba(118, 50, 63, 0.1);
+}
+
+html[data-theme="dark"] .ingest-mode-switch {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-strong);
+}
+
+html[data-theme="dark"] .ingest-mode-switch button.is-active {
+  color: var(--color-content-on-action);
+}
+
+html[data-theme="dark"] .ingest-file-card,
+html[data-theme="dark"] .ingest-dropzone {
+  border-color: color-mix(in srgb, var(--color-tan) 42%, transparent);
+  background: color-mix(in srgb, var(--color-tan) 7%, var(--color-surface-strong));
+}
+
+html[data-theme="dark"] .ingest-dropzone:hover,
+html[data-theme="dark"] .ingest-dropzone.is-active {
+  border-color: color-mix(in srgb, var(--color-tan) 72%, transparent);
+  background: color-mix(in srgb, var(--color-tan) 12%, var(--color-surface-strong));
+  box-shadow: 0 14px 32px rgba(20, 14, 12, 0.28);
 }
 
 .ingest-dropzone.is-active {
