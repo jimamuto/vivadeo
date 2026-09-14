@@ -807,7 +807,7 @@ async def upload_video(
         kind="ingest_uploaded_object",
         status="queued",
         video_id=video_id,
-        payload={"transcribe": transcribe, "prepare_visual": thread is None},
+        payload={"transcribe": True, "prepare_visual": True},
     )
     session.add(job)
     session.commit()
@@ -847,7 +847,7 @@ def ingest_video_url(
         kind="ingest_url",
         status="queued",
         video_id=video_id,
-        payload={"url": request.url, "max_height": request.max_height, "transcribe": request.transcribe, "prepare_visual": thread is None},
+        payload={"url": request.url, "max_height": request.max_height, "transcribe": True, "prepare_visual": True},
     )
     session.add(job)
     session.commit()
@@ -887,7 +887,7 @@ def ingest_local_video(
         kind="ingest_local_path",
         status="queued",
         video_id=video_id,
-        payload={"transcribe": request.transcribe},
+        payload={"transcribe": True, "prepare_visual": True},
     )
     session.add(job)
     session.commit()
@@ -1126,12 +1126,6 @@ def reindex_video(
         raise HTTPException(status_code=404, detail="Video not found")
 
     session.execute(delete(VideoChunk).where(VideoChunk.video_id == video_id))
-    latest_job = None
-    if hasattr(session, "scalars"):
-        latest_job = session.scalars(
-            select(Job).where(Job.video_id == video_id).order_by(Job.created_at.desc()).limit(1)
-        ).first()
-    transcribe = bool((latest_job.payload or {}).get("transcribe", True)) if latest_job else True
     job = Job(
         id=new_id(),
         organization_id=organization_id,
@@ -1140,15 +1134,14 @@ def reindex_video(
         video_id=video_id,
         progress=0.0,
         message="Reindex queued",
-        payload={"transcribe": transcribe, "prepare_visual": True},
+        payload={"transcribe": True, "prepare_visual": True},
         created_at=utcnow(),
         updated_at=utcnow(),
     )
     video.status = "queued"
     video.error = None
     video.visual_status = "queued"
-    if transcribe:
-        video.transcript_status = "queued"
+    video.transcript_status = "queued"
     session.add(job)
     session.commit()
 
@@ -1467,7 +1460,7 @@ def cancel_job(
             for stage in ("transcript_status", "visual_status"):
                 if getattr(video, stage) in {"queued", "running"}:
                     setattr(video, stage, "canceled")
-            video.status = "ready" if "ready" in {video.transcript_status, video.visual_status} else "canceled"
+            video.status = "ready" if video.transcript_status == video.visual_status == "ready" else "canceled"
             video.error = "Canceled by user"
     if job.clip_id:
         clip = session.get(Clip, job.clip_id)
@@ -1512,9 +1505,9 @@ def retry_job(
             raise HTTPException(status_code=404, detail="Video not found for job")
         video.status = "queued"
         video.error = None
-        for stage, needed in (("transcript_status", (job.payload or {}).get("transcribe", True)), ("visual_status", (job.payload or {}).get("prepare_visual", True))):
-            if needed and getattr(video, stage) != "ready":
-                setattr(video, stage, "queued")
+        job.payload = {**(job.payload or {}), "transcribe": True, "prepare_visual": True}
+        video.transcript_status = "queued"
+        video.visual_status = "queued"
     if job.kind == "embed_transcript":
         if video is None or video.organization_id != organization_id:
             raise HTTPException(status_code=404, detail="Video not found for job")

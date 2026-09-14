@@ -124,7 +124,6 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [ingestMode, setIngestMode] = useState<"file" | "youtube">("file");
   const [isUploadDrawerOpen, setIsUploadDrawerOpen] = useState(false);
-  const [transcribe, setTranscribe] = useState(true);
   const [isDragActive, setIsDragActive] = useState(false);
   const [videos, setVideos] = useState(initialVideos);
   const [jobs, setJobs] = useState(initialJobs);
@@ -216,7 +215,7 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
     try {
       const fd = new FormData();
       fd.append("file", file!);
-      fd.append("transcribe", String(transcribe));
+      fd.append("transcribe", "true");
       const job = await proxyPost<Job>("/v1/videos/upload", fd, false);
       appendActivity(workspace, "ingest.queued", file!.name);
       setJobs((current) => [job, ...current]);
@@ -249,7 +248,7 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
     }
     setUrlStatus({ state: "loading" });
     try {
-      const job = await proxyPost<Job>("/v1/videos/url", JSON.stringify({ url, transcribe }));
+      const job = await proxyPost<Job>("/v1/videos/url", JSON.stringify({ url, transcribe: true }));
       appendActivity(workspace, "ingest.queued", url);
       setJobs((current) => [job, ...current]);
       setIsUploadDrawerOpen(false);
@@ -314,7 +313,7 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
             <div className="chat-settings-body ingest-drawer-body">
               <div className="ingest-mode-switch" role="tablist" aria-label="Video source"><button type="button" className={ingestMode === "file" ? "is-active" : ""} onClick={() => setIngestMode("file")} role="tab" aria-selected={ingestMode === "file"}>Upload file</button><button type="button" className={ingestMode === "youtube" ? "is-active" : ""} onClick={() => setIngestMode("youtube")} role="tab" aria-selected={ingestMode === "youtube"}>Video link</button></div>
               {ingestMode === "file" ? <button type="button" className={`ingest-drawer-dropzone${isDragActive ? " is-active" : ""}`} onClick={() => fileRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }} onDragLeave={(event) => { event.preventDefault(); setIsDragActive(false); }} onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}><span className="ingest-drawer-upload-icon" aria-hidden="true">↑</span><strong>{selectedFile ? selectedFile.name : isDragActive ? "Drop video to add it" : "Click or drag video to upload"}</strong><span>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB · ${selectedFile.type || "Video file"}` : "Video files up to 512 MB"}</span></button> : <form className="ingest-url-form" id="ingest-url-form" onSubmit={handleSubmit}><label htmlFor="url">Video URL</label><input ref={urlRef} id="url" name="url" placeholder="https://…" /><p>Confirm you have permission to use this source.</p><StatusLine status={urlStatus} /></form>}
-              <label className="ingest-drawer-transcription"><input type="checkbox" checked={transcribe} onChange={(event) => setTranscribe(event.target.checked)} /><span><strong>Prepare spoken content</strong><small>Make dialogue available for text search.</small></span></label>
+              <div className="ingest-drawer-transcription"><span><strong>Complete preparation included</strong><small>Spoken content, visual evidence, and search indexes are prepared before this video becomes ready.</small></span></div>
               <section className="ingest-drawer-guidance"><h3>What happens next</h3><ol><li><span>1</span><div><strong>Upload</strong><small>The source is secured in this workspace.</small></div></li><li><span>2</span><div><strong>Process</strong><small>Spoken and visual evidence becomes searchable.</small></div></li><li><span>3</span><div><strong>Ready</strong><small>The video appears as ready in this list.</small></div></li></ol></section>
               <StatusLine status={fileStatus} />
             </div>

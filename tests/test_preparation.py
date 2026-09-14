@@ -7,24 +7,21 @@ from vivadeo import worker
 from vivadeo.llm import OpenAICompatibleError, _read_answer_stream
 
 
-@pytest.mark.parametrize("visual", [False, True])
-def test_preparation_only_runs_required_stages(monkeypatch, visual):
+def test_preparation_runs_every_search_stage(monkeypatch):
     calls = []
-    video = SimpleNamespace(transcript_status="pending", visual_status="pending")
-    job = SimpleNamespace(payload={"transcribe": True, "prepare_visual": visual})
-
-    @contextmanager
-    def scope():
-        yield SimpleNamespace(get=lambda model, _: job if model is worker.Job else video)
-
-    monkeypatch.setattr(worker, "session_scope", scope)
     monkeypatch.setattr(worker, "_raise_if_canceled", lambda _: None)
     monkeypatch.setattr(worker, "_mark_video", lambda *a, **kw: calls.append(kw))
     monkeypatch.setattr(worker, "_transcribe_file", lambda *a: calls.append("transcript"))
+    monkeypatch.setattr(worker, "_embed_transcript_segments", lambda *a: calls.append("transcript_embeddings"))
     monkeypatch.setattr(worker, "_index_file", lambda *a: calls.append("visual"))
     worker._prepare_file("v", "org", "file", "job")
-    assert "transcript" in calls
-    assert ("visual" in calls) is visual
+    assert calls == [
+        "transcript",
+        "transcript_embeddings",
+        {"visual_status": "running"},
+        "visual",
+        {"visual_status": "ready"},
+    ]
 
 
 def test_durable_stream_stops_before_publishing_when_canceled(monkeypatch):

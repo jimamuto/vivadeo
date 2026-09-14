@@ -189,7 +189,6 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
             pass
 
     _raise_if_canceled(job_id)
-    embedding_job_id = None
     with session_scope() as session:
         session.execute(
             delete(VideoTranscriptSegment).where(
@@ -212,80 +211,82 @@ def _transcribe_file(video_id: str, organization_id: str, file_path: str, job_id
         session.flush()
         video = session.get(Video, video_id)
         if video is not None:
-            video.transcript_status = "ready"
+            video.transcript_status = "embedding"
             video.error = None
-        if settings.nvidia_embedding_api_key and transcript_rows:
-            embedding_job_id = new_id()
-            session.add(Job(id=embedding_job_id, organization_id=organization_id, video_id=video_id, kind="embed_transcript", status="queued", payload={}))
-    if embedding_job_id:
-        try:
-            embed_transcript_task.delay(embedding_job_id, video_id, organization_id)
-        except Exception:
-            logger.exception("transcript_embedding_dispatch_failed job_id=%s", embedding_job_id)
-            _update_job(embedding_job_id, status="failed", error="Search preparation could not start. The transcript is still available.")
-    _update_job(job_id, status="running", progress=0.4, message="Spoken content ready")
+    _update_job(job_id, status="running", progress=0.24, message="Spoken content transcribed")
 
 
-@celery_app.task(name="vivadeo.embed_transcript")
-def embed_transcript_task(job_id: str, video_id: str, organization_id: str) -> None:
+def _embed_transcript_segments(job_id: str, video_id: str, organization_id: str, *, standalone_job: bool = False) -> None:
     settings = get_settings()
+    if not settings.nvidia_embedding_api_key:
+        raise RuntimeError("Spoken-content search preparation is not configured")
+    with session_scope() as session:
+        rows = [(row.id, row.text) for row in session.scalars(select(VideoTranscriptSegment).where(
+            VideoTranscriptSegment.video_id == video_id,
+            VideoTranscriptSegment.organization_id == organization_id,
+            VideoTranscriptSegment.nvidia_embedding.is_(None),
+        )).all()]
+    embedder = get_embedder(
+        backend="nvidia",
+        api_key=settings.nvidia_embedding_api_key,
+        base_url=settings.nvidia_embedding_base_url,
+        model=settings.nvidia_embedding_model,
+        timeout=settings.nvidia_embedding_timeout,
+    )
     try:
-        _raise_if_canceled(job_id)
-        _update_job(job_id, status="running", progress=0.1, message="Improving spoken-content search")
-        with session_scope() as session:
-            rows = [(row.id, row.text) for row in session.scalars(select(VideoTranscriptSegment).where(
-                VideoTranscriptSegment.video_id == video_id,
-                VideoTranscriptSegment.organization_id == organization_id,
-                VideoTranscriptSegment.nvidia_embedding.is_(None),
-            )).all()]
-        embedder = get_embedder(backend="nvidia", api_key=settings.nvidia_embedding_api_key,
-                               base_url=settings.nvidia_embedding_base_url, model=settings.nvidia_embedding_model,
-                               timeout=settings.nvidia_embedding_timeout)
         for start in range(0, len(rows), 32):
             _raise_if_canceled(job_id)
             batch = rows[start:start + 32]
             embeddings = embedder.embed_texts([text for _, text in batch], input_type="passage")
             if len(embeddings) != len(batch):
-                raise RuntimeError("Incomplete transcript search preparation")
+                raise RuntimeError("Incomplete spoken-content search preparation")
             _raise_if_canceled(job_id)
             with session_scope() as session:
                 for (segment_id, _), embedding in zip(batch, embeddings):
                     row = session.get(VideoTranscriptSegment, segment_id)
                     if row is not None and row.organization_id == organization_id:
                         row.nvidia_embedding = embedding
-            _update_job(job_id, progress=min(0.95, (start + len(batch)) / max(1, len(rows))), message="Improving spoken-content search")
-        _update_job(job_id, status="succeeded", progress=1.0, message="Spoken-content search ready")
+            ratio = (start + len(batch)) / max(1, len(rows))
+            _update_job(
+                job_id,
+                progress=min(0.95, ratio) if standalone_job else 0.24 + (0.16 * ratio),
+                message="Improving spoken-content search" if standalone_job else f"Embedding spoken content {start + len(batch)}/{len(rows)}",
+            )
+        _mark_video(video_id, transcript_status="ready")
+        if standalone_job:
+            _update_job(job_id, status="succeeded", progress=1.0, message="Spoken-content search ready")
+        else:
+            _update_job(job_id, status="running", progress=0.4, message="Spoken-content search ready")
+    finally:
+        reset_embedder()
+
+
+@celery_app.task(name="vivadeo.embed_transcript")
+def embed_transcript_task(job_id: str, video_id: str, organization_id: str) -> None:
+    try:
+        _raise_if_canceled(job_id)
+        _update_job(job_id, status="running", progress=0.1, message="Improving spoken-content search")
+        _embed_transcript_segments(job_id, video_id, organization_id, standalone_job=True)
     except JobCanceled:
         return
     except Exception:
         _update_job(job_id, status="failed", error="Could not improve spoken-content search. The transcript remains available.", message="Search preparation interrupted")
         raise
-    finally:
-        reset_embedder()
-
-
 def _prepare_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
-    with session_scope() as session:
-        job = session.get(Job, job_id)
-        video = session.get(Video, video_id)
-        payload = job.payload or {}
-        transcribe = payload.get("transcribe", True) and video.transcript_status != "ready"
-        visual = payload.get("prepare_visual", True) and video.visual_status != "ready"
-    if transcribe:
-        try:
-            _transcribe_file(video_id, organization_id, file_path, job_id)
-        except Exception as exc:
-            _mark_video(video_id, transcript_status="canceled" if isinstance(exc, JobCanceled) else "failed")
-            raise
+    try:
+        _transcribe_file(video_id, organization_id, file_path, job_id)
+        _embed_transcript_segments(job_id, video_id, organization_id)
+    except Exception as exc:
+        _mark_video(video_id, transcript_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+        raise
     _raise_if_canceled(job_id)
-    if visual:
-        _mark_video(video_id, visual_status="running")
-        try:
-            _index_file(video_id, organization_id, file_path, job_id)
-            _mark_video(video_id, visual_status="ready")
-        except Exception as exc:
-            _mark_video(video_id, visual_status="canceled" if isinstance(exc, JobCanceled) else "failed")
-            raise
+    _mark_video(video_id, visual_status="running")
+    try:
+        _index_file(video_id, organization_id, file_path, job_id)
+        _mark_video(video_id, visual_status="ready")
+    except Exception as exc:
+        _mark_video(video_id, visual_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+        raise
 
 
 def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id: str, embedder=None) -> None:
@@ -408,6 +409,8 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                 [item["embed_path"] for item in batch],
                 verbose=False,
             )
+            if len(embeddings) != len(batch):
+                raise RuntimeError("Incomplete visual search preparation")
             logger.info("visual_embedding_complete backend=%s job_id=%s video_id=%s batch=%s", visual_backend, job_id, video_id, len(embeddings))
             with session_scope() as session:
                 store = PostgresVideoStore(session)
@@ -441,7 +444,7 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                 message=f"Preparing visual evidence {processed}/{len(chunks)}",
             )
 
-            if settings.skip_still and is_still_frame_chunk(chunk_path):
+            if settings.skip_still and processed > 1 and is_still_frame_chunk(chunk_path):
                 continue
 
             embed_path = chunk_path
@@ -498,8 +501,8 @@ def _index_file(video_id: str, organization_id: str, file_path: str, job_id: str
                         repr(exc),
                     )
                 batch.clear()
-        if stored_count == 0 and failed_count > 0:
-            raise RuntimeError(f"All {failed_count} chunk embedding attempt(s) failed.")
+        if stored_count == 0:
+            raise RuntimeError(f"No visual embeddings were prepared ({failed_count} failed chunk attempt(s)).")
         _update_job(job_id, status="running", progress=0.82, message="Caching visual keyframes")
         _index_keyframes(video_id, organization_id, file_path, job_id, embedder)
     finally:
