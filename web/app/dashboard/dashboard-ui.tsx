@@ -542,6 +542,8 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState(initialVideoId || "");
   const [viewOpen, setViewOpen] = useState(false);
+  const [folderPickerId, setFolderPickerId] = useState("");
+  const [pickerVideoIds, setPickerVideoIds] = useState<string[]>([]);
 
   useEffect(() => {
     setItems(videos);
@@ -670,13 +672,29 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
 
   async function createFolder(event: FormEvent) {
     event.preventDefault();
-    if (!folderDraft.trim()) return;
+    if (!folderDraft.trim()) return setActionStatus({ state: "error", message: "Enter a folder name first." });
     const response = await fetch("/api/proxy/v1/library/folders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: folderDraft }) });
     const payload = await response.json().catch(() => ({})) as LibraryFolder & { detail?: string };
     if (!response.ok) return setActionStatus({ state: "error", message: payload.detail || "Folder could not be created." });
     setFolders((current) => [...current, payload]);
     setFolderDraft("");
     openLibrarySection("folder", payload);
+  }
+
+  function openFolderPicker(folderId: string) {
+    setFolderPickerId(folderId);
+    setPickerVideoIds([]);
+  }
+
+  async function addVideosToFolder() {
+    const folderId = folderPickerId;
+    if (!folderId || !pickerVideoIds.length) return;
+    await Promise.all(pickerVideoIds.map((videoId) => {
+      const video = items.find((item) => item.id === videoId);
+      return video ? updateLibraryMetadata(video, { collection: folderId }) : Promise.resolve();
+    }));
+    setFolderPickerId("");
+    setPickerVideoIds([]);
   }
 
   async function saveFolderName(folder: LibraryFolder) {
@@ -726,21 +744,22 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
         </nav>
 
         {activeFolder === "folders" ? <section className="library-folders-section" aria-labelledby="library-folders-title">
-          <header><div><h2 id="library-folders-title">Folders</h2><p>Create folders, change their order, or open one to arrange its videos.</p></div>{permissions.canEdit ? <form className="library-folder-create" onSubmit={(event) => void createFolder(event)}><input value={folderDraft} onChange={(event) => setFolderDraft(event.target.value)} placeholder="Folder name" aria-label="New folder name" /><button type="submit" disabled={!folderDraft.trim()}>Create folder</button></form> : null}</header>
+          <header><div><h2 id="library-folders-title">Folders</h2><p>Create folders, change their order, or open one to arrange its videos.</p></div>{permissions.canEdit ? <form className="library-folder-create" onSubmit={(event) => void createFolder(event)}><input value={folderDraft} onChange={(event) => { setFolderDraft(event.target.value); if (actionStatus.state === "error") setActionStatus({ state: "idle" }); }} placeholder="Folder name" aria-label="New folder name" /><button type="submit">Create folder</button></form> : null}</header>
+          <StatusLine status={actionStatus} />
           <div className="library-folder-board">
             {folders.length ? folders.map((folder) => <article key={folder.id} className="library-folder-row" draggable={permissions.canEdit && editingFolderId !== folder.id} onDragStart={() => { setDraggedFolderId(folder.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedFolderId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => { const video = items.find((item) => item.id === draggedVideoId); if (video) void updateLibraryMetadata(video, { collection: folder.id }); else if (draggedFolderId) void reorderFolder(draggedFolderId, folder.id); setDraggedVideoId(null); setDraggedFolderId(null); }}>
               {editingFolderId === folder.id ? <input value={editingFolderName} autoFocus aria-label={`Rename ${folder.name}`} onChange={(event) => setEditingFolderName(event.target.value)} onBlur={() => void saveFolderName(folder)} onKeyDown={(event) => { if (event.key === "Enter") void saveFolderName(folder); if (event.key === "Escape") setEditingFolderId(""); }} /> : <Link href={`/dashboard/library?view=folder&folder=${encodeURIComponent(folder.id)}&folder_name=${encodeURIComponent(folder.name)}`} onClick={() => { setActiveFolder(folder.id); setQuery(""); setSelectedVideoIds([]); }}><span>{folder.name}</span><small>{items.filter((video) => video.collection === folder.id).length} videos</small></Link>}
-              {permissions.canEdit && editingFolderId !== folder.id ? <details><summary aria-label={`Folder actions for ${folder.name}`}>•••</summary><div><button type="button" onClick={() => { setEditingFolderId(folder.id); setEditingFolderName(folder.name); }}>Rename</button><button type="button" onClick={() => void deleteFolder(folder)}>Delete</button></div></details> : null}
+              {permissions.canEdit && editingFolderId !== folder.id ? <details><summary aria-label={`Folder actions for ${folder.name}`}>•••</summary><div><button type="button" onClick={() => openFolderPicker(folder.id)}>Add existing videos</button><button type="button" onClick={() => { setEditingFolderId(folder.id); setEditingFolderName(folder.name); }}>Rename</button><button type="button" onClick={() => void deleteFolder(folder)}>Delete</button></div></details> : null}
             </article>) : <div className="library-empty-state"><h3>No folders yet</h3><p>Create a folder when you are ready to organize related videos.</p></div>}
           </div>
         </section> : <div className="library-content-panel">
             <div className="library-content-toolbar">
               <div><h2>{activeFolder === "all" ? "All videos" : activeFolder === "unorganized" ? "Unorganized" : folderName(activeFolder)}</h2><span>{filteredVideos.length} {filteredVideos.length === 1 ? "video" : "videos"}</span></div>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search library" />
+              <div className="library-content-tools">{!(["all", "unorganized"].includes(activeFolder)) && permissions.canEdit ? <button type="button" className="button-secondary" onClick={() => openFolderPicker(activeFolder)}>Add existing videos</button> : null}<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search library" /></div>
             </div>
             {selectedVideoIds.length ? <div className="library-selection-bar"><span>{selectedVideoIds.length} selected</span>{folders.length ? <LibraryFolderMenu folders={folders} label="Move selected videos" onChange={(folderId) => void moveSelected(folderId)} disabled={!permissions.canEdit} /> : null}<Link className="button-secondary" href={`/search?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`}>Search</Link><button type="button" onClick={() => setSelectedVideoIds([])}>Clear</button></div> : null}
             <StatusLine status={actionStatus} />
-            {filteredVideos.length === 0 ? <div className="library-empty-state"><h3>{items.length ? "No videos here" : "Your library is empty"}</h3><p>{items.length ? "Move videos into this folder or choose another folder." : "Add a video to begin building your workspace library."}</p>{!items.length ? <Link href={"/dashboard/ingest" as any} className="button">Add videos</Link> : null}</div> : <div className="library-card-grid">
+            {filteredVideos.length === 0 ? <div className="library-empty-state"><h3>{items.length ? "No videos here" : "Your library is empty"}</h3><p>{items.length ? "Choose existing videos to add to this folder." : "Add a video to begin building your workspace library."}</p>{!items.length ? <Link href={"/dashboard/ingest" as any} className="button">Add videos</Link> : !(["all", "unorganized"].includes(activeFolder)) && permissions.canEdit ? <button type="button" className="button" onClick={() => openFolderPicker(activeFolder)}>Add existing videos</button> : null}</div> : <div className="library-card-grid">
             {filteredVideos.map((video) => {
               const thumbnailUrl = video.thumbnail_object_key ? `/api/proxy/v1/media/${video.thumbnail_object_key.split("/").map(encodeURIComponent).join("/")}` : null;
               return <article key={video.id} className="library-media-card" draggable={permissions.canEdit} onDragStart={() => { setDraggedVideoId(video.id); setDraggedFolderId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedVideoId) void reorderVideo(draggedVideoId, video.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedVideoId(null)}>
@@ -755,6 +774,7 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
       </article>
 
       {viewOpen && selectedVideo ? <div className="library-view-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setViewOpen(false); }}><section className="library-view-dialog" role="dialog" aria-modal="true" aria-labelledby="library-view-title"><header><div><h2 id="library-view-title">{selectedVideo.filename}</h2><p>{fmt(selectedVideo.duration)} · {folderName(selectedVideo.collection)}</p></div><button type="button" autoFocus onClick={() => setViewOpen(false)} aria-label="Close video viewer">×</button></header>{selectedMediaUrl ? <video src={selectedMediaUrl} controls autoPlay preload="metadata" /> : <div className="library-view-unavailable">Preview unavailable</div>}<footer><Link className="button" href={`/search?video_ids=${encodeURIComponent(selectedVideo.id)}`}>Search this video</Link>{folders.length ? <LibraryFolderMenu folders={folders} value={selectedVideo.collection || ""} label="Move video to folder" onChange={(folderId) => void updateLibraryMetadata(selectedVideo, { collection: folderId })} disabled={!permissions.canEdit} /> : null}<button type="button" className="button-secondary library-delete-action" onClick={() => void deleteVideo(selectedVideo.id)} disabled={!permissions.canEdit}>Delete</button></footer></section></div> : null}
+      {folderPickerId ? <div className="library-folder-picker-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setFolderPickerId(""); }}><section className="library-folder-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-picker-title"><header><div><h2 id="folder-picker-title">Add existing videos</h2><p>Choose videos for {folderName(folderPickerId)}.</p></div><button type="button" onClick={() => setFolderPickerId("")} aria-label="Close video picker">×</button></header><div className="library-folder-picker-list">{items.filter((video) => video.collection !== folderPickerId).map((video) => <label key={video.id}><input type="checkbox" checked={pickerVideoIds.includes(video.id)} onChange={(event) => setPickerVideoIds((current) => event.target.checked ? [...current, video.id] : current.filter((id) => id !== video.id))} />{video.thumbnail_object_key ? <img src={`/api/proxy/v1/media/${video.thumbnail_object_key.split("/").map(encodeURIComponent).join("/")}`} alt="" /> : <span aria-hidden="true">▶</span>}<strong>{video.filename}</strong><small>{folderName(video.collection)}</small></label>)}</div><footer><button type="button" className="button-secondary" onClick={() => setFolderPickerId("")}>Cancel</button><button type="button" className="button" disabled={!pickerVideoIds.length} onClick={() => void addVideosToFolder()}>Add {pickerVideoIds.length || ""} {pickerVideoIds.length === 1 ? "video" : "videos"}</button></footer></section></div> : null}
     </section>
   );
 }

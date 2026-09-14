@@ -742,7 +742,7 @@ export function SearchContent({
       .then(async (response) => {
         if (!response.ok) return;
         const payload = await response.json() as { provider?: string; base_url?: string; model?: string };
-        if (payload.provider) setChatModel(payload.provider);
+        if (payload.provider) setChatModel(payload.provider === "custom" ? "custom" : "vivadeo-auto");
         if (payload.base_url) setCustomBaseUrl(payload.base_url);
         if (payload.model) setCustomModel(payload.model);
       })
@@ -1686,7 +1686,7 @@ export function SearchContent({
                   <div className="chat-model-control">
                     <button className="chat-model-trigger" type="button" aria-label="Open chat settings" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen(true); }}>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 4v6 M6 14v6" /></svg>
-                      <strong>Settings · {chatModel === "vivadeo-auto" ? "Vivadeo Auto" : chatModel === "ollama" ? "Ollama" : chatModel === "anthropic" ? "Anthropic" : chatModel === "openai" ? "OpenAI-compatible" : chatModel === "gemini" ? "Gemini-compatible" : chatModel === "nvidia" ? "NVIDIA-compatible" : "Custom endpoint"}</strong>
+                      <strong>Settings · {chatModel === "custom" ? "Custom endpoint" : "Vivadeo Auto"}</strong>
                     </button>
                     {modelOpen && typeof document !== "undefined" ? createPortal(
                       <div className="chat-settings-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setModelOpen(false); }}>
@@ -1701,7 +1701,6 @@ export function SearchContent({
                               {!customModelView ? <div className="chat-model-options">
                                 <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => setChatModel("vivadeo-auto")}><span><strong>Vivadeo Auto</strong><small>Balanced for everyday archive questions</small></span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
                                 <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setCustomModelView(true)}><span><strong>Custom endpoint</strong><small>Connect a compatible answer service</small></span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
-                                {[["openai", "OpenAI-compatible"], ["anthropic", "Anthropic"], ["ollama", "Ollama"], ["gemini", "Gemini-compatible"], ["nvidia", "NVIDIA-compatible"]].map(([value, label]) => <button key={value} type="button" className={chatModel === value ? "is-selected" : ""} onClick={() => setChatModel(value)}><span><strong>{label}</strong><small>Use your saved connection</small></span><span aria-hidden="true">{chatModel === value ? "✓" : ""}</span></button>)}
                               </div> : <div className="chat-model-custom">
                                 <button type="button" className="chat-model-back" onClick={() => setCustomModelView(false)}>← Back to answer services</button>
                                 <input value={customBaseUrl} onChange={(event) => setCustomBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" aria-label="Custom AI base URL" />
