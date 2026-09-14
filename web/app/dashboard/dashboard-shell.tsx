@@ -92,6 +92,7 @@ export function DashboardShell({
   const paletteRef = useRef<HTMLDialogElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const isSettingsPage = pathname.startsWith("/settings");
@@ -170,25 +171,31 @@ export function DashboardShell({
   }
 
   useEffect(() => {
-    function closeAccountMenu(event: PointerEvent) {
+    function closeOpenMenus(event: PointerEvent) {
       const menu = accountMenuRef.current;
       if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+      const notificationsMenu = notificationsRef.current;
+      if (notificationsOpen && event.target instanceof Node && !notificationsMenu?.contains(event.target)) setNotificationsOpen(false);
     }
 
-    function closeAccountMenuWithKeyboard(event: KeyboardEvent) {
+    function closeOpenMenusWithKeyboard(event: KeyboardEvent) {
       if (event.key === "Escape" && accountMenuRef.current?.open) {
         accountMenuRef.current.open = false;
         accountMenuRef.current.querySelector<HTMLElement>("summary")?.focus();
       }
+      if (event.key === "Escape" && notificationsOpen) {
+        setNotificationsOpen(false);
+        notificationsRef.current?.querySelector<HTMLElement>("button")?.focus();
+      }
     }
 
-    document.addEventListener("pointerdown", closeAccountMenu);
-    document.addEventListener("keydown", closeAccountMenuWithKeyboard);
+    document.addEventListener("pointerdown", closeOpenMenus);
+    document.addEventListener("keydown", closeOpenMenusWithKeyboard);
     return () => {
-      document.removeEventListener("pointerdown", closeAccountMenu);
-      document.removeEventListener("keydown", closeAccountMenuWithKeyboard);
+      document.removeEventListener("pointerdown", closeOpenMenus);
+      document.removeEventListener("keydown", closeOpenMenusWithKeyboard);
     };
-  }, []);
+  }, [notificationsOpen]);
 
   function closePalette() {
     setPaletteOpen(false);
@@ -304,7 +311,7 @@ export function DashboardShell({
               <span>Search anything...</span>
               <kbd aria-label="Command or Control plus K">⌘ K</kbd>
             </button>
-            <div className="dashboard-notifications">
+            <div ref={notificationsRef} className="dashboard-notifications">
             <button type="button" className="dashboard-notification-trigger" aria-label="View notifications" aria-expanded={notificationsOpen} onClick={() => void markNotificationsRead()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
               {notifications.some((item) => !item.read_at) ? <span aria-label={`${notifications.filter((item) => !item.read_at).length} unread notifications`}>{Math.min(9, notifications.filter((item) => !item.read_at).length)}</span> : null}
