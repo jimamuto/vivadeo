@@ -29,6 +29,7 @@ from .db import (
     Job,
     Organization,
     OrganizationSetting,
+    ReviewEvidenceItem,
     SessionLocal,
     SavedSearch,
     Video,
@@ -56,6 +57,9 @@ from .schemas import (
     ChatMessageRequest,
     ChatMessageVideoResponse,
     ChatEvidenceFeedbackRequest,
+    ReviewEvidenceRequest,
+    ReviewEvidenceResponse,
+    ReviewEvidenceUpdateRequest,
     ChatSearchRunResponse,
     ChatExtractionRow,
     ChatComparisonClaim,
@@ -2822,6 +2826,136 @@ def add_search_feedback(
     session.refresh(run)
     entries = session.scalars(select(ChatEvidenceFeedback).where(ChatEvidenceFeedback.search_run_id == run.id).order_by(ChatEvidenceFeedback.created_at.asc())).all()
     return _search_run_response(run, entries)
+
+
+def _review_evidence_response(item: ReviewEvidenceItem, run: ChatSearchRun, video: Video, store: ObjectStore) -> ReviewEvidenceResponse:
+    return ReviewEvidenceResponse(
+        id=item.id,
+        search_run_id=item.search_run_id,
+        thread_id=run.thread_id,
+        query=run.query,
+        video_id=item.video_id,
+        filename=video.filename,
+        source_uri=video.source_uri,
+        video_url=store.presigned_url(video.object_key) if video.object_key else None,
+        duration=video.duration,
+        start_time=item.start_time,
+        end_time=item.end_time,
+        text=item.text,
+        modality=item.modality,
+        decision=item.decision,
+        note=item.note,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+def _review_evidence_rows(session: Session, organization_id: str) -> list[ReviewEvidenceResponse]:
+    rows = session.execute(
+        select(ReviewEvidenceItem, ChatSearchRun, Video)
+        .join(ChatSearchRun, ReviewEvidenceItem.search_run_id == ChatSearchRun.id)
+        .join(Video, ReviewEvidenceItem.video_id == Video.id)
+        .where(ReviewEvidenceItem.organization_id == organization_id)
+        .order_by(ReviewEvidenceItem.updated_at.desc(), ReviewEvidenceItem.created_at.asc())
+    ).all()
+    store = ObjectStore()
+    return [_review_evidence_response(item, run, video, store) for item, run, video in rows]
+
+
+@app.get(
+    "/v1/review/evidence",
+    response_model=list[ReviewEvidenceResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def list_review_evidence(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    return _review_evidence_rows(session, organization_id)
+
+
+@app.post(
+    "/v1/review/evidence",
+    response_model=ReviewEvidenceResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def add_review_evidence(
+    request: ReviewEvidenceRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    if request.end_time < request.start_time:
+        raise HTTPException(status_code=422, detail="Evidence end time must be after the start time")
+    run = session.scalar(select(ChatSearchRun).where(ChatSearchRun.id == request.search_run_id, ChatSearchRun.organization_id == organization_id))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Search run not found")
+    video = session.scalar(select(Video).where(Video.id == request.video_id, Video.organization_id == organization_id))
+    if video is None or (run.scope_video_ids and request.video_id not in run.scope_video_ids):
+        raise HTTPException(status_code=404, detail="Evidence video not found")
+    item = session.scalar(select(ReviewEvidenceItem).where(
+        ReviewEvidenceItem.organization_id == organization_id,
+        ReviewEvidenceItem.search_run_id == run.id,
+        ReviewEvidenceItem.video_id == request.video_id,
+        ReviewEvidenceItem.start_time == request.start_time,
+        ReviewEvidenceItem.end_time == request.end_time,
+    ))
+    if item is None:
+        item = ReviewEvidenceItem(
+            id=new_id(),
+            organization_id=organization_id,
+            search_run_id=run.id,
+            video_id=request.video_id,
+            start_time=request.start_time,
+            end_time=request.end_time,
+            text=request.text.strip(),
+            modality=request.modality,
+        )
+        session.add(item)
+    session.commit()
+    session.refresh(item)
+    return _review_evidence_response(item, run, video, ObjectStore())
+
+
+@app.patch(
+    "/v1/review/evidence/{item_id}",
+    response_model=ReviewEvidenceResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def update_review_evidence(
+    item_id: str,
+    request: ReviewEvidenceUpdateRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    item = session.scalar(select(ReviewEvidenceItem).where(ReviewEvidenceItem.id == item_id, ReviewEvidenceItem.organization_id == organization_id))
+    if item is None:
+        raise HTTPException(status_code=404, detail="Review evidence not found")
+    item.decision = request.decision
+    item.note = request.note.strip() if request.note else None
+    run = session.get(ChatSearchRun, item.search_run_id)
+    video = session.get(Video, item.video_id)
+    if run is None or video is None:
+        raise HTTPException(status_code=404, detail="Review evidence source not found")
+    session.commit()
+    session.refresh(item)
+    return _review_evidence_response(item, run, video, ObjectStore())
+
+
+@app.delete(
+    "/v1/review/evidence/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_api_key)],
+)
+def remove_review_evidence(
+    item_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    item = session.scalar(select(ReviewEvidenceItem).where(ReviewEvidenceItem.id == item_id, ReviewEvidenceItem.organization_id == organization_id))
+    if item is None:
+        raise HTTPException(status_code=404, detail="Review evidence not found")
+    session.delete(item)
+    session.commit()
 
 
 def _saved_search_response(saved: SavedSearch) -> SavedSearchResponse:

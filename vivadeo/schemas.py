@@ -284,6 +284,40 @@ class ChatEvidenceFeedbackRequest(BaseModel):
     correction: str | None = Field(default=None, max_length=500)
 
 
+class ReviewEvidenceRequest(BaseModel):
+    search_run_id: str
+    video_id: str
+    start_time: float = Field(..., ge=0)
+    end_time: float = Field(..., ge=0)
+    text: str = Field(default="", max_length=5000)
+    modality: Literal["visual", "transcript", "hybrid"] = "transcript"
+
+
+class ReviewEvidenceUpdateRequest(BaseModel):
+    decision: Literal["pending", "verified", "rejected", "needs_context"]
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ReviewEvidenceResponse(BaseModel):
+    id: str
+    search_run_id: str
+    thread_id: str | None = None
+    query: str
+    video_id: str
+    filename: str
+    source_uri: str
+    video_url: str | None = None
+    duration: float | None = None
+    start_time: float
+    end_time: float
+    text: str
+    modality: str
+    decision: Literal["pending", "verified", "rejected", "needs_context"]
+    note: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatSearchRunResponse(BaseModel):
     id: str
     query: str

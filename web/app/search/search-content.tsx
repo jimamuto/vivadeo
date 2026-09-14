@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/app/dashboard/dashboard-shell";
 import { appendActivity } from "@/lib/activity-log";
@@ -676,6 +677,8 @@ export function SearchContent({
   const [browseOpen, setBrowseOpen] = useState(false);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
+  const [reviewEvidence, setReviewEvidence] = useState<Record<string, boolean>>({});
+  const [addingReviewKey, setAddingReviewKey] = useState<string | null>(null);
   const [savedSearchName, setSavedSearchName] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingPrompt, setEditingPrompt] = useState("");
@@ -751,6 +754,16 @@ export function SearchContent({
       .then(async (response) => {
         if (!response.ok) return;
         setSavedSearches(await response.json() as SavedSearch[]);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/proxy/v1/review/evidence", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = await response.json() as Array<{ search_run_id: string; video_id: string; start_time: number; end_time: number }>;
+        setReviewEvidence(Object.fromEntries(payload.map((item) => [`${item.search_run_id}:${item.video_id}:${item.start_time.toFixed(3)}:${item.end_time.toFixed(3)}`, true])));
       })
       .catch(() => undefined);
   }, []);
@@ -1131,6 +1144,49 @@ export function SearchContent({
     return `${citation.video_id}:${citation.start_time.toFixed(3)}`;
   }
 
+  function reviewKey(runId: string, citation: Citation) {
+    return `${runId}:${evidenceKey(citation)}:${citation.end_time.toFixed(3)}`;
+  }
+
+  async function addEvidenceToReview(turn: ChatTurn, selected: Citation[], openReview = false) {
+    if (!turn.search_run_id || !selected.length) {
+      setStatus("This answer does not have evidence that can be reviewed.");
+      return;
+    }
+    const pending = selected.filter((citation) => !reviewEvidence[reviewKey(turn.search_run_id!, citation)]);
+    if (!pending.length) {
+      if (openReview) router.push("/dashboard/review");
+      return;
+    }
+    setAddingReviewKey(pending.length === 1 ? reviewKey(turn.search_run_id, pending[0]) : turn.search_run_id);
+    setStatus(`Adding ${pending.length === 1 ? "moment" : `${pending.length} moments`} to Review…`);
+    try {
+      const results = await Promise.all(pending.map(async (citation) => {
+        const response = await fetch("/api/proxy/v1/review/evidence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            search_run_id: turn.search_run_id,
+            video_id: citation.video_id,
+            start_time: citation.start_time,
+            end_time: citation.end_time,
+            text: citation.text || citation.match_reason || "",
+            modality: citation.modality || "transcript",
+          }),
+        });
+        if (!response.ok) throw new Error("Could not add evidence to Review.");
+        return citation;
+      }));
+      setReviewEvidence((current) => ({ ...current, ...Object.fromEntries(results.map((citation) => [reviewKey(turn.search_run_id!, citation), true])) }));
+      setStatus(`${results.length === 1 ? "Moment" : `${results.length} moments`} added to Review.`);
+      if (openReview) router.push("/dashboard/review");
+    } catch (cause) {
+      setStatus(cause instanceof Error ? cause.message : "Could not add evidence to Review.");
+    } finally {
+      setAddingReviewKey(null);
+    }
+  }
+
   async function sendCitationFeedback(turn: ChatTurn, citation: Citation, feedback: string) {
     if (!turn.search_run_id) {
       setStatus("This older answer cannot receive evidence feedback.");
@@ -1486,6 +1542,7 @@ export function SearchContent({
   const activeSources = threadSources.filter((source) => activeSourceIds.includes(source.video_id));
   const composerExpanded = turns.length > 0 || composerFocused || question.length > 0 || loading || modelOpen || browseOpen || activeSources.length > 0 || !!momentContext;
   const sourceCount = threadSources.length;
+  const reviewCount = Object.keys(reviewEvidence).length;
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
@@ -1580,6 +1637,7 @@ export function SearchContent({
 
         <div className={`search-main ${turns.length || restoringThread ? "chat-main-active" : "chat-main-empty"}`}>
           <section key={`composer-${newChatMotionKey}`} className={`surface-section search-query${turns.length === 0 ? " chat-new-composer-enter" : ""}`}>
+            {reviewCount ? <div className="chat-review-dock"><span><strong>{reviewCount}</strong> evidence {reviewCount === 1 ? "moment" : "moments"} collected</span><Link href="/dashboard/review">Open Review →</Link></div> : null}
             <form className={`chat-composer${composerExpanded ? " is-expanded" : " is-compact"}`} onSubmit={submit}
               onFocus={(event) => { if (event.currentTarget.contains(event.target)) setComposerFocused(true); }}
               onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setComposerFocused(false); }}>
@@ -1798,6 +1856,10 @@ export function SearchContent({
                           <span>Try next</span>
                           {turn.suggested_refinements.slice(0, 3).map((suggestion) => <button key={suggestion} type="button" onClick={() => useSuggestedRefinement(turn, suggestion)}>{suggestion}</button>)}
                         </div> : null}
+                        {turn.search_run_id && citations.length ? <div className="chat-review-actions">
+                          <button type="button" className="chat-add-review" disabled={addingReviewKey === turn.search_run_id} onClick={() => void addEvidenceToReview(turn, citations)}>{addingReviewKey === turn.search_run_id ? "Adding…" : `Add ${citations.length === 1 ? "moment" : `${citations.length} moments`} to Review`}</button>
+                          <button type="button" className="chat-open-review" onClick={() => void addEvidenceToReview(turn, citations, true)}>Review evidence</button>
+                        </div> : null}
                         {turn.search_run_id ? savingSearchRunId === turn.search_run_id ? (
                           <form className="chat-save-search-form" onSubmit={(event) => { event.preventDefault(); void saveCurrentSearch(turn, savingSearchName); }}>
                             <input autoFocus value={savingSearchName} maxLength={120} onChange={(event) => setSavingSearchName(event.currentTarget.value)} aria-label="Saved search name" />
@@ -1837,6 +1899,8 @@ export function SearchContent({
                               const previewEnd = citationSource?.duration ? Math.min(citationSource.duration, citation.end_time + 1) : citation.end_time + 1;
                               const feedback = citationFeedback[evidenceKey(citation)];
                               const verification = citation.verification_status || (citation.visual_verified ? "verified" : "possible");
+                              const citationReviewKey = turn.search_run_id ? reviewKey(turn.search_run_id, citation) : "";
+                              const isInReview = Boolean(citationReviewKey && reviewEvidence[citationReviewKey]);
                               return (
                                 <article key={`${citation.video_id}-${citation.start_time.toFixed(3)}`} className={`search-citation-card search-citation-${verification}`}>
                                   <CitationPreview
@@ -1851,6 +1915,7 @@ export function SearchContent({
                                       <span className={`chat-evidence-status chat-evidence-status-${verification}`} aria-label={`Evidence status: ${verification}`}>{verification === "verified" ? "Verified" : verification === "possible" ? "Possible match" : "Not relevant"}</span>
                                     </div>
                                     <div className="chat-evidence-controls">
+                                      <button type="button" className={`chat-evidence-add-review${isInReview ? " is-active" : ""}`} disabled={!turn.search_run_id || addingReviewKey === citationReviewKey} onClick={() => void addEvidenceToReview(turn, [citation])}>{addingReviewKey === citationReviewKey ? "Adding…" : isInReview ? "Added ✓" : "Add to review"}</button>
                                       <button type="button" className={feedback === "relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "relevant")}>Relevant</button>
                                       <button type="button" className={feedback === "not_relevant" ? "is-active" : ""} onClick={() => void sendCitationFeedback(turn, citation, "not_relevant")}>Not relevant</button>
                                       <button type="button" onClick={() => focusMoment(citation, "Show nearby context around this moment.", turn.search_run_id)}>Nearby</button>

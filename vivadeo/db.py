@@ -282,6 +282,28 @@ class ChatEvidenceFeedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ReviewEvidenceItem(Base):
+    __tablename__ = "review_evidence_items"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "search_run_id", "video_id", "start_time", "end_time", name="uq_review_evidence_moment"),
+        Index("ix_review_evidence_org_updated", "organization_id", "updated_at"),
+        Index("ix_review_evidence_run", "search_run_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    search_run_id: Mapped[str] = mapped_column(String(36), ForeignKey("chat_search_runs.id", ondelete="CASCADE"), nullable=False)
+    video_id: Mapped[str] = mapped_column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    modality: Mapped[str] = mapped_column(String(16), nullable=False, default="transcript")
+    decision: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class EvidenceFrame(Base):
     __tablename__ = "evidence_frames"
     __table_args__ = (UniqueConstraint("video_id", "timestamp_key", name="uq_evidence_frame_timestamp"),)
