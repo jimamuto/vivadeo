@@ -2061,6 +2061,20 @@ main { width: 100%; }
 .dashboard-command-bar nav > button:not(.dashboard-command-search), .dashboard-command-bar nav > a { display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 9px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
 .dashboard-command-bar nav > button:not(.dashboard-command-search):hover, .dashboard-command-bar nav > a:hover, .dashboard-command-bar nav > button:not(.dashboard-command-search):focus-visible, .dashboard-command-bar nav > a:focus-visible { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
 .dashboard-command-account { position: relative; margin-left: 5px; }
+.dashboard-notifications { position: relative; }
+.dashboard-notification-trigger { position: relative; display: grid; min-width: 34px; height: 34px; place-items: center; padding: 0 9px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
+.dashboard-notification-trigger:hover, .dashboard-notification-trigger:focus-visible { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
+.dashboard-notification-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+.dashboard-notification-trigger > span { position: absolute; top: 1px; right: 1px; display: grid; min-width: 15px; height: 15px; place-items: center; padding: 0 3px; border-radius: 999px; background: var(--color-oxblood); color: var(--color-content-on-action); font-size: .58rem; font-weight: 750; }
+.dashboard-notification-panel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 70; width: min(380px, calc(100vw - 24px)); border: 1px solid var(--color-border); background: var(--color-surface-solid); box-shadow: 0 18px 48px rgba(45, 36, 34, .18); }
+.dashboard-notification-panel > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--color-border); }
+.dashboard-notification-panel > header a { width: auto; height: auto; color: var(--color-oxblood); font-size: .7rem; }
+.dashboard-notification-panel > div { display: grid; max-height: min(520px, 70vh); overflow-y: auto; }
+.dashboard-notification-panel > div > a { display: grid; width: auto; height: auto; gap: 4px; padding: 14px 16px; border-bottom: 1px solid var(--color-border); color: var(--color-content); text-align: left; }
+.dashboard-notification-panel > div > a:hover { background: var(--color-action-subtle); }
+.dashboard-notification-panel strong { font-size: .76rem; }
+.dashboard-notification-panel span, .dashboard-notification-panel time { color: var(--muted); font-size: .67rem; line-height: 1.4; }
+.dashboard-notification-panel > p { margin: 0; padding: 28px 16px; color: var(--muted); font-size: .75rem; text-align: center; }
 .dashboard-command-profile { gap: 8px; width: auto; height: 34px; padding: 0 9px 0 6px; border-radius: 9px; color: var(--muted); cursor: pointer; list-style: none; }
 .dashboard-command-profile::-webkit-details-marker { display: none; }
 .dashboard-command-profile:hover, .dashboard-command-profile:focus-visible, .dashboard-command-account[open] .dashboard-command-profile { background: var(--color-action-subtle); color: var(--color-oxblood); outline: none; }
@@ -4176,22 +4190,24 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
 .ingest-registry-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; padding: 8px 0 30px; }
 .ingest-registry-head h1 { margin: 0; font-family: var(--font-display); font-size: 2rem; letter-spacing: -.035em; }
 .ingest-registry-head p { max-width: 620px; margin: 8px 0 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
-.ingest-status-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 16px; border-bottom: 1px solid var(--color-border); }
+.ingest-status-bar { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--color-border); }
+.ingest-status-tabs { display: flex; min-width: 0; gap: 4px; overflow-x: auto; padding-bottom: 16px; }
 .ingest-status-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 13px; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: inherit; font-size: .76rem; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .ingest-status-tabs button:hover { background: var(--color-action-subtle); color: var(--color-content); }
 .ingest-status-tabs button.is-active { border-color: var(--color-border-strong); background: var(--color-surface-solid); color: var(--color-oxblood); }
 .ingest-status-tabs button span { display: grid; min-width: 20px; height: 20px; place-items: center; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, var(--color-grain) 28%, transparent); color: inherit; font-size: .66rem; }
+.ingest-add-button { flex: 0 0 auto; min-height: 38px; margin-bottom: 16px; padding: 8px 14px; border-radius: 10px; font-size: .78rem; box-shadow: inset 0 1px 0 rgba(215, 206, 199, .32), inset 0 -1px 0 rgba(45, 36, 34, .75), 0 7px 16px rgba(45, 36, 34, .18); }
 .ingest-registry-tools { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 0; }
 .ingest-registry-tools input { width: min(360px, 100%); padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 0; background: var(--color-surface-solid); color: var(--color-content); font: inherit; font-size: .78rem; }
 .ingest-registry-tools span { color: var(--muted); font-size: .72rem; }
 .ingest-registry-table-wrap { min-width: 0; overflow-x: auto; border-top: 1px solid var(--color-border); }
 .ingest-registry-table { width: 100%; min-width: 820px; border-collapse: collapse; table-layout: fixed; }
 .ingest-registry-table th { padding: 13px 12px; color: var(--muted); font-size: .65rem; font-weight: 700; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
-.ingest-registry-table th:first-child { width: 34%; }
-.ingest-registry-table th:nth-child(2) { width: 20%; }
+.ingest-registry-table th:first-child { width: 31%; }
+.ingest-registry-table th:nth-child(2) { width: 19%; }
 .ingest-registry-table th:nth-child(3) { width: 14%; }
-.ingest-registry-table th:nth-child(4) { width: 23%; }
-.ingest-registry-table th:last-child { width: 9%; }
+.ingest-registry-table th:nth-child(4) { width: 22%; }
+.ingest-registry-table th:last-child { width: 14%; }
 .ingest-registry-table td { padding: 17px 12px; border-top: 1px solid var(--color-border); color: var(--color-content); font-size: .76rem; vertical-align: middle; }
 .ingest-registry-table tbody tr { transition: background 160ms cubic-bezier(.22, 1, .36, 1); }
 .ingest-registry-table tbody tr:hover { background: color-mix(in srgb, var(--color-grain) 9%, transparent); }
@@ -4240,11 +4256,61 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
 .ingest-drawer-guidance li small { color: var(--muted); font-size: .68rem; }
 .ingest-upload-drawer > footer { gap: 10px; }
 .ingest-upload-drawer > footer .button-secondary { border-radius: 0; }
+
+html[data-theme="dark"] .dashboard-wrap .ingest-registry-head p,
+html[data-theme="dark"] .dashboard-wrap .ingest-registry-tools span,
+html[data-theme="dark"] .dashboard-wrap .ingest-file-identity small,
+html[data-theme="dark"] .dashboard-wrap .ingest-registry-table time,
+html[data-theme="dark"] .dashboard-wrap .ingest-row-progress small {
+  color: color-mix(in srgb, var(--color-grain) 78%, transparent);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-registry-table th {
+  color: color-mix(in srgb, var(--color-grain) 86%, transparent);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-registry-tools input {
+  border-color: color-mix(in srgb, var(--color-grain) 34%, transparent);
+  background: color-mix(in srgb, var(--color-blackboard) 12%, var(--color-surface-solid));
+  color: var(--color-grain);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-registry-tools input::placeholder {
+  color: color-mix(in srgb, var(--color-grain) 66%, transparent);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-status-tabs button {
+  color: color-mix(in srgb, var(--color-grain) 82%, transparent);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-status-tabs button:hover,
+html[data-theme="dark"] .dashboard-wrap .ingest-status-tabs button.is-active {
+  border-color: color-mix(in srgb, var(--color-grain) 38%, transparent);
+  background: color-mix(in srgb, var(--color-grain) 9%, transparent);
+  color: var(--color-tan);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-status-tabs button span {
+  background: color-mix(in srgb, var(--color-grain) 20%, transparent);
+  color: var(--color-grain);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-status-good,
+html[data-theme="dark"] .dashboard-wrap .ingest-status-idle {
+  color: color-mix(in srgb, var(--color-grain) 88%, transparent);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-status-live,
+html[data-theme="dark"] .dashboard-wrap .ingest-status-bad,
+html[data-theme="dark"] .dashboard-wrap .ingest-row-actions a,
+html[data-theme="dark"] .dashboard-wrap .ingest-row-actions button {
+  color: var(--color-tan);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-row-progress > span {
+  background: color-mix(in srgb, var(--color-grain) 20%, transparent);
+}
+html[data-theme="dark"] .dashboard-wrap .ingest-row-progress > span i {
+  background: var(--color-tan);
+}
 @keyframes ingest-status-pulse { 50% { opacity: .35; } }
 
 @media (max-width: 720px) {
   .ingest-registry-head { align-items: stretch; flex-direction: column; padding-top: 0; }
-  .ingest-registry-head .button { width: 100%; }
+  .ingest-status-bar { align-items: stretch; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+  .ingest-status-tabs { width: 100%; padding-bottom: 0; }
+  .ingest-add-button { width: 100%; margin-bottom: 0; }
   .ingest-registry-tools { align-items: stretch; flex-direction: column; gap: 9px; }
   .ingest-registry-tools input { width: 100%; }
   .chat-settings-drawer.ingest-upload-drawer { width: 100%; height: 100%; padding: 0; }
@@ -4454,6 +4520,12 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
 .settings-tabs .is-disabled { color: var(--muted); cursor: not-allowed; opacity: .65; }
 .settings-tabs a.is-active { background: var(--color-content); color: var(--color-surface-solid); }
 .settings-section { padding: 34px 8px; }
+.notification-settings > header h2 { margin: 0; font-size: 1.25rem; }
+.notification-settings > header p { margin: 7px 0 24px; color: var(--muted); }
+.notification-settings > label { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 0; border-top: 1px solid var(--color-border); cursor: pointer; }
+.notification-settings > label > span { display: grid; gap: 5px; }
+.notification-settings > label small { color: var(--muted); font-size: .75rem; font-weight: 400; }
+.notification-settings > label input { width: 19px; height: 19px; flex: 0 0 auto; accent-color: var(--color-oxblood); }
 .settings-section + .settings-section { border-top: 1px solid rgba(86, 86, 86, .14); }
 .settings-section-head { margin-bottom: 24px; }
 .settings-subsection { margin-top: 34px; padding-top: 30px; border-top: 1px solid rgba(86, 86, 86, .12); }
@@ -5724,7 +5796,7 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
 /* Progressive composer tools; the input stays anchored during expansion. */
 .chat-composer { grid-template-rows: auto auto; }
 .chat-composer .chat-composer-input textarea,
-.chat-composer .chat-composer-input textarea:focus { padding-left: 50px; max-height: 180px; overflow-y: auto; }
+.chat-composer .chat-composer-input textarea:focus { padding-left: 18px; max-height: 180px; overflow-y: auto; }
 .chat-quick-attach { position: absolute; z-index: 1; top: 12px; left: 10px; display: grid; place-items: center; width: 34px; height: 34px; padding: 7px; border: 0; border-radius: 50%; background: transparent; color: var(--color-content); cursor: pointer; }
 .chat-quick-attach:hover { background: var(--color-action-subtle); }
 .chat-quick-attach:focus-visible { outline: 2px solid var(--color-oxblood); outline-offset: 2px; }

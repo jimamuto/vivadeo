@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str | None = Field(None, alias="AZURE_STORAGE_CONNECTION_STRING")
     azure_storage_container: str = Field("vivadeo", alias="AZURE_STORAGE_CONTAINER")
     azure_storage_timeout: int = Field(300, ge=30, alias="AZURE_STORAGE_TIMEOUT")
+    azure_communication_connection_string: str | None = Field(None, alias="AZURE_COMMUNICATION_CONNECTION_STRING")
+    email_from: str | None = Field(None, alias="EMAIL_FROM")
     s3_endpoint_url: str = Field("https://s3.eu-central-003.backblazeb2.com", alias="S3_ENDPOINT_URL")
     s3_bucket: str = Field("vivadeo", alias="S3_BUCKET")
     s3_access_key_id: str = Field("change-me", alias="S3_ACCESS_KEY_ID")

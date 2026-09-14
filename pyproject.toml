@@ -22,6 +22,7 @@ dependencies = [
     "yt-dlp>=2025.1.0",
     "cryptography>=42",
     "azure-storage-blob>=12.24",
+    "azure-communication-email>=1.0.0",
     "opentelemetry-distro>=0.56b0",
     "opentelemetry-exporter-otlp-proto-http>=1.35.0",
     "opentelemetry-instrumentation-celery>=0.56b0",

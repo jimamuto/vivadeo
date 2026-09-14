@@ -19,7 +19,7 @@ type BackendThread = {
 function toChatThread(thread: BackendThread): ChatThread {
   return {
     id: thread.id,
-    title: thread.title === "New thread" ? "New chat" : thread.title,
+    title: thread.title === "New thread" ? "New search" : thread.title,
     updatedAt: thread.updated_at,
     messages: thread.messages,
     turns: thread.messages,

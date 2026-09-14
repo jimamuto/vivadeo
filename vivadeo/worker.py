@@ -20,6 +20,7 @@ from .embedder import get_embedder, reset_embedder
 from .frame_extractor import extract_frame
 from .azure_whisper import AzureWhisperTranscriber
 from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key, visual_keyframe_object_key
+from .notifications import notify_ingest_outcome
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
 
@@ -532,12 +533,14 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
         _prepare_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Evidence ready")
+        notify_ingest_outcome(job_id=job_id, video_id=video_id, organization_id=organization_id, succeeded=True)
     except JobCanceled:
         _mark_video(video_id, status="canceled", error="Canceled by user")
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
+        notify_ingest_outcome(job_id=job_id, video_id=video_id, organization_id=organization_id, succeeded=False)
         raise
 
 
@@ -560,12 +563,14 @@ def ingest_uploaded_object(job_id: str, video_id: str, organization_id: str) -> 
         _prepare_file(video_id, organization_id, local_path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Indexed")
+        notify_ingest_outcome(job_id=job_id, video_id=video_id, organization_id=organization_id, succeeded=True)
     except JobCanceled:
         _mark_video(video_id, status="canceled", error="Canceled by user")
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
+        notify_ingest_outcome(job_id=job_id, video_id=video_id, organization_id=organization_id, succeeded=False)
         raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -594,12 +599,14 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
         _prepare_file(video_id, organization_id, path, job_id)
         _mark_video(video_id, status="ready", error=None)
         _update_job(job_id, status="succeeded", progress=1.0, message="Evidence ready")
+        notify_ingest_outcome(job_id=job_id, video_id=video_id, organization_id=organization_id, succeeded=True)
     except JobCanceled:
         _mark_video(video_id, status="canceled", error="Canceled by user")
         _update_job(job_id, status="canceled", progress=0.0, message="Canceled by user", error=None)
     except Exception as exc:
         _mark_video(video_id, status="failed", error=str(exc))
         _update_job(job_id, status="failed", error=str(exc), message="Failed")
+        notify_ingest_outcome(job_id=job_id, video_id=video_id, organization_id=organization_id, succeeded=False)
         raise
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

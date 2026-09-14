@@ -46,7 +46,13 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Ingest And Jobs
 
-- Chat attachments prepare spoken content first and track spoken/visual readiness independently. Transcript questions can answer as soon as spoken content is ready; visual questions trigger visual preparation only when needed, and focused timestamp questions extract a cached frame without building the whole visual index.
+- Add video is the authoritative ingest and live progress surface. Upload and URL ingest remain on that page while its registry polls pipeline state; normal ingest does not redirect to the dedicated job page.
+- Search chat can browse and attach existing ready workspace videos, but cannot upload files or ingest links. Videos must complete preparation through Add video before chat can select them.
+- Ready videos on Add video can open a new Search chat with that video already selected; processing and failed videos do not expose the Search action.
+- The Add video registry does not link to the separate job detail page while the future progress-navigation model is being decided.
+- Ready and failed ingest outcomes create persisted per-user notifications for workspace members. The dashboard bell shows these records, optional browser notifications work while Vivadeo is open, and email delivery works in the background when enabled.
+- Notification preferences persist in PostgreSQL. Browser notifications require explicit browser permission; email notifications default on and can be disabled in Settings.
+- Prepared sources track spoken and visual readiness independently. Transcript questions use spoken content as soon as it is ready; visual questions use prepared visual evidence, and focused timestamp questions extract a cached frame without rebuilding the whole visual index.
 - Ingest transcription uses Azure OpenAI Whisper; Modal remains responsible for Vivadeo Auto embeddings and answer generation.
 - Failed ingest and clip jobs have a retry path at `/v1/jobs/{job_id}/retry` for supported job kinds.
 - Retry accepts canceled ingest jobs as well as failed ones.

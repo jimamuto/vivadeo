@@ -6,6 +6,7 @@ import { AccountSettingsPanel } from "./account-settings-panel";
 import { DeleteAccountPanel } from "./delete-account-panel";
 import { LlmSettingsPanel } from "./llm-settings-panel";
 import { PasswordSettingsPanel } from "./password-settings-panel";
+import { NotificationSettingsPanel } from "./notification-settings-panel";
 import { SETTINGS_SECTIONS, type SettingsSection } from "./settings-sections";
 
 export async function SettingsPageContent({ section }: { section: SettingsSection }) {
@@ -38,7 +39,6 @@ export async function SettingsPageContent({ section }: { section: SettingsSectio
             {item.label}
           </Link>
         ))}
-        <span className="is-disabled" aria-disabled="true">Notifications</span>
         <span className="is-disabled" aria-disabled="true">Billing</span>
       </nav>
 
@@ -49,6 +49,7 @@ export async function SettingsPageContent({ section }: { section: SettingsSectio
         {section === "security" ? <PasswordSettingsPanel /> : null}
         {section === "privacy" ? <DeleteAccountPanel /> : null}
         {section === "ai-providers" ? <LlmSettingsPanel /> : null}
+        {section === "notifications" ? <NotificationSettingsPanel /> : null}
       </div>
     </DashboardShell>
   );

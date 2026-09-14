@@ -591,7 +591,7 @@ function normalizeThread(payload: { id: string; title: string; updated_at: strin
   const currentMessageId = payload.current_message_id ?? messages.at(-1)?.id ?? null;
   return {
     id: payload.id,
-    title: payload.title === "New thread" ? "New chat" : payload.title,
+    title: payload.title === "New thread" ? "New search" : payload.title,
     updatedAt: payload.updated_at,
     messages,
     turns: activeBranch(messages, currentMessageId),
@@ -625,7 +625,10 @@ export function SearchContent({
   initialWorkspace?: string;
 }) {
   const router = useRouter();
-  const initialThread = initialThreads.find((thread) => thread.id === initialThreadId) || initialThreads[0];
+  const hasInitialVideoSelection = Boolean(initialVideoId || initialVideoIds.length);
+  const initialThread = initialThreadId
+    ? initialThreads.find((thread) => thread.id === initialThreadId)
+    : hasInitialVideoSelection ? undefined : initialThreads[0];
   const [activeWorkspace, setActiveWorkspace] = useState(initialWorkspace);
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
@@ -684,6 +687,7 @@ export function SearchContent({
   const chatFeedRef = useRef<HTMLElement>(null);
   const creatingThreadRef = useRef<Promise<string | null> | null>(null);
   const initialQuerySubmitted = useRef(false);
+  const initialVideoAttached = useRef(false);
 
   useClientLayoutEffect(() => {
     const input = questionInputRef.current;
@@ -756,11 +760,23 @@ export function SearchContent({
       .then(async (response) => {
         if (!response.ok) return;
         const payload = (await response.json()) as VideoOption[];
-        setVideos(payload.filter((video) => video.status !== "archived"));
+        setVideos(payload.filter((video) => video.status === "ready"));
       })
       .catch(() => undefined)
       .finally(() => setVideosLoaded(true));
   }, []);
+
+  useEffect(() => {
+    if (!videosLoaded || initialVideoAttached.current || initialThreadId) return;
+    const requestedVideoId = initialVideoIds[0] || initialVideoId;
+    if (!requestedVideoId) return;
+    initialVideoAttached.current = true;
+    if (!videos.some((video) => video.id === requestedVideoId)) {
+      setStatus("That video is not ready for search yet.");
+      return;
+    }
+    void attachExistingVideo(requestedVideoId);
+  }, [initialThreadId, initialVideoId, initialVideoIds, videos, videosLoaded]);
 
   useEffect(() => {
     if (window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true") setOnboardingSeen(true);
@@ -776,6 +792,12 @@ export function SearchContent({
         const loadedThreads = payload.map(normalizeThread);
         if (loadedThreads.length) {
           setThreads(loadedThreads);
+          if (hasInitialVideoSelection && !initialThreadId) {
+            setActiveThreadId("");
+            setTurns([]);
+            setRestoringThread(false);
+            return;
+          }
           const selectedId = initialThreadId && loadedThreads.some((thread) => thread.id === initialThreadId)
             ? initialThreadId
             : loadedThreads.some((thread) => thread.id === activeThreadId) ? activeThreadId : loadedThreads[0].id;
@@ -861,7 +883,7 @@ export function SearchContent({
     setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, sources } : thread));
     if (videosResponse.ok) {
       const payload = (await videosResponse.json()) as VideoOption[];
-      setVideos(payload.filter((video) => video.status !== "archived"));
+      setVideos(payload.filter((video) => video.status === "ready"));
     }
     return sources;
   }
@@ -1246,14 +1268,8 @@ export function SearchContent({
     setStatus("Preparing a reply...");
 
     try {
-      // Wait for transfer/attachment registration, never for full indexing.
-      await uploadTransfersRef.current;
-      const linkedUrl = nextQuestion.match(/https?:\/\/[^\s<>()]+/i)?.[0].replace(/[),.!?]+$/, "") || null;
-      if (linkedUrl) setStatus("Preparing the linked video…");
-      const linkedVideoId = linkedUrl ? await ingestVideoUrl(linkedUrl) : null;
-      if (linkedUrl && !linkedVideoId) throw new Error("Vivadeo could not prepare the linked video.");
       const knownSources = threads.find((thread) => thread.id === threadId)?.sources || [];
-      const shouldRefreshSources = Boolean(linkedVideoId || uploadItems.length || knownSources.length);
+      const shouldRefreshSources = Boolean(knownSources.length);
       const currentSources = shouldRefreshSources ? await refreshThreadSources(threadId) : [];
       if (!currentSources) throw new Error("Could not check the attached videos. Please try again.");
       const availableSourceIds = new Set(currentSources.map((source) => source.video_id));
@@ -1262,8 +1278,7 @@ export function SearchContent({
       const promptSourceIds = Array.from(new Set([
         ...videoIds.filter((sourceId) => availableSourceIds.has(sourceId)),
         ...selectedSourceIds,
-        ...(linkedVideoId ? [linkedVideoId] : []),
-        ...(!videoIds.length && !selectedSourceIds.length && !linkedVideoId && defaultSourceId ? [defaultSourceId] : []),
+        ...(!videoIds.length && !selectedSourceIds.length && defaultSourceId ? [defaultSourceId] : []),
       ]));
       setStatus("Preparing a reply...");
       const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/messages`, {
@@ -1469,9 +1484,8 @@ export function SearchContent({
   }, []);
   const threadSources = activeThread?.sources || [];
   const activeSources = threadSources.filter((source) => activeSourceIds.includes(source.video_id));
-  const visibleUploadItems = uploadItems.filter((item) => !["succeeded", "ready"].includes(item.status) || !threadSources.some((source) => source.video_id === item.videoId));
-  const composerExpanded = turns.length > 0 || composerFocused || question.length > 0 || loading || modelOpen || browseOpen || activeSources.length > 0 || visibleUploadItems.length > 0 || !!momentContext;
-  const sourceCount = threadSources.length + uploadItems.filter((item) => !["succeeded", "ready", "failed", "canceled", "rejected"].includes(item.status) && !threadSources.some((source) => source.video_id === item.videoId)).length;
+  const composerExpanded = turns.length > 0 || composerFocused || question.length > 0 || loading || modelOpen || browseOpen || activeSources.length > 0 || !!momentContext;
+  const sourceCount = threadSources.length;
   const hasConversation = threads.some((thread) => thread.turns.length > 0);
   const showGreeting = turns.length === 0 && !hasConversation;
   const showOnboarding = videosLoaded && videos.length === 0 && !onboardingSeen && showGreeting && !uploadItems.length && !threadSources.length;
@@ -1501,7 +1515,7 @@ export function SearchContent({
         </span>
       ) : undefined}
       sidebarContent={visibleThreads.length ? <section className="sidebar-recent-chats" aria-label="Recents">
-        <div className="sidebar-recent-chats-head"><span>Recents</span><button type="button" onClick={startNewThread} aria-label="Start a new chat">＋</button></div>
+        <div className="sidebar-recent-chats-head"><span>Recents</span><button type="button" onClick={startNewThread} aria-label="Start a new search">＋</button></div>
         <div className="sidebar-recent-chats-list">
           {filteredThreads.slice(0, 8).map((thread) => (
             <div key={thread.id} className={`sidebar-recent-chat ${thread.id === activeThreadId ? "is-active" : ""} ${threadMenuId === `sidebar:${thread.id}` ? "menu-open" : ""}`}>
@@ -1566,35 +1580,9 @@ export function SearchContent({
 
         <div className={`search-main ${turns.length || restoringThread ? "chat-main-active" : "chat-main-empty"}`}>
           <section key={`composer-${newChatMotionKey}`} className={`surface-section search-query${turns.length === 0 ? " chat-new-composer-enter" : ""}`}>
-            <input
-              ref={uploadInputRef}
-              className="visually-hidden"
-              type="file"
-              accept="video/*"
-              multiple
-              onChange={(event) => {
-                const selectedFiles = event.target.files ? Array.from(event.target.files) : [];
-                event.target.value = "";
-                if (selectedFiles.length) void uploadVideos(selectedFiles);
-              }}
-            />
-            {visibleUploadItems.length ? <div className="chat-upload-list" aria-label="Video preparation status">
-              {visibleUploadItems.map((item) => {
-                const failed = ["failed", "canceled", "rejected"].includes(item.status);
-                const label = item.status === "uploading" ? "Uploading" : item.status === "queued" ? "Waiting to prepare" : item.message || (failed ? "Preparation interrupted" : "Preparing video");
-                return <div key={item.id} className={`chat-upload-card${failed ? " is-failed" : ""}`}>
-                  <span className="chat-upload-icon" aria-hidden="true" />
-                  <div className="chat-upload-copy"><strong title={item.filename}>{item.filename}</strong><span>{item.error || label}</span></div>
-                  {!failed ? <span className="chat-upload-progress" aria-label={`${Math.round(item.progress * 100)}% complete`}><span style={{ width: `${Math.max(6, Math.round(item.progress * 100))}%` }} /></span> : null}
-                  {failed && item.jobId ? <button type="button" onClick={() => void retryUpload(item)}>Retry</button> : null}
-                  <button type="button" className="chat-upload-remove" onClick={() => setUploadItems((current) => current.filter((candidate) => candidate.id !== item.id))} aria-label={`Dismiss ${item.filename}`}>×</button>
-                </div>;
-              })}
-            </div> : null}
             <form className={`chat-composer${composerExpanded ? " is-expanded" : " is-compact"}`} onSubmit={submit}
               onFocus={(event) => { if (event.currentTarget.contains(event.target)) setComposerFocused(true); }}
               onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setComposerFocused(false); }}>
-              <button type="button" className="chat-quick-attach" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg></button>
               <div className="field chat-composer-input">
                 <label htmlFor="query">Ask about your videos</label>
                 {momentContext ? <button
@@ -1636,7 +1624,6 @@ export function SearchContent({
               <div className="chat-composer-reveal" inert={!composerExpanded} aria-hidden={!composerExpanded}>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
-                  <button type="button" onClick={() => uploadInputRef.current?.click()} aria-label="Attach videos" data-tooltip="Attach videos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a4.5 4.5 0 0 1-6.4-6.4l7.1-7.1" /></svg><span>Attach</span></button>
                   <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" data-tooltip="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
                   <div className="chat-model-control">
                     <button className="chat-model-trigger" type="button" aria-label="Open chat settings" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen(true); }}>
@@ -1709,7 +1696,7 @@ export function SearchContent({
                       return <button key={video.id} type="button" className={`chat-video-picker-item${selected ? " is-selected" : ""}`} onClick={() => attached ? setActiveSourceIds([video.id]) : void attachExistingVideo(video.id)}><span>{video.filename}</span><small>{selected ? "Using next" : attached ? "Use in next question" : video.status}</small></button>;
                     })}
                   </div>
-                ) : <p className="muted">No videos are available yet. Attach a file or add a URL first.</p>}
+                ) : <p className="muted">No ready videos are available yet. Add a video and follow its progress on the Add video page.</p>}
               </div>
             ) : null}
             <p className="chat-disclaimer">Only share videos you have permission to process. Vivadeo may make mistakes.</p>
@@ -1726,8 +1713,8 @@ export function SearchContent({
                 </article>
               ) : turns.length === 0 ? (
                 <article key={`empty-${newChatMotionKey}`} className={`search-result ${showOnboarding ? "chat-onboarding" : "chat-returning"} chat-new-copy-enter`}>
-                  <h3 className="chat-greeting">{showGreeting ? <TypedText text={`${greeting}, ${firstName}`} className="chat-greeting-typed" /> : "New chat"}</h3>
-                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a new question to start this chat."}</p>
+                  <h3 className="chat-greeting">{showGreeting ? <TypedText text={`${greeting}, ${firstName}`} className="chat-greeting-typed" /> : "Search for evidence"}</h3>
+                  <p className="muted">{showGreeting ? (showOnboarding ? "Start with a question and Vivadeo will find the relevant moments." : "Ask anything about your video archive.") : "Ask a question about your selected videos."}</p>
                   {showOnboarding ? <div className="chat-starters">
                     {[
                       ["Find a moment", "When did we talk about the launch?", "moment"],
@@ -1921,7 +1908,7 @@ export function SearchContent({
                 </div>
                 <button type="button" className="history-toggle" aria-label="Close history">×</button>
               </div>
-              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New chat</button>
+              <button type="button" className="button-secondary chat-new-thread" onClick={startNewThread}>＋ New search</button>
               <input className="chat-history-search" value={threadSearch} onChange={(event) => setThreadSearch(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
               {savedSearches.filter((saved) => !saved.archived).length ? <section className="chat-saved-searches" aria-label="Saved searches">
                 <h3>Saved searches</h3>
@@ -1960,7 +1947,7 @@ export function SearchContent({
                     ))}
                     </div>
                   </section>
-                )) : <p className="muted chat-history-empty">Start a new chat to begin.</p>}
+                )) : <p className="muted chat-history-empty">Start a new search to begin.</p>}
               </div>
             </aside> : null}
       </section>

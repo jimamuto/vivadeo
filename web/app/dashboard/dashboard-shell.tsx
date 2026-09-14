@@ -10,6 +10,7 @@ import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 type NavIcon = "chat" | "ingest" | "library" | "jobs" | "review";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
+type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
 
 const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Review evidence", description: "Confirm the moments behind a result", href: "/dashboard/review", group: "Quick actions", icon: "review", keywords: "review verify evidence moments citations" },
@@ -85,6 +86,8 @@ export function DashboardShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [activeCommand, setActiveCommand] = useState(0);
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const paletteRef = useRef<HTMLDialogElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
@@ -137,6 +140,33 @@ export function DashboardShell({
   }, [paletteOpen]);
 
   useEffect(() => setActiveCommand(0), [paletteQuery]);
+
+  useEffect(() => {
+    let active = true;
+    const shown = new Set<string>();
+    async function refreshNotifications() {
+      try {
+        const response = await fetch("/api/notifications", { cache: "no-store" });
+        if (!response.ok || !active) return;
+        const payload = await response.json() as { notifications: UserNotification[]; preferences: { ingest_browser_notifications?: boolean } };
+        setNotifications(payload.notifications);
+        if (payload.preferences?.ingest_browser_notifications && "Notification" in window && Notification.permission === "granted") {
+          payload.notifications.filter((item) => !item.read_at && !shown.has(item.id)).forEach((item) => { shown.add(item.id); new Notification(item.title, { body: item.message, tag: item.id }); });
+        }
+      } catch { return; }
+    }
+    void refreshNotifications();
+    const timer = window.setInterval(() => void refreshNotifications(), 10000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  async function markNotificationsRead() {
+    setNotificationsOpen((current) => !current);
+    if (!notificationsOpen && notifications.some((item) => !item.read_at)) {
+      setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() })));
+      await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mark_all_read: true }) });
+    }
+  }
 
   useEffect(() => {
     function closeAccountMenu(event: PointerEvent) {
@@ -274,9 +304,13 @@ export function DashboardShell({
               <span>Search anything...</span>
               <kbd aria-label="Command or Control plus K">⌘ K</kbd>
             </button>
-            <Link href="/dashboard/jobs" aria-label="View activity">
+            <div className="dashboard-notifications">
+            <button type="button" className="dashboard-notification-trigger" aria-label="View notifications" aria-expanded={notificationsOpen} onClick={() => void markNotificationsRead()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-            </Link>
+              {notifications.some((item) => !item.read_at) ? <span aria-label={`${notifications.filter((item) => !item.read_at).length} unread notifications`}>{Math.min(9, notifications.filter((item) => !item.read_at).length)}</span> : null}
+            </button>
+            {notificationsOpen ? <div className="dashboard-notification-panel"><header><strong>Notifications</strong><Link href="/settings/notifications">Settings</Link></header>{notifications.length ? <div>{notifications.slice(0, 8).map((item) => <Link key={item.id} href={item.job_id ? `/dashboard/ingest` : "/dashboard/ingest"}><strong>{item.title}</strong><span>{item.message}</span><time>{new Date(item.created_at).toLocaleString()}</time></Link>)}</div> : <p>No notifications yet.</p>}</div> : null}
+            </div>
             <details ref={accountMenuRef} className="dashboard-command-account">
               <summary className="dashboard-command-profile" aria-label="Open account menu">
                 <span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>

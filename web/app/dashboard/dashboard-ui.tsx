@@ -279,11 +279,13 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
     <section className="ingest-registry">
       <header className="ingest-registry-head">
         <div><h1>Videos</h1><p>Track every source as it moves from upload to searchable video evidence.</p></div>
-        <button type="button" className="button" onClick={() => setIsUploadDrawerOpen(true)} disabled={!permissions.canEdit}>＋ Add videos</button>
       </header>
-      <nav className="ingest-status-tabs" aria-label="Filter videos by processing status">
-        {([ ["all", "All", ingestCounts.all], ["processing", "Processing", ingestCounts.processing], ["ready", "Ready", ingestCounts.ready], ["failed", "Needs attention", ingestCounts.failed] ] as const).map(([value, label, count]) => <button key={value} type="button" className={statusFilter === value ? "is-active" : ""} onClick={() => setStatusFilter(value)}>{label} <span>{count}</span></button>)}
-      </nav>
+      <div className="ingest-status-bar">
+        <nav className="ingest-status-tabs" aria-label="Filter videos by processing status">
+          {([ ["all", "All", ingestCounts.all], ["processing", "Processing", ingestCounts.processing], ["ready", "Ready", ingestCounts.ready], ["failed", "Needs attention", ingestCounts.failed] ] as const).map(([value, label, count]) => <button key={value} type="button" className={statusFilter === value ? "is-active" : ""} onClick={() => setStatusFilter(value)}>{label} <span>{count}</span></button>)}
+        </nav>
+        <button type="button" className="button ingest-add-button" onClick={() => setIsUploadDrawerOpen(true)} disabled={!permissions.canEdit}>＋ Add videos</button>
+      </div>
       <div className="ingest-registry-tools"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search uploaded videos" /><span>{ingestRows.length} shown</span></div>
       <div className="ingest-registry-table-wrap">
         <table className="ingest-registry-table">
@@ -297,7 +299,7 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
                 <td data-label="Added"><time dateTime={video.created_at}>{fmtDate(video.created_at)}</time></td>
                 <td data-label="Status"><span className={`ingest-status ingest-status-${statusTone(status)}`}><i aria-hidden="true" />{status === "ready" || status === "succeeded" ? "Ready" : status === "running" || status === "processing" ? "Processing" : status === "queued" ? "Queued" : status === "canceled" ? "Canceled" : status === "failed" ? "Failed" : status}</span></td>
                 <td data-label="Progress"><div className="ingest-row-progress"><span><i style={{ width: `${progress}%` }} /></span><small>{isWorking ? `${progress}%` : job?.message || (status === "ready" ? "Searchable" : "Waiting")}</small></div></td>
-                <td data-label="Actions"><div className="ingest-row-actions">{job ? <Link href={`/jobs?job=${encodeURIComponent(job.id)}`} aria-label={`View processing details for ${video.filename}`}>Details</Link> : <Link href={`/dashboard/library?video_id=${encodeURIComponent(video.id)}`} aria-label={`Open ${video.filename} in the library`}>Open</Link>}{["failed", "canceled"].includes(status) && job ? <button type="button" onClick={() => void retryInterruptedJob(job.id)} disabled={!permissions.canEdit}>Retry</button> : null}</div></td>
+                <td data-label="Actions"><div className="ingest-row-actions">{status === "ready" || status === "succeeded" ? <Link href={`/search?video_ids=${encodeURIComponent(video.id)}`} aria-label={`Start a new search with ${video.filename}`}>Search</Link> : null}{!job ? <Link href={`/dashboard/library?video_id=${encodeURIComponent(video.id)}`} aria-label={`Open ${video.filename} in the library`}>Open</Link> : null}{["failed", "canceled"].includes(status) && job ? <button type="button" onClick={() => void retryInterruptedJob(job.id)} disabled={!permissions.canEdit}>Retry</button> : null}</div></td>
               </tr>;
             })}
             {ingestRows.length === 0 ? <tr><td colSpan={5}><div className="ingest-registry-empty"><strong>{videos.length ? "No videos match this view" : "Your first video starts here"}</strong><p>{videos.length ? "Try another status or search term." : "Add a file or video link to begin building searchable evidence."}</p><button type="button" className="button-secondary" onClick={() => setIsUploadDrawerOpen(true)}>Add video</button></div></td></tr> : null}

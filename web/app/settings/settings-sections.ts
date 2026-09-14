@@ -3,6 +3,7 @@ export const SETTINGS_SECTIONS = [
   { slug: "security", label: "Security" },
   { slug: "privacy", label: "Data & privacy" },
   { slug: "ai-providers", label: "AI providers" },
+  { slug: "notifications", label: "Notifications" },
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["slug"];
