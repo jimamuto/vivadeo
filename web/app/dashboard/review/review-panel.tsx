@@ -132,14 +132,20 @@ export function ReviewPanel() {
 
   if (loading) return <section className="review-loading" aria-live="polite"><span /><p>Loading review evidence…</p></section>;
   if (!items.length) return (
-    <section className="review-empty" aria-labelledby="review-empty-title">
-      <div className="review-empty-mark" aria-hidden="true">03</div>
-      <div><h2 id="review-empty-title">Bring evidence here from Search.</h2><p>Use Add to review on any evidence moment, or collect every citation from an answer. Your selections will remain available here.</p><Link className="button" href="/search">Go to Search</Link></div>
+    <section className="review-empty-simple" aria-labelledby="review-empty-title">
+      <h1 id="review-empty-title">No evidence to review yet.</h1>
+      <p>Add moments from a search answer, then verify them here.</p>
+      <Link className="button" href="/search">Search videos</Link>
     </section>
   );
 
   return (
-    <div className="review-workspace">
+    <>
+      <header className="workflow-step-header review-populated-header">
+        <div><h1>Review evidence</h1><p>Inspect each moment in context and keep only what supports your work.</p></div>
+        <div className="review-header-actions"><Link className="button-secondary" href="/search">Collect evidence</Link><Link className="button" href="/dashboard/output">Create output</Link></div>
+      </header>
+      <div className="review-workspace">
       <nav className="review-sessions" aria-label="Review sessions">
         <div className="review-sessions-heading"><span>Review sessions</span><strong>{sessions.length}</strong></div>
         {sessions.map((session) => {
@@ -193,6 +199,7 @@ export function ReviewPanel() {
         </> : null}
         {error ? <p className="review-error" role="alert">{error}</p> : null}
       </section>
-    </div>
+      </div>
+    </>
   );
 }

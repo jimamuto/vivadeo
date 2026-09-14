@@ -78,6 +78,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 - Search evidence can be added to a persistent workspace Review queue one moment at a time or as the complete citation set for an answer. Review sessions are grouped by their originating search run and retain the query, source video, timestamp range, evidence text, attribution, decision, note, and return link to the chat.
 - Search relevance feedback remains separate from editorial review decisions. Evidence becomes `verified`, `rejected`, or `needs_context` only inside Review.
+- Output consumes only verified Review evidence. Users can choose the included moments, copy a cited brief, inspect structured findings, or download timestamped evidence as CSV or JSON.
 
 ## Library And Usage
 
