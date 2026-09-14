@@ -8,7 +8,7 @@ import { auth } from "@/lib/auth";
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ video_id?: string; t?: string }>;
+  searchParams: Promise<{ video_id?: string; t?: string; view?: string; folder?: string; folder_name?: string }>;
 }) {
   const cookieStore = await cookies();
   const activeWorkspace =
@@ -17,13 +17,14 @@ export default async function LibraryPage({
   const displayName = session?.user?.name || session?.user?.email || "V";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const { videos, jobs } = await fetchDashboardData(activeWorkspace);
-  const { video_id: selectedVideoId = "", t = "" } = await searchParams;
+  const { video_id: selectedVideoId = "", t = "", view = "all", folder = "", folder_name: folderName = "" } = await searchParams;
   const selectedStartTime = t && Number.isFinite(Number(t)) ? Math.max(0, Number(t)) : undefined;
+  const librarySection = view === "folders" ? "Folders" : view === "unorganized" ? "Unorganized" : view === "folder" && folderName ? folderName : "All videos";
 
   return (
-      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName}>
+      <DashboardShell workspace={activeWorkspace} profileInitial={profileInitial} profileName={displayName} breadcrumbDetail={librarySection}>
       <div className="dashboard-stack">
-        <LibraryPanel videos={videos} jobs={jobs} initialVideoId={selectedVideoId} initialStartTime={selectedStartTime} />
+        <LibraryPanel videos={videos} jobs={jobs} initialVideoId={selectedVideoId} initialStartTime={selectedStartTime} initialView={view} initialFolder={folder} />
       </div>
     </DashboardShell>
   );

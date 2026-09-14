@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { appendActivity, readActivityLog, type ActivityEntry } from "@/lib/activity-log";
-import { readSavedClips, writeSavedClips, type SavedClip } from "@/lib/clip-registry";
-import { readVideoLabels, writeVideoLabels } from "@/lib/video-labels";
 import { useWorkspacePermissions } from "@/lib/workspace-permissions";
-import type { Job, Video, VideoChunk } from "./dashboard-data";
+import type { Job, Video } from "./dashboard-data";
 
 type FetchStatus = { state: "idle" | "loading" | "ok" | "error"; message?: string };
 
@@ -474,64 +472,127 @@ export function JobsPanel({ jobs, videos, referenceTime }: { jobs: Job[]; videos
   );
 }
 
-export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTime }: { videos: Video[]; jobs: Job[]; initialVideoId?: string; initialStartTime?: number }) {
+type LibraryFolder = { id: string; name: string; position: number };
+
+function LibraryFolderMenu({
+  folders,
+  value,
+  label,
+  placeholder,
+  onChange,
+  disabled = false,
+}: {
+  folders: LibraryFolder[];
+  value?: string;
+  label?: string;
+  placeholder?: string;
+  onChange: (folderId: string) => void;
+  disabled?: boolean;
+}) {
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const currentName = value === undefined ? placeholder || "Move to…" : folders.find((folder) => folder.id === value)?.name || "Unorganized";
+
+  useEffect(() => {
+    const closeMenu = (event: PointerEvent) => {
+      if (menuRef.current?.open && !menuRef.current.contains(event.target as Node)) menuRef.current.open = false;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menuRef.current?.open) {
+        menuRef.current.open = false;
+        menuRef.current.querySelector<HTMLElement>("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
+  const choose = (folderId: string) => {
+    onChange(folderId);
+    if (menuRef.current) menuRef.current.open = false;
+  };
+
+  return (
+    <details className="library-folder-menu" ref={menuRef} data-disabled={disabled || undefined}>
+      <summary aria-label={label || `Move video from ${currentName}`} aria-disabled={disabled} tabIndex={disabled ? -1 : 0} onClick={(event) => { if (disabled) event.preventDefault(); }}>{currentName}<span aria-hidden="true">⌄</span></summary>
+      <div role="menu" aria-label="Choose folder">
+        <button type="button" role="menuitemradio" aria-checked={value === ""} onClick={() => choose("")}><span>Unorganized</span>{value === "" ? <b aria-hidden="true">✓</b> : null}</button>
+        {folders.map((folder) => <button key={folder.id} type="button" role="menuitemradio" aria-checked={value === folder.id} onClick={() => choose(folder.id)}><span>{folder.name}</span>{value === folder.id ? <b aria-hidden="true">✓</b> : null}</button>)}
+      </div>
+    </details>
+  );
+}
+
+export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initialStartTime, initialView = "all", initialFolder = "" }: { videos: Video[]; jobs: Job[]; initialVideoId?: string; initialStartTime?: number; initialView?: string; initialFolder?: string }) {
+  const router = useRouter();
   const permissions = useWorkspacePermissions();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState(videos);
-  const [selectedId, setSelectedId] = useState(initialVideoId || videos[0]?.id || "");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [collectionFilter, setCollectionFilter] = useState("all");
+  const [folders, setFolders] = useState<LibraryFolder[]>([]);
+  const [activeFolder, setActiveFolder] = useState(initialView === "folders" || initialView === "unorganized" ? initialView : initialView === "folder" && initialFolder ? initialFolder : "all");
+  const [folderDraft, setFolderDraft] = useState("");
+  const [editingFolderId, setEditingFolderId] = useState("");
+  const [editingFolderName, setEditingFolderName] = useState("");
   const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([]);
-  const [savedClips, setSavedClips] = useState<SavedClip[]>([]);
-  const [editingClipId, setEditingClipId] = useState("");
-  const [videoLabels, setVideoLabels] = useState<Record<string, string[]>>({});
-  const [labelDraft, setLabelDraft] = useState("");
-  const [chunks, setChunks] = useState<VideoChunk[]>([]);
-  const [chunksStatus, setChunksStatus] = useState<FetchStatus>({ state: "idle" });
   const [actionStatus, setActionStatus] = useState<FetchStatus>({ state: "idle" });
   const [draggedVideoId, setDraggedVideoId] = useState<string | null>(null);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState(initialVideoId || "");
   const [viewOpen, setViewOpen] = useState(false);
-  const detailPlayerRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    setSavedClips(readSavedClips());
-    setVideoLabels(readVideoLabels());
-  }, []);
 
   useEffect(() => {
     setItems(videos);
   }, [videos]);
 
-  const filteredVideos = useMemo(() => {
-    return items.filter((video) => {
-      if (statusFilter !== "all" && video.status !== statusFilter) return false;
-      if (collectionFilter !== "all" && (video.collection || "Unsorted") !== collectionFilter) return false;
-      if (!query.trim()) return true;
-      const haystack = `${video.filename} ${video.source_uri} ${video.id}`.toLowerCase();
-      return haystack.includes(query.trim().toLowerCase());
-    });
-  }, [items, query, statusFilter, collectionFilter]);
-
-  const collections = useMemo(
-    () => ["all", ...new Set(items.map((video) => video.collection || "Unsorted"))],
-    [items],
-  );
+  useEffect(() => {
+    setActiveFolder(initialView === "folders" || initialView === "unorganized" ? initialView : initialView === "folder" && initialFolder ? initialFolder : "all");
+  }, [initialView, initialFolder]);
 
   useEffect(() => {
-    setSelectedId((current) => (current && filteredVideos.some((video) => video.id === current) ? current : filteredVideos[0]?.id ?? ""));
-  }, [filteredVideos]);
+    let active = true;
+    void fetch("/api/proxy/v1/library/folders", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Folder lookup failed (${response.status})`);
+        return response.json() as Promise<LibraryFolder[]>;
+      })
+      .then((payload) => { if (active) setFolders(payload); })
+      .catch((cause) => { if (active) setActionStatus({ state: "error", message: cause instanceof Error ? cause.message : "Folders could not be loaded." }); });
+    return () => { active = false; };
+  }, []);
 
-  const selectedVideo = filteredVideos.find((video) => video.id === selectedId) ?? filteredVideos[0] ?? null;
+  const filteredVideos = useMemo(() => {
+    return items.filter((video) => {
+      if (activeFolder === "unorganized" && video.collection) return false;
+      if (activeFolder !== "all" && activeFolder !== "unorganized" && video.collection !== activeFolder) return false;
+      if (!query.trim()) return true;
+      const haystack = video.filename.toLowerCase();
+      return haystack.includes(query.trim().toLowerCase());
+    });
+  }, [items, query, activeFolder]);
 
-  const latestJobByVideo = useMemo(() => {
-    return new Map(jobs.map((job) => [job.video_id, job] as const));
-  }, [jobs]);
-
-  const clipsForSelectedVideo = savedClips.filter((clip) => clip.video_id === selectedVideo?.id);
-  const labelsForSelectedVideo = selectedVideo ? (videoLabels[selectedVideo.id] || []) : [];
+  const selectedVideo = items.find((video) => video.id === selectedId) ?? null;
   const selectedMediaUrl = selectedVideo?.object_key
     ? `/api/proxy/v1/media/${selectedVideo.object_key.split("/").map(encodeURIComponent).join("/")}`
     : null;
+  const folderName = (folderId?: string | null) => folders.find((folder) => folder.id === folderId)?.name || "Unorganized";
+  const unorganizedCount = items.filter((video) => !video.collection).length;
+
+  function openLibrarySection(section: "all" | "folders" | "unorganized" | "folder", folder?: LibraryFolder) {
+    const next = section === "folder" && folder ? folder.id : section;
+    setActiveFolder(next);
+    setSelectedVideoIds([]);
+    setQuery("");
+    const params = new URLSearchParams();
+    if (section !== "all") params.set("view", section);
+    if (folder) {
+      params.set("folder", folder.id);
+      params.set("folder_name", folder.name);
+    }
+    router.replace(`/dashboard/library${params.size ? `?${params.toString()}` : ""}` as any, { scroll: false });
+  }
 
   useEffect(() => {
     if (!viewOpen) return;
@@ -541,72 +602,13 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
   }, [viewOpen]);
 
   useEffect(() => {
-    const player = detailPlayerRef.current;
+    const player = document.querySelector<HTMLVideoElement>(".library-view-dialog video");
     if (!player || initialStartTime === undefined || !selectedVideo) return;
     const seek = () => { player.currentTime = Math.min(initialStartTime, player.duration || initialStartTime); };
     if (player.readyState >= 1) seek();
     else player.addEventListener("loadedmetadata", seek, { once: true });
     return () => player.removeEventListener("loadedmetadata", seek);
   }, [initialStartTime, selectedVideo?.id]);
-
-  useEffect(() => {
-    if (!selectedVideo) {
-      setChunks([]);
-      setChunksStatus({ state: "idle" });
-      return;
-    }
-    let mounted = true;
-    setChunksStatus({ state: "loading" });
-    void (async () => {
-      try {
-        const response = await fetch(`/api/proxy/v1/videos/${selectedVideo.id}/chunks`);
-        if (!response.ok) throw new Error(`Chunk lookup failed (${response.status})`);
-        const payload = (await response.json()) as VideoChunk[];
-        if (!mounted) return;
-        setChunks(payload);
-        setChunksStatus({ state: "ok", message: payload.length ? `Loaded ${payload.length} chunks.` : "No chunks yet." });
-      } catch (cause) {
-        if (!mounted) return;
-        setChunks([]);
-        setChunksStatus({
-          state: "error",
-          message: cause instanceof Error ? cause.message : "Chunk lookup failed.",
-        });
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [selectedVideo]);
-
-  function updateSavedClip(clipId: string, field: "name" | "notes" | "collection", value: string) {
-    setSavedClips((current) => {
-      const next = current.map((clip) => (clip.id === clipId ? { ...clip, [field]: value } : clip));
-      writeSavedClips(next);
-      return next;
-    });
-  }
-
-  function addLabel() {
-    if (!selectedVideo || !labelDraft.trim()) return;
-    const next = {
-      ...videoLabels,
-      [selectedVideo.id]: [...new Set([...(videoLabels[selectedVideo.id] || []), labelDraft.trim()])],
-    };
-    setVideoLabels(next);
-    writeVideoLabels(next);
-    setLabelDraft("");
-  }
-
-  function removeLabel(label: string) {
-    if (!selectedVideo) return;
-    const next = {
-      ...videoLabels,
-      [selectedVideo.id]: (videoLabels[selectedVideo.id] || []).filter((item) => item !== label),
-    };
-    setVideoLabels(next);
-    writeVideoLabels(next);
-  }
 
   async function reorderVideo(videoId: string, targetId: string) {
     if (videoId === targetId) return;
@@ -617,9 +619,7 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
     const [moved] = ordered.splice(from, 1);
     ordered.splice(to, 0, moved);
     setItems(ordered);
-    for (const [position, video] of ordered.entries()) {
-      await updateLibraryMetadata(video, { position });
-    }
+    await Promise.all(ordered.map((video, position) => updateLibraryMetadata(video, { position })));
   }
 
   async function updateLibraryMetadata(video: Video, changes: { filename?: string; collection?: string; labels?: string[]; position?: number }) {
@@ -634,233 +634,127 @@ export function LibraryPanel({ videos, jobs, initialVideoId = "", initialStartTi
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as { detail?: string };
+      setActionStatus({ state: "error", message: payload.detail || "Video could not be updated." });
+      return;
+    }
     const updated = (await response.json()) as Video;
     setItems((current) => current.map((item) => (item.id === video.id ? { ...item, ...updated } : item)));
+    setActionStatus({ state: "ok", message: "Library updated." });
   }
 
-  async function runBulkAction(action: "archive" | "reindex" | "delete") {
-    for (const videoId of selectedVideoIds) await runVideoAction(videoId, action);
+  async function moveSelected(folderId: string) {
+    await Promise.all(selectedVideoIds.map((videoId) => {
+      const video = items.find((item) => item.id === videoId);
+      return video ? updateLibraryMetadata(video, { collection: folderId }) : Promise.resolve();
+    }));
     setSelectedVideoIds([]);
   }
 
-  async function runVideoAction(videoId: string, action: "archive" | "reindex" | "delete") {
+  async function deleteVideo(videoId: string) {
+    const video = items.find((item) => item.id === videoId);
+    if (!video || !window.confirm(`Delete “${video.filename}”? This cannot be undone.`)) return;
     setActionStatus({ state: "loading" });
     try {
-      const response = await fetch(`/api/proxy/v1/videos/${videoId}${action === "delete" ? "" : `/${action}`}`, {
-        method: action === "delete" ? "DELETE" : "POST",
-      });
-      if (!response.ok) throw new Error(`${action} failed (${response.status})`);
-
-      if (action === "archive") {
-        const nextVideo = (await response.json()) as Video;
-        setItems((current) => current.map((video) => (video.id === videoId ? nextVideo : video)));
-        setActionStatus({ state: "ok", message: "Video archived." });
-      }
-      if (action === "reindex") {
-        setItems((current) => current.map((video) => (video.id === videoId ? { ...video, status: "queued", error: null } : video)));
-        setActionStatus({ state: "ok", message: "Reindex queued." });
-      }
-      if (action === "delete") {
-        setItems((current) => current.filter((video) => video.id !== videoId));
-        setSavedClips((current) => {
-          const next = current.filter((clip) => clip.video_id !== videoId);
-          writeSavedClips(next);
-          return next;
-        });
-        setActionStatus({ state: "ok", message: "Video deleted." });
-      }
+      const response = await fetch(`/api/proxy/v1/videos/${videoId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`Delete failed (${response.status})`);
+      setItems((current) => current.filter((item) => item.id !== videoId));
+      setSelectedVideoIds((current) => current.filter((id) => id !== videoId));
+      if (selectedId === videoId) { setSelectedId(""); setViewOpen(false); }
+      setActionStatus({ state: "ok", message: "Video deleted." });
     } catch (cause) {
-      setActionStatus({ state: "error", message: cause instanceof Error ? cause.message : `${action} failed` });
+      setActionStatus({ state: "error", message: cause instanceof Error ? cause.message : "Delete failed." });
     }
   }
 
+  async function createFolder(event: FormEvent) {
+    event.preventDefault();
+    if (!folderDraft.trim()) return;
+    const response = await fetch("/api/proxy/v1/library/folders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: folderDraft }) });
+    const payload = await response.json().catch(() => ({})) as LibraryFolder & { detail?: string };
+    if (!response.ok) return setActionStatus({ state: "error", message: payload.detail || "Folder could not be created." });
+    setFolders((current) => [...current, payload]);
+    setFolderDraft("");
+    openLibrarySection("folder", payload);
+  }
+
+  async function saveFolderName(folder: LibraryFolder) {
+    const name = editingFolderName.trim();
+    if (!name || name === folder.name) { setEditingFolderId(""); return; }
+    const response = await fetch(`/api/proxy/v1/library/folders/${folder.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    const payload = await response.json().catch(() => ({})) as LibraryFolder & { detail?: string };
+    if (!response.ok) return setActionStatus({ state: "error", message: payload.detail || "Folder could not be renamed." });
+    setFolders((current) => current.map((item) => item.id === folder.id ? payload : item));
+    setEditingFolderId("");
+  }
+
+  async function deleteFolder(folder: LibraryFolder) {
+    if (!window.confirm(`Delete “${folder.name}”? Its videos will move to Unorganized.`)) return;
+    const response = await fetch(`/api/proxy/v1/library/folders/${folder.id}`, { method: "DELETE" });
+    if (!response.ok) return setActionStatus({ state: "error", message: "Folder could not be deleted." });
+    setFolders((current) => current.filter((item) => item.id !== folder.id));
+    setItems((current) => current.map((video) => video.collection === folder.id ? { ...video, collection: null } : video));
+    if (activeFolder === folder.id) openLibrarySection("unorganized");
+  }
+
+  async function reorderFolder(folderId: string, targetId: string) {
+    if (folderId === targetId) return;
+    const ordered = [...folders];
+    const from = ordered.findIndex((folder) => folder.id === folderId);
+    const to = ordered.findIndex((folder) => folder.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    const positioned = ordered.map((folder, position) => ({ ...folder, position }));
+    setFolders(positioned);
+    const response = await fetch("/api/proxy/v1/library/folder-order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folder_ids: positioned.map((folder) => folder.id) }) });
+    if (!response.ok) setActionStatus({ state: "error", message: "Folder order could not be saved." });
+  }
+
   return (
-    <section className="dashboard-split-panel library-workbench">
+    <section className="library-workbench library-manager">
       <article className="card dashboard-panel library-list-panel">
         <header className="library-page-head">
-          <div><h1>Media library</h1><p>Manage the video sources available to your workspace.</p></div>
-          <div className="library-page-actions"><span>{filteredVideos.length} {filteredVideos.length === 1 ? "video" : "videos"}</span><Link href={"/dashboard/ingest" as any} className="button">＋ Upload</Link></div>
+          <div><h1>Library</h1><p>Organize and revisit your workspace videos.</p></div>
         </header>
-        <div className="library-toolbar">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search library" />
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter library by status">
-            <option value="all">All statuses</option><option value="ready">Ready</option><option value="queued">Queued</option><option value="failed">Failed</option>
-          </select>
-          <select value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)} aria-label="Filter library by collection">
-            {collections.map((collection) => <option key={collection} value={collection}>{collection === "all" ? "All collections" : collection}</option>)}
-          </select>
-        </div>
-        <div className="library-bulk-toolbar">
-          <label><input type="checkbox" checked={filteredVideos.length > 0 && filteredVideos.every((video) => selectedVideoIds.includes(video.id))} onChange={(event) => setSelectedVideoIds(event.target.checked ? filteredVideos.map((video) => video.id) : [])} /> Select visible</label>
-          <span>{selectedVideoIds.length} selected</span>
-          <button type="button" className="button-secondary" onClick={() => void runBulkAction("archive")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Archive</button>
-          <button type="button" className="button-secondary" onClick={() => void runBulkAction("reindex")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Reindex</button>
-          <button type="button" className="button-secondary" onClick={() => void runBulkAction("delete")} disabled={!selectedVideoIds.length || !permissions.canEdit}>Delete</button>
-          {selectedVideoIds.length > 0 ? <Link className="button-secondary" href={`/search?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`}>Use in search</Link> : null}
-        </div>
-        {filteredVideos.length === 0 ? <div className="empty-state"><h3>No videos yet</h3><p className="muted">Upload a video to get started.</p><Link href={"/dashboard/ingest" as any} className="button">Open ingest</Link></div> : <div className="library-table-wrap">
-          <div className="library-table-head" aria-hidden="true"><span /><span>Name</span><span>Tags</span><span>Type</span><span>Created</span><span>Duration</span><span>Status</span><span>Actions</span></div>
-          <div className="library-list">
+        <nav className="library-section-nav" aria-label="Library sections">
+          <Link href="/dashboard/library" className={activeFolder === "all" ? "is-active" : ""} onClick={() => { setActiveFolder("all"); setQuery(""); setSelectedVideoIds([]); }}><span>All videos</span><small>{items.length}</small></Link>
+          <Link href="/dashboard/library?view=folders" className={activeFolder === "folders" || (!(["all", "unorganized"].includes(activeFolder))) ? "is-active" : ""} onClick={() => { setActiveFolder("folders"); setQuery(""); setSelectedVideoIds([]); }}><span>Folders</span><small>{folders.length}</small></Link>
+          <Link href="/dashboard/library?view=unorganized" className={activeFolder === "unorganized" ? "is-active" : ""} onClick={() => { setActiveFolder("unorganized"); setQuery(""); setSelectedVideoIds([]); }} onDragOver={(event) => event.preventDefault()} onDrop={() => { const video = items.find((item) => item.id === draggedVideoId); if (video) void updateLibraryMetadata(video, { collection: "" }); setDraggedVideoId(null); }}><span>Unorganized</span><small>{unorganizedCount}</small></Link>
+          <Link href={"/dashboard/ingest" as any} className="button library-add-videos">＋ Add videos</Link>
+        </nav>
+
+        {activeFolder === "folders" ? <section className="library-folders-section" aria-labelledby="library-folders-title">
+          <header><div><h2 id="library-folders-title">Folders</h2><p>Create folders, change their order, or open one to arrange its videos.</p></div>{permissions.canEdit ? <form className="library-folder-create" onSubmit={(event) => void createFolder(event)}><input value={folderDraft} onChange={(event) => setFolderDraft(event.target.value)} placeholder="Folder name" aria-label="New folder name" /><button type="submit" disabled={!folderDraft.trim()}>Create folder</button></form> : null}</header>
+          <div className="library-folder-board">
+            {folders.length ? folders.map((folder) => <article key={folder.id} className="library-folder-row" draggable={permissions.canEdit && editingFolderId !== folder.id} onDragStart={() => { setDraggedFolderId(folder.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedFolderId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => { const video = items.find((item) => item.id === draggedVideoId); if (video) void updateLibraryMetadata(video, { collection: folder.id }); else if (draggedFolderId) void reorderFolder(draggedFolderId, folder.id); setDraggedVideoId(null); setDraggedFolderId(null); }}>
+              {editingFolderId === folder.id ? <input value={editingFolderName} autoFocus aria-label={`Rename ${folder.name}`} onChange={(event) => setEditingFolderName(event.target.value)} onBlur={() => void saveFolderName(folder)} onKeyDown={(event) => { if (event.key === "Enter") void saveFolderName(folder); if (event.key === "Escape") setEditingFolderId(""); }} /> : <Link href={`/dashboard/library?view=folder&folder=${encodeURIComponent(folder.id)}&folder_name=${encodeURIComponent(folder.name)}`} onClick={() => { setActiveFolder(folder.id); setQuery(""); setSelectedVideoIds([]); }}><span>{folder.name}</span><small>{items.filter((video) => video.collection === folder.id).length} videos</small></Link>}
+              {permissions.canEdit && editingFolderId !== folder.id ? <details><summary aria-label={`Folder actions for ${folder.name}`}>•••</summary><div><button type="button" onClick={() => { setEditingFolderId(folder.id); setEditingFolderName(folder.name); }}>Rename</button><button type="button" onClick={() => void deleteFolder(folder)}>Delete</button></div></details> : null}
+            </article>) : <div className="library-empty-state"><h3>No folders yet</h3><p>Create a folder when you are ready to organize related videos.</p></div>}
+          </div>
+        </section> : <div className="library-content-panel">
+            <div className="library-content-toolbar">
+              <div><h2>{activeFolder === "all" ? "All videos" : activeFolder === "unorganized" ? "Unorganized" : folderName(activeFolder)}</h2><span>{filteredVideos.length} {filteredVideos.length === 1 ? "video" : "videos"}</span></div>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search videos…" aria-label="Search library" />
+            </div>
+            {selectedVideoIds.length ? <div className="library-selection-bar"><span>{selectedVideoIds.length} selected</span>{folders.length ? <LibraryFolderMenu folders={folders} label="Move selected videos" onChange={(folderId) => void moveSelected(folderId)} disabled={!permissions.canEdit} /> : null}<Link className="button-secondary" href={`/search?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`}>Search</Link><button type="button" onClick={() => setSelectedVideoIds([])}>Clear</button></div> : null}
+            <StatusLine status={actionStatus} />
+            {filteredVideos.length === 0 ? <div className="library-empty-state"><h3>{items.length ? "No videos here" : "Your library is empty"}</h3><p>{items.length ? "Move videos into this folder or choose another folder." : "Add a video to begin building your workspace library."}</p>{!items.length ? <Link href={"/dashboard/ingest" as any} className="button">Add videos</Link> : null}</div> : <div className="library-card-grid">
             {filteredVideos.map((video) => {
-              const mediaUrl = video.object_key ? `/api/proxy/v1/media/${video.object_key.split("/").map(encodeURIComponent).join("/")}` : null;
-              return <article key={video.id} className="library-item library-video-card" draggable={permissions.canEdit} onDragStart={() => setDraggedVideoId(video.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedVideoId) void reorderVideo(draggedVideoId, video.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedVideoId(null)}>
-                <label className="library-video-select"><input type="checkbox" aria-label={`Select ${video.filename}`} checked={selectedVideoIds.includes(video.id)} onChange={(event) => setSelectedVideoIds((current) => event.target.checked ? [...new Set([...current, video.id])] : current.filter((id) => id !== video.id))} /></label>
-                <div className="library-name-cell">{mediaUrl ? <video className="library-video-preview" src={mediaUrl} muted preload="metadata" /> : <div className="library-video-placeholder">Video</div>}<div><input className="library-video-title" defaultValue={video.filename} aria-label={`Rename ${video.filename}`} onBlur={(event) => void updateLibraryMetadata(video, { filename: event.target.value })} /><small>{sourceLabel(video.source_type)}</small></div></div>
-                <div className="library-tags-cell"><span>{(video.labels || []).join(", ") || video.collection || "Uncategorized"}</span><small>{latestJobByVideo.get(video.id)?.transcribe === false ? "Text search off" : "Transcript ready"}</small></div>
-                <span>Video</span><span>{fmtDate(video.created_at)}</span><span>{fmt(video.duration)}</span>
-                <span><span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span></span>
-                <div className="library-row-actions"><button type="button" className="library-view-button" onClick={() => { setSelectedId(video.id); setViewOpen(true); }}>View</button><button type="button" title="Reindex" aria-label={`Reindex ${video.filename}`} onClick={() => void runVideoAction(video.id, "reindex")} disabled={!permissions.canEdit}>↻</button><button type="button" title="Delete" aria-label={`Delete ${video.filename}`} onClick={() => void runVideoAction(video.id, "delete")} disabled={!permissions.canEdit}>⌫</button></div>
+              const thumbnailUrl = video.thumbnail_object_key ? `/api/proxy/v1/media/${video.thumbnail_object_key.split("/").map(encodeURIComponent).join("/")}` : null;
+              return <article key={video.id} className="library-media-card" draggable={permissions.canEdit} onDragStart={() => { setDraggedVideoId(video.id); setDraggedFolderId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedVideoId) void reorderVideo(draggedVideoId, video.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedVideoId(null)}>
+                <button type="button" className="library-media-preview" onClick={() => { setSelectedId(video.id); setViewOpen(true); }} aria-label={`View ${video.filename}`}>{thumbnailUrl ? <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" /> : <span>Preview unavailable</span>}<span className="library-play-mark" aria-hidden="true">▶</span></button>
+                <label className="library-card-select"><input type="checkbox" aria-label={`Select ${video.filename}`} checked={selectedVideoIds.includes(video.id)} onChange={(event) => setSelectedVideoIds((current) => event.target.checked ? [...new Set([...current, video.id])] : current.filter((id) => id !== video.id))} /></label>
+                <div className="library-media-card-body"><div><input className="library-media-title" value={video.filename} aria-label={`Rename ${video.filename}`} disabled={!permissions.canEdit} onChange={(event) => setItems((current) => current.map((item) => item.id === video.id ? { ...item, filename: event.target.value } : item))} onBlur={(event) => { const filename = event.target.value.trim(); if (filename) void updateLibraryMetadata(video, { filename }); else setItems((current) => current.map((item) => item.id === video.id ? { ...item, filename: video.filename } : item)); }} /><p>{fmt(video.duration)} · {folderName(video.collection)}</p></div>{video.status !== "ready" ? <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span> : null}</div>
+                <div className="library-card-actions"><button type="button" className="library-delete-action library-trash-action" aria-label={`Delete ${video.filename}`} title="Delete video" onClick={() => void deleteVideo(video.id)} disabled={!permissions.canEdit}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" /></svg></button></div>
               </article>;
             })}
-          </div>
-        </div>}
+            </div>}
+          </div>}
       </article>
 
-      {viewOpen && selectedVideo ? <div className="library-view-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setViewOpen(false); }}><section className="library-view-dialog" role="dialog" aria-modal="true" aria-labelledby="library-view-title"><header><div><h2 id="library-view-title">{selectedVideo.filename}</h2><p>{fmt(selectedVideo.duration)} · {sourceLabel(selectedVideo.source_type)}</p></div><button type="button" autoFocus onClick={() => setViewOpen(false)} aria-label="Close video viewer">×</button></header>{selectedMediaUrl ? <video src={selectedMediaUrl} controls autoPlay preload="metadata" /> : <div className="library-view-unavailable">Preview unavailable</div>}</section></div> : null}
-
-      <article className="card dashboard-panel library-detail-panel">
-        <div className="dashboard-panel-head library-panel-head">
-          <div>
-            <h2>Video detail</h2>
-          </div>
-          {selectedVideo ? <span className={`job-status job-status-${statusTone(selectedVideo.status)}`}>{selectedVideo.status}</span> : null}
-        </div>
-        <StatusLine status={actionStatus} />
-        {!selectedVideo ? <p className="muted">Select video to inspect details.</p> : (
-          <div className="dashboard-stack library-detail-body">
-            <div className="library-detail-hero">
-              <div>
-                <p className="eyebrow">Selected source</p>
-                <h3>{selectedVideo.filename}</h3>
-                <p className="muted detail-wrap">{selectedVideo.source_uri}</p>
-              </div>
-              <div className="library-detail-stats" aria-label="Selected video summary">
-                <span>{fmt(selectedVideo.duration)} duration</span>
-                <span>{chunks.length} chunks</span>
-              </div>
-            </div>
-            {selectedMediaUrl ? (
-              <video ref={detailPlayerRef} className="library-detail-player" src={selectedMediaUrl} controls preload="metadata" />
-            ) : null}
-            <div className="detail-grid">
-              <article className="detail-card">
-                <span>Duration</span>
-                <strong>{fmt(selectedVideo.duration)}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Uploaded</span>
-                <strong>{fmtDate(selectedVideo.created_at)}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Source type</span>
-                <strong>{sourceLabel(selectedVideo.source_type)}</strong>
-              </article>
-              <article className="detail-card">
-                <span>Chunks</span>
-                <strong>{chunks.length}</strong>
-              </article>
-            </div>
-            <article className="detail-card">
-              <span>Source URI</span>
-              <strong className="detail-wrap">{selectedVideo.source_uri}</strong>
-            </article>
-            <article className="detail-card">
-              <span>Labels</span>
-              <strong>{labelsForSelectedVideo.length > 0 ? labelsForSelectedVideo.join(", ") : "No labels yet"}</strong>
-            </article>
-            {selectedVideo.error ? <p className="notice notice-bad">Video error: {selectedVideo.error}</p> : null}
-            {latestJobByVideo.get(selectedVideo.id) ? (
-              <article className="detail-card">
-                <span>Latest job</span>
-                <strong>{latestJobByVideo.get(selectedVideo.id)?.message || latestJobByVideo.get(selectedVideo.id)?.kind}</strong>
-              </article>
-            ) : null}
-            <div className="dashboard-panel-links">
-              <button type="button" className="button-secondary" onClick={() => void runVideoAction(selectedVideo.id, "archive")} disabled={!permissions.canEdit}>Archive</button>
-              <button type="button" className="button-secondary" onClick={() => void runVideoAction(selectedVideo.id, "reindex")} disabled={!permissions.canEdit}>Reindex</button>
-              <button type="button" className="button-secondary" onClick={() => void runVideoAction(selectedVideo.id, "delete")} disabled={!permissions.canEdit}>Delete</button>
-            </div>
-            <div className="dashboard-panel-links">
-              <input value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} placeholder="Add label" aria-label="Add label" />
-              <button type="button" className="button-secondary" onClick={addLabel} disabled={!permissions.canEdit}>Add label</button>
-            </div>
-            {labelsForSelectedVideo.length > 0 ? (
-              <div className="dashboard-panel-links">
-                {labelsForSelectedVideo.map((label) => (
-                  <button key={label} type="button" className="pill pill-button" onClick={() => removeLabel(label)} disabled={!permissions.canEdit}>{label}</button>
-                ))}
-              </div>
-            ) : null}
-            <details className="chunk-browser-panel" open>
-              <summary className="chunk-browser-summary">
-                <div>
-                  <h3>Chunk browser</h3>
-                </div>
-                <span className="pill">{chunks.length} chunks</span>
-              </summary>
-              <StatusLine status={chunksStatus} />
-              {chunks.length > 0 ? (
-                <div className="job-history-list chunk-browser-list">
-                  {chunks.map((chunk) => (
-                    <article key={chunk.id} className="detail-card">
-                      <span>Chunk {fmt(chunk.start_time)} - {fmt(chunk.end_time)}</span>
-                      <strong>{Math.max(0, chunk.end_time - chunk.start_time).toFixed(1)}s span</strong>
-                      <p className="muted">{chunk.embedding_backend} • {chunk.embedding_model}</p>
-                    </article>
-                  ))}
-                </div>
-              ) : chunksStatus.state === "ok" ? (
-                <p className="muted">No indexed chunks yet for this video.</p>
-              ) : null}
-            </details>
-            {clipsForSelectedVideo.length > 0 ? (
-              <div className="dashboard-stack">
-                <h3>Clips from this video</h3>
-                <div className="job-history-list">
-                  {clipsForSelectedVideo.map((clip) => (
-                    <article key={clip.id} className="detail-card">
-                      <span>{editingClipId === clip.id ? "Editing clip metadata" : clip.name}</span>
-                      <strong>{fmt(clip.start_time)} - {fmt(clip.end_time)}</strong>
-                      <p className="muted">{selectedVideo.source_uri}</p>
-                      {editingClipId === clip.id ? (
-                        <div className="form">
-                          <input
-                            value={clip.name}
-                            onChange={(event) => updateSavedClip(clip.id, "name", event.target.value)}
-                            aria-label="Clip name"
-                          />
-                          <input
-                            value={clip.collection}
-                            onChange={(event) => updateSavedClip(clip.id, "collection", event.target.value)}
-                            aria-label="Clip collection"
-                          />
-                          <textarea
-                            value={clip.notes}
-                            onChange={(event) => updateSavedClip(clip.id, "notes", event.target.value)}
-                            aria-label="Clip notes"
-                          />
-                          <button type="button" className="button-secondary" onClick={() => setEditingClipId("")}>Done</button>
-                        </div>
-                      ) : (
-                        <div className="dashboard-panel-links">
-                          <button type="button" className="button-secondary" onClick={() => setEditingClipId(clip.id)} disabled={!permissions.canEdit}>Edit metadata</button>
-                          {clip.url ? <a href={clip.url} className="button-secondary" target="_blank" rel="noreferrer">Open clip</a> : null}
-                        </div>
-                      )}
-                      <p className="muted">Collection {clip.collection}</p>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <div className="dashboard-panel-links">
-              <Link href={`/jobs?job=${encodeURIComponent(latestJobByVideo.get(selectedVideo.id)?.id ?? "")}`} className="button-secondary">Open latest job</Link>
-              <Link href="/search" className="button-secondary">Ask about this video</Link>
-            </div>
-          </div>
-        )}
-      </article>
+      {viewOpen && selectedVideo ? <div className="library-view-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setViewOpen(false); }}><section className="library-view-dialog" role="dialog" aria-modal="true" aria-labelledby="library-view-title"><header><div><h2 id="library-view-title">{selectedVideo.filename}</h2><p>{fmt(selectedVideo.duration)} · {folderName(selectedVideo.collection)}</p></div><button type="button" autoFocus onClick={() => setViewOpen(false)} aria-label="Close video viewer">×</button></header>{selectedMediaUrl ? <video src={selectedMediaUrl} controls autoPlay preload="metadata" /> : <div className="library-view-unavailable">Preview unavailable</div>}<footer><Link className="button" href={`/search?video_ids=${encodeURIComponent(selectedVideo.id)}`}>Search this video</Link>{folders.length ? <LibraryFolderMenu folders={folders} value={selectedVideo.collection || ""} label="Move video to folder" onChange={(folderId) => void updateLibraryMetadata(selectedVideo, { collection: folderId })} disabled={!permissions.canEdit} /> : null}<button type="button" className="button-secondary library-delete-action" onClick={() => void deleteVideo(selectedVideo.id)} disabled={!permissions.canEdit}>Delete</button></footer></section></div> : null}
     </section>
   );
 }

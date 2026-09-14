@@ -82,6 +82,10 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Library And Usage
 
+- Library is the workspace organization surface, not a second ingest-status table. New videos begin in Unorganized and can be moved into persistent workspace folders.
+- Workspace folders can be created, renamed, reordered, and deleted. Deleting a folder returns its videos to Unorganized without deleting the source videos.
+- Library videos use a thumbnail-led card grid with direct preview, rename, folder assignment, multi-select search, drag reordering, and confirmed deletion. Pipeline and diagnostic metadata remains on Add video rather than competing with browsing.
+- Library thumbnails reuse the earliest ready visual keyframe persisted by ingest in private object storage and load through the workspace-authorized media proxy. Cards do not download full video files to paint previews.
 - Source attribution currently means displaying `source_uri` on search results, video detail, clip preview/export surfaces, and clip lists.
 - No richer provenance model exists yet.
 - Workspace usage UI reads `/v1/stats` for `total_videos`, `total_chunks`, and `total_storage_bytes`.

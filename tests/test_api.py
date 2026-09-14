@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 import vivadeo.api as api
 from vivadeo.api import app
-from vivadeo.schemas import ChatMessage, ChatRequest
+from vivadeo.schemas import ChatMessage, ChatRequest, LibraryFolderCreateRequest, LibraryFolderReorderRequest, LibraryFolderUpdateRequest
 
 
 class _FakeConn:
@@ -119,11 +119,59 @@ def test_video_response_includes_error_and_timestamps():
         updated_at=now,
     )
 
-    response = api._video_response(video)
+    response = api._video_response(video, thumbnail_object_key="visual-keyframes/video-1/0.000.jpg")
 
     assert response.error == "decode failed"
     assert response.created_at == now
     assert response.updated_at == now
+    assert response.thumbnail_object_key == "visual-keyframes/video-1/0.000.jpg"
+
+
+def test_video_thumbnail_falls_back_to_legacy_evidence_frame():
+    class FakeSession:
+        def __init__(self):
+            self.calls = 0
+
+        def scalar(self, _query):
+            self.calls += 1
+            return None if self.calls == 1 else "evidence-frames/frame-1.jpg"
+
+    session = FakeSession()
+    assert api._video_thumbnail_object_key(session, "default-workspace", "video-1") == "evidence-frames/frame-1.jpg"
+    assert session.calls == 2
+
+
+def test_library_folders_persist_and_deleted_folder_releases_videos():
+    setting = SimpleNamespace(settings={"video_library": {"video-1": {"collection": None, "labels": [], "position": 0}}})
+
+    class FakeSession:
+        def get(self, model, ident):
+            if model.__name__ == "OrganizationSetting" and ident == "default-workspace":
+                return setting
+            return None
+
+        def add(self, value):
+            return None
+
+        def commit(self):
+            return None
+
+    session = FakeSession()
+    folder = api.create_library_folder(LibraryFolderCreateRequest(name="Interviews"), session=session, organization_id="default-workspace")
+    assert folder.name == "Interviews"
+    assert api.list_library_folders(session=session, organization_id="default-workspace")[0].id == folder.id
+
+    renamed = api.update_library_folder(folder.id, LibraryFolderUpdateRequest(name="Research"), session=session, organization_id="default-workspace")
+    assert renamed.name == "Research"
+
+    second = api.create_library_folder(LibraryFolderCreateRequest(name="Interviews"), session=session, organization_id="default-workspace")
+    reordered = api.reorder_library_folders(LibraryFolderReorderRequest(folder_ids=[second.id, folder.id]), session=session, organization_id="default-workspace")
+    assert [item.id for item in reordered] == [second.id, folder.id]
+
+    setting.settings["video_library"]["video-1"]["collection"] = folder.id
+    api.delete_library_folder(folder.id, session=session, organization_id="default-workspace")
+    assert [item.id for item in api.list_library_folders(session=session, organization_id="default-workspace")] == [second.id]
+    assert setting.settings["video_library"]["video-1"]["collection"] is None
 
 
 def test_job_response_includes_timestamps():

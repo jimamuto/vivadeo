@@ -67,6 +67,25 @@ class VideoLibraryUpdateRequest(BaseModel):
     position: int | None = None
 
 
+class LibraryFolderCreateRequest(BaseModel):
+    name: str
+
+
+class LibraryFolderUpdateRequest(BaseModel):
+    name: str | None = None
+    position: int | None = None
+
+
+class LibraryFolderReorderRequest(BaseModel):
+    folder_ids: list[str]
+
+
+class LibraryFolderResponse(BaseModel):
+    id: str
+    name: str
+    position: int = 0
+
+
 class VideoResponse(BaseModel):
     id: str
     organization_id: str
@@ -76,6 +95,7 @@ class VideoResponse(BaseModel):
     status: str
     duration: float | None = None
     object_key: str | None = None
+    thumbnail_object_key: str | None = None
     url: str | None = None
     error: str | None = None
     collection: str | None = None

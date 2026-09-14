@@ -79,6 +79,10 @@ from .schemas import (
     EvidenceFrameRequest,
     EvidenceFrameResponse,
     JobResponse,
+    LibraryFolderCreateRequest,
+    LibraryFolderReorderRequest,
+    LibraryFolderResponse,
+    LibraryFolderUpdateRequest,
     LocalPathIngestRequest,
     LlmSettingsRequest,
     LlmSettingsResponse,
@@ -394,10 +398,32 @@ def _save_library_metadata(session: Session, organization_id: str, metadata: dic
     session.commit()
 
 
+def _library_folders(session: Session, organization_id: str) -> list[dict]:
+    setting = session.get(OrganizationSetting, organization_id)
+    settings = setting.settings if setting and isinstance(setting.settings, dict) else {}
+    folders = settings.get("library_folders", [])
+    if not isinstance(folders, list):
+        return []
+    valid = [folder for folder in folders if isinstance(folder, dict) and folder.get("id") and folder.get("name")]
+    return sorted(valid, key=lambda folder: (folder.get("position", 0), folder["name"].lower()))
+
+
+def _save_library_folders(session: Session, organization_id: str, folders: list[dict]) -> None:
+    setting = session.get(OrganizationSetting, organization_id)
+    if setting is None:
+        setting = OrganizationSetting(organization_id=organization_id, settings={})
+        session.add(setting)
+    settings = dict(setting.settings or {})
+    settings["library_folders"] = folders
+    setting.settings = settings
+    session.commit()
+
+
 def _video_response(
     video: Video,
     store: ObjectStore | None = None,
     library_metadata: dict | None = None,
+    thumbnail_object_key: str | None = None,
 ) -> VideoResponse:
     url = store.presigned_url(video.object_key) if store and video.object_key else None
     metadata = library_metadata or {}
@@ -412,6 +438,7 @@ def _video_response(
         visual_status=video.visual_status,
         duration=video.duration,
         object_key=video.object_key,
+        thumbnail_object_key=thumbnail_object_key,
         url=url,
         error=video.error,
         collection=metadata.get("collection"),
@@ -419,6 +446,32 @@ def _video_response(
         position=metadata.get("position", 0),
         created_at=video.created_at,
         updated_at=video.updated_at,
+    )
+
+
+def _video_thumbnail_object_key(session: Session, organization_id: str, video_id: str) -> str | None:
+    key = session.scalar(
+        select(VisualKeyframe.object_key)
+        .where(
+            VisualKeyframe.video_id == video_id,
+            VisualKeyframe.organization_id == organization_id,
+            VisualKeyframe.status == "ready",
+            VisualKeyframe.object_key.is_not(None),
+        )
+        .order_by(VisualKeyframe.timestamp)
+        .limit(1)
+    )
+    if key:
+        return key
+    return session.scalar(
+        select(EvidenceFrame.object_key)
+        .where(
+            EvidenceFrame.video_id == video_id,
+            EvidenceFrame.organization_id == organization_id,
+            EvidenceFrame.object_key.is_not(None),
+        )
+        .order_by(EvidenceFrame.timestamp)
+        .limit(1)
     )
 
 
@@ -914,8 +967,32 @@ def list_videos(
         .where(Video.organization_id == organization_id)
         .order_by(Video.created_at.desc())
     ).all()
+    thumbnail_keys: dict[str, str] = {}
+    keyframes = session.execute(
+        select(VisualKeyframe.video_id, VisualKeyframe.object_key)
+        .where(
+            VisualKeyframe.organization_id == organization_id,
+            VisualKeyframe.status == "ready",
+            VisualKeyframe.object_key.is_not(None),
+        )
+        .order_by(VisualKeyframe.video_id, VisualKeyframe.timestamp)
+    ).all()
+    for video_id, object_key in keyframes:
+        if object_key:
+            thumbnail_keys.setdefault(video_id, object_key)
+    legacy_frames = session.execute(
+        select(EvidenceFrame.video_id, EvidenceFrame.object_key)
+        .where(
+            EvidenceFrame.organization_id == organization_id,
+            EvidenceFrame.object_key.is_not(None),
+        )
+        .order_by(EvidenceFrame.video_id, EvidenceFrame.timestamp)
+    ).all()
+    for video_id, object_key in legacy_frames:
+        if object_key:
+            thumbnail_keys.setdefault(video_id, object_key)
     videos.sort(key=lambda video: (library.get(video.id, {}).get("position", 0), -video.created_at.timestamp()))
-    return [_video_response(video, store, library.get(video.id)) for video in videos]
+    return [_video_response(video, store, library.get(video.id), thumbnail_keys.get(video.id)) for video in videos]
 
 
 @app.get(
@@ -931,7 +1008,8 @@ def get_video(
     video = session.get(Video, video_id)
     if not video or video.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id))
+    thumbnail_object_key = _video_thumbnail_object_key(session, organization_id, video_id)
+    return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id), thumbnail_object_key)
 
 
 @app.post(
@@ -1043,6 +1121,118 @@ def get_evidence_frame(
     return _evidence_frame_response(frame, ObjectStore())
 
 
+@app.get(
+    "/v1/library/folders",
+    response_model=list[LibraryFolderResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def list_library_folders(
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    return [LibraryFolderResponse(**folder) for folder in _library_folders(session, organization_id)]
+
+
+@app.post(
+    "/v1/library/folders",
+    response_model=LibraryFolderResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_api_key)],
+)
+def create_library_folder(
+    request: LibraryFolderCreateRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Folder name cannot be empty")
+    folders = _library_folders(session, organization_id)
+    if any(folder["name"].casefold() == name.casefold() for folder in folders):
+        raise HTTPException(status_code=409, detail="A folder with this name already exists")
+    folder = {"id": new_id(), "name": name, "position": len(folders)}
+    folders.append(folder)
+    _save_library_folders(session, organization_id, folders)
+    return LibraryFolderResponse(**folder)
+
+
+@app.patch(
+    "/v1/library/folders/{folder_id}",
+    response_model=LibraryFolderResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def update_library_folder(
+    folder_id: str,
+    request: LibraryFolderUpdateRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    folders = _library_folders(session, organization_id)
+    folder = next((item for item in folders if item["id"] == folder_id), None)
+    if folder is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    if request.name is not None:
+        name = request.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Folder name cannot be empty")
+        if any(item["id"] != folder_id and item["name"].casefold() == name.casefold() for item in folders):
+            raise HTTPException(status_code=409, detail="A folder with this name already exists")
+        folder["name"] = name
+    if request.position is not None:
+        folder["position"] = max(0, request.position)
+    folders.sort(key=lambda item: (item.get("position", 0), item["name"].lower()))
+    for position, item in enumerate(folders):
+        item["position"] = position
+    _save_library_folders(session, organization_id, folders)
+    return LibraryFolderResponse(**folder)
+
+
+@app.put(
+    "/v1/library/folder-order",
+    response_model=list[LibraryFolderResponse],
+    dependencies=[Depends(require_api_key)],
+)
+def reorder_library_folders(
+    request: LibraryFolderReorderRequest,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    folders = _library_folders(session, organization_id)
+    existing_ids = {folder["id"] for folder in folders}
+    if len(request.folder_ids) != len(existing_ids) or set(request.folder_ids) != existing_ids:
+        raise HTTPException(status_code=400, detail="Folder order must include every folder exactly once")
+    by_id = {folder["id"]: folder for folder in folders}
+    ordered = [by_id[folder_id] for folder_id in request.folder_ids]
+    for position, folder in enumerate(ordered):
+        folder["position"] = position
+    _save_library_folders(session, organization_id, ordered)
+    return [LibraryFolderResponse(**folder) for folder in ordered]
+
+
+@app.delete(
+    "/v1/library/folders/{folder_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_api_key)],
+)
+def delete_library_folder(
+    folder_id: str,
+    session: Session = Depends(db_dep),
+    organization_id: str = Depends(workspace_dep),
+):
+    folders = _library_folders(session, organization_id)
+    if not any(folder["id"] == folder_id for folder in folders):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    remaining = [folder for folder in folders if folder["id"] != folder_id]
+    for position, folder in enumerate(remaining):
+        folder["position"] = position
+    library = _library_metadata(session, organization_id)
+    for metadata in library.values():
+        if isinstance(metadata, dict) and metadata.get("collection") == folder_id:
+            metadata["collection"] = None
+    _save_library_metadata(session, organization_id, library)
+    _save_library_folders(session, organization_id, remaining)
+
+
 @app.patch(
     "/v1/videos/{video_id}/library",
     response_model=VideoResponse,
@@ -1070,7 +1260,7 @@ def update_video_library(
         "position": max(0, request.position) if request.position is not None else current.get("position", 0),
     }
     _save_library_metadata(session, organization_id, library)
-    return _video_response(video, ObjectStore(), library[video_id])
+    return _video_response(video, ObjectStore(), library[video_id], _video_thumbnail_object_key(session, organization_id, video_id))
 
 
 @app.get(
@@ -1112,7 +1302,7 @@ def archive_video(
         raise HTTPException(status_code=404, detail="Video not found")
     video.status = "archived"
     session.commit()
-    return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id))
+    return _video_response(video, ObjectStore(), _library_metadata(session, organization_id).get(video.id), _video_thumbnail_object_key(session, organization_id, video.id))
 
 
 @app.post(

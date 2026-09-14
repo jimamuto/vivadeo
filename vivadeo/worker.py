@@ -273,6 +273,7 @@ def embed_transcript_task(job_id: str, video_id: str, organization_id: str) -> N
         _update_job(job_id, status="failed", error="Could not improve spoken-content search. The transcript remains available.", message="Search preparation interrupted")
         raise
 def _prepare_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
+    _cache_initial_keyframe(video_id, organization_id, file_path)
     try:
         _transcribe_file(video_id, organization_id, file_path, job_id)
         _embed_transcript_segments(job_id, video_id, organization_id)
@@ -287,6 +288,40 @@ def _prepare_file(video_id: str, organization_id: str, file_path: str, job_id: s
     except Exception as exc:
         _mark_video(video_id, visual_status="canceled" if isinstance(exc, JobCanceled) else "failed")
         raise
+
+
+def _cache_initial_keyframe(video_id: str, organization_id: str, file_path: str) -> None:
+    """Persist a poster before expensive processing so every usable source has a Library preview."""
+    with session_scope() as session:
+        if session.scalar(select(VisualKeyframe.id).where(
+            VisualKeyframe.video_id == video_id,
+            VisualKeyframe.organization_id == organization_id,
+            VisualKeyframe.status == "ready",
+            VisualKeyframe.object_key.is_not(None),
+        ).limit(1)):
+            return
+    tmp_dir = tempfile.mkdtemp(prefix="vivadeo_poster_")
+    try:
+        frame_path = os.path.join(tmp_dir, "0.000.jpg")
+        extract_frame(file_path, 0.0, frame_path)
+        object_key = visual_keyframe_object_key(video_id, "0.000")
+        ObjectStore().upload_file(frame_path, object_key, "image/jpeg")
+        with session_scope() as session:
+            frame = session.scalar(select(VisualKeyframe).where(
+                VisualKeyframe.video_id == video_id,
+                VisualKeyframe.organization_id == organization_id,
+                VisualKeyframe.timestamp_key == "0.000",
+            ))
+            if frame is None:
+                frame = VisualKeyframe(id=new_id(), organization_id=organization_id, video_id=video_id, timestamp=0.0, timestamp_key="0.000")
+                session.add(frame)
+            frame.object_key = object_key
+            frame.status = "ready"
+            frame.error = None
+    except Exception:
+        logger.warning("initial_keyframe_cache_failed video_id=%s", video_id, exc_info=True)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id: str, embedder=None) -> None:

@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
     email,
     password: String(form.get("password") || ""),
     rememberMe: form.get("rememberMe") === "on",
-    callbackURL: publicAppUrl(request, "/chat").toString(),
+    callbackURL: publicAppUrl(request, "/dashboard/ingest").toString(),
   });
 
   if (authResponse.ok) {
-    const response = NextResponse.redirect(publicAppUrl(request, "/chat"));
+    const response = NextResponse.redirect(publicAppUrl(request, "/dashboard/ingest"));
     forwardAuthCookies(authResponse, response);
     const requestedWorkspace = request.nextUrl.searchParams.get("workspace") || request.cookies.get("vivadeo_workspace")?.value;
     const workspace =
