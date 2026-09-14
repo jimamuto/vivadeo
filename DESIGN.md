@@ -55,6 +55,15 @@ Do not add extra accent colors outside grain, blackboard, oxblood, and tan.
 - Avoid large decorative elements that compete with video/search content.
 - Buttons, filters, status chips, and rails should remain readable against creamy backgrounds.
 
+## Theme Compatibility
+
+- Every new frontend surface must be designed and verified for both Vivadeo's light and dark themes before it is considered complete.
+- Use semantic color tokens for text, surfaces, borders, actions, focus states, and status indicators so theme changes preserve hierarchy.
+- Do not assume the light palette will retain sufficient contrast in dark mode. Check pills, muted labels, icons, action links, borders, hover states, and selected states explicitly.
+- Dark mode should preserve Vivadeo's warm editorial character, using the existing blackboard, grain, oxblood, and tan roles without introducing new accent colors.
+- Do not rely on color alone to communicate workflow state. Pair color with readable labels, icons, position, or other persistent cues.
+- Verify new layouts at desktop and mobile widths in both themes, including keyboard focus and reduced-motion behavior where interaction is present.
+
 ## UI Library Iteration
 
 - When adding a UI library during design iteration, install it in the running web container instead of rebuilding the frontend image.

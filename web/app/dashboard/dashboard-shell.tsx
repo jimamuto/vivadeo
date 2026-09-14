@@ -7,11 +7,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
-type NavIcon = "chat" | "ingest" | "library" | "jobs";
+type NavIcon = "chat" | "ingest" | "library" | "jobs" | "review";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 
 const PALETTE_COMMANDS: PaletteCommand[] = [
+  { label: "Review evidence", description: "Confirm the moments behind a result", href: "/dashboard/review", group: "Quick actions", icon: "review", keywords: "review verify evidence moments citations" },
   { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "chat", keywords: "search ask answer new chat footage" },
   { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
@@ -33,6 +34,7 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
     settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6 7 7 M17 17l1.4 1.4 M18.4 5.6 17 7 M7 17l-1.4 1.4",
     shield: "M12 3l7 3v5c0 4.5-2.8 7.5-7 10-4.2-2.5-7-5.5-7-10V6z M9 12l2 2 4-4",
     profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M5 21c.8-4 3.1-6 7-6s6.2 2 7 6",
+    review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -43,6 +45,7 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
+    review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
   };
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -95,7 +98,13 @@ export function DashboardShell({
     : pathname.startsWith("/dashboard/jobs")
       ? "History"
       : pathname.startsWith("/dashboard/ingest")
-        ? "Ingest"
+      ? "Ingest"
+        : pathname.startsWith("/search")
+          ? "Search"
+          : pathname.startsWith("/dashboard/review")
+            ? "Review"
+            : pathname.startsWith("/dashboard/output")
+              ? "Output"
         : isSettingsPage
           ? "Settings"
           : pathname.startsWith("/jobs")
@@ -211,12 +220,10 @@ export function DashboardShell({
           </button> : null}
         </div>
         <nav className="dashboard-nav" aria-label="Main navigation">
-          <span className="dashboard-nav-label">General</span>
-          {onStartNewChat ? (
-            <button className="dash-nav-item" type="button" onClick={onStartNewChat} aria-label="New chat" data-tooltip="New chat">
-              <NavGlyph icon="chat" /><span>New chat</span>
-            </button>
-          ) : <NavItem href="/chat" label={isSettingsPage ? "Back to chats" : "New chat"} icon="chat" showActive={false} />}
+          <span className="dashboard-nav-label">Workflow</span>
+          <NavItem href="/dashboard/ingest" label="Add video" icon="ingest" />
+          <NavItem href="/search" label="Search" icon="chat" activePaths={["/chat"]} />
+          <NavItem href="/dashboard/review" label="Review" icon="review" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>
