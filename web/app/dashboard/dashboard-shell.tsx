@@ -7,17 +7,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
-type NavIcon = "chat" | "ingest" | "library" | "jobs" | "review";
+type NavIcon = "chat" | "search" | "ingest" | "library" | "jobs" | "review";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
 
 const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Review evidence", description: "Confirm the moments behind a result", href: "/dashboard/review", group: "Quick actions", icon: "review", keywords: "review verify evidence moments citations" },
-  { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "chat", keywords: "search ask answer new chat footage" },
+  { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "search", keywords: "search ask answer new chat footage" },
   { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
-  { label: "Job history", description: "Review uploads, imports, and processing", href: "/dashboard/jobs", group: "Workspace", icon: "jobs", keywords: "history status progress failed jobs processing" },
   { label: "Workspace", description: "Manage members and workspace access", href: "/dashboard/workspace", group: "Workspace", icon: "workspace", keywords: "organization team members roles invites" },
   { label: "Profile settings", description: "Update your profile and preferences", href: "/settings/account", group: "Settings", icon: "profile", keywords: "account name avatar timezone preferences" },
   { label: "Security", description: "Manage your password", href: "/settings/security", group: "Settings", icon: "shield", keywords: "password login security" },
@@ -28,6 +27,7 @@ const PALETTE_COMMANDS: PaletteCommand[] = [
 function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
   const paths: Record<PaletteIcon, string> = {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
+    search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M16 16l4 4",
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
@@ -43,6 +43,7 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
 function NavGlyph({ icon }: { icon: NavIcon }) {
   const paths: Record<NavIcon, string> = {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
+    search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M16 16l4 4",
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
@@ -206,7 +207,7 @@ export function DashboardShell({
   const paletteCommands = query
     ? [
         ...matchingCommands,
-        { label: `Search archive for “${paletteQuery.trim()}”`, description: "Ask Vivadeo across your workspace videos", href: `/chat?q=${encodeURIComponent(paletteQuery.trim())}`, group: "Search", icon: "chat" as PaletteIcon, keywords: "" },
+        { label: `Search archive for “${paletteQuery.trim()}”`, description: "Ask Vivadeo across your workspace videos", href: `/chat?q=${encodeURIComponent(paletteQuery.trim())}`, group: "Search", icon: "search" as PaletteIcon, keywords: "" },
       ]
     : PALETTE_COMMANDS;
   const commandGroups = paletteCommands.reduce<Array<{ label: string; commands: PaletteCommand[] }>>((groups, command) => {
@@ -252,10 +253,9 @@ export function DashboardShell({
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">Workflow</span>
           <NavItem href="/dashboard/ingest" label="Add video" icon="ingest" />
-          <NavItem href="/search" label="Search" icon="chat" activePaths={["/chat"]} />
+          <NavItem href="/search" label="Search" icon="search" activePaths={["/chat"]} />
           <NavItem href="/dashboard/review" label="Review" icon="review" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
-          <NavItem href="/dashboard/jobs" activePaths={["/jobs"]} label="History" icon="jobs" />
         </nav>
         {sidebarContent ? <div className="dashboard-sidebar-content">{sidebarContent}</div> : null}
       </aside>

@@ -59,7 +59,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Ingest page surfaces recent interrupted ingest jobs, including failed and canceled jobs, and can requeue them through `/v1/jobs/{job_id}/retry`.
 - Queued/running jobs have a cancel path at `/v1/jobs/{job_id}/cancel`.
 - Workers check cancel state at safe checkpoints and flip related video/clip status to `canceled`; cancellation is cooperative, not hard process termination.
-- `/jobs` is the dedicated ingest progress page and shows explicit stage labels for `queued`, `uploading`, `chunking`, `embedding`, `indexing`, `ready`, and `failed`.
+- The legacy job-detail routes remain available for internal diagnostics, but History is not part of the primary navigation. Add video is the user-facing source of truth for ingest progress and recovery.
 - Job stage labels are inferred from job status, message, and progress.
 - Dashboard ingest supports drag-and-drop by binding dropped files back into the hidden file input with `DataTransfer`; keep click-to-browse as fallback.
 - Ingest UI validates `video/*`, enforces a 512 MB frontend warning limit, and only allows `http/https` URL ingest.
