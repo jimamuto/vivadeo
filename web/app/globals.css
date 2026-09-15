@@ -978,6 +978,8 @@ main { width: 100%; }
 }
 
 .landing-page .topbar-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   width: min(calc(100% - 48px), 1152px);
   padding: 8px 12px;
   gap: 24px;
@@ -987,6 +989,10 @@ main { width: 100%; }
   box-shadow: 0 12px 30px rgba(86, 86, 86, 0.08);
   backdrop-filter: blur(8px) saturate(0.8) brightness(1.04);
 }
+
+.landing-page .brand { justify-self: start; }
+.landing-page .nav-center { justify-self: center; }
+.landing-page .nav-actions { justify-self: end; }
 
 .landing-page .brand {
   min-height: 44px;

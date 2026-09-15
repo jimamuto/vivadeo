@@ -50,7 +50,6 @@ export default async function HomePage() {
             <Link href="#about" className="nav-link">Services</Link>
             <Link href="#pricing" className="nav-link">Pricing</Link>
           </div>
-          <div className="nav-spacer" />
           <div className="nav-actions">
             {signedIn ? (
               <Link href="/dashboard" className="button-secondary">Console</Link>
