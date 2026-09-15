@@ -9,38 +9,11 @@ import TextAnimation from "@/components/ui/scroll-text";
 import type { Metadata } from "next";
 import { contactEmail, contactLocation } from "@/lib/site";
 import { CookieSettingsButton } from "@/components/cookie-consent";
+import { VIVADEO_PLANS } from "@/lib/plans";
 
 export const metadata: Metadata = { title: "Video evidence search", description: "Find exact moments across your video archive, verify their sources, and keep your team moving." };
 
 const archiveTeams = "Studios   •   Broadcasters   •   Newsrooms   •   Film archives   •   Sports media   •   Universities   •   Creative agencies   •";
-
-const plans = [
-  {
-    name: "Free",
-    description: "For exploring a searchable video archive.",
-    price: "Free",
-    detail: "Start with the essential search workflow.",
-    features: ["Video ingest", "Transcript-grounded search", "Timestamp citations"],
-    action: "Get started",
-  },
-  {
-    name: "Pro",
-    description: "For teams reviewing footage every day.",
-    price: "Pro",
-    detail: "Advanced search for collaborative work.",
-    features: ["Everything in Free", "Premium answers", "Team workspace controls", "Transcript reindexing"],
-    action: "Choose Pro",
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    description: "For organizations with broader rollout needs.",
-    price: "Custom",
-    detail: "A tailored path for larger teams.",
-    features: ["Everything in Pro", "Multiple workspace operations", "Administrative controls", "Rollout support"],
-    action: "Contact us",
-  },
-];
 
 const connections = [
   { icon: "/images/connections/google-drive.svg", name: "Google Drive" },
@@ -148,17 +121,23 @@ export default async function HomePage() {
           <TextAnimation as="h2" text="Simple plans for every archive." />
         </ScrollAnimation>
         <div className="landing-pricing-grid">
-          {plans.map((plan) => (
+          {VIVADEO_PLANS.map((plan) => (
             <ScrollAnimation as="article" className={`landing-plan${plan.featured ? " landing-plan-featured" : ""}`} key={plan.name}>
               <div>
                 <h3>{plan.name}</h3>
                 <p>{plan.description}</p>
               </div>
               <div className="landing-plan-price">
-                <strong>{plan.price}</strong>
-                <span>{plan.detail}</span>
+                <strong>{plan.priceLabel}</strong>
+                <span>{plan.billingNote}</span>
               </div>
-              <Link href={plan.name === "Enterprise" ? "#contact" : signedIn ? "/dashboard" : "/sign-up"}>{plan.action}</Link>
+              {plan.id === "free" ? (
+                <Link href={signedIn ? "/dashboard" : "/sign-up"}>{signedIn ? "Open Vivadeo" : "Start free"}</Link>
+              ) : plan.id === "enterprise" ? (
+                <Link href="#contact">Contact us</Link>
+              ) : (
+                <span className="landing-plan-unavailable">Billing coming soon</span>
+              )}
               <ul>
                 {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
               </ul>

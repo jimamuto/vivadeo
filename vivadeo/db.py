@@ -42,7 +42,7 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     slug: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    plan: Mapped[str] = mapped_column(String(32), nullable=False, default="starter")
+    plan: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

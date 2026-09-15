@@ -24,7 +24,7 @@ const questions = [
   },
   {
     question: 'Can I start without choosing a paid plan?',
-    answer: 'Yes. The Free plan includes video ingest, transcript-grounded search, and timestamp citations. You can move to Pro when your team needs premium answers and workspace controls.',
+    answer: 'Yes. Free includes the complete search and review workflow for a small archive. Starter begins at $10 per month when you need more processing, storage, and answers.',
   },
 ];
 

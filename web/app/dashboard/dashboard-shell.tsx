@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
-type NavIcon = "chat" | "search" | "ingest" | "library" | "jobs" | "review";
+type NavIcon = "chat" | "search" | "ingest" | "library" | "jobs" | "review" | "billing";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
@@ -17,6 +17,7 @@ const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "search", keywords: "search ask answer new chat footage" },
   { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
+  { label: "Billing", description: "Compare Vivadeo plans", href: "/dashboard/billing", group: "Workspace", icon: "billing", keywords: "billing pricing plan upgrade subscription" },
   { label: "Workspace", description: "Manage members and workspace access", href: "/dashboard/workspace", group: "Workspace", icon: "workspace", keywords: "organization team members roles invites" },
   { label: "Profile settings", description: "Update your profile and preferences", href: "/settings/account", group: "Settings", icon: "profile", keywords: "account name avatar timezone preferences" },
   { label: "Security", description: "Manage your password", href: "/settings/security", group: "Settings", icon: "shield", keywords: "password login security" },
@@ -36,6 +37,7 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
     shield: "M12 3l7 3v5c0 4.5-2.8 7.5-7 10-4.2-2.5-7-5.5-7-10V6z M9 12l2 2 4-4",
     profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M5 21c.8-4 3.1-6 7-6s6.2 2 7 6",
     review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
+    billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -48,6 +50,7 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
     review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
+    billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
   };
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -110,6 +113,8 @@ export function DashboardShell({
             ? "Review"
             : pathname.startsWith("/dashboard/output")
               ? "Output"
+            : pathname.startsWith("/dashboard/billing")
+              ? "Billing"
         : isSettingsPage
           ? "Settings"
           : pathname.startsWith("/jobs")
@@ -263,6 +268,8 @@ export function DashboardShell({
           <NavItem href="/search" label="Search" icon="search" activePaths={["/chat"]} />
           <NavItem href="/dashboard/review" label="Review" icon="review" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
+          <span className="dashboard-nav-label dashboard-nav-label-secondary">Workspace</span>
+          <NavItem href="/dashboard/billing" label="Billing" icon="billing" />
         </nav>
         {sidebarContent ? <div className="dashboard-sidebar-content">{sidebarContent}</div> : null}
       </aside>

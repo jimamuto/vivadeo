@@ -39,7 +39,6 @@ export async function SettingsPageContent({ section }: { section: SettingsSectio
             {item.label}
           </Link>
         ))}
-        <span className="is-disabled" aria-disabled="true">Billing</span>
       </nav>
 
       <div className="settings-surface settings-content fade-in">

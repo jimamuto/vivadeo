@@ -25,7 +25,9 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 - Forgot/reset password flows are real via `/api/auth/forgot-password` to Better Auth `/request-password-reset`, and `/api/auth/reset-password` to Better Auth `/reset-password`.
 - Email verification is real through Azure Communication Services Email; sign-up sends a six-digit code and redirects to `/verify-email` when Azure email credentials are configured. Codes expire after 10 minutes and can be resent.
 - Account deletion is enabled through Better Auth `/api/auth/delete-user`; settings only starts the email-verified deletion request, and actual deletion completes through the callback link.
-- The administrator entitlement migration provisions `jim.amuto@strathmore.edu` as an admin with Pro workspace access; subscription enforcement for other users is deferred.
+- New workspaces begin on Free. Vivadeo's published catalogue includes Free, Starter ($10/month), Pro, Team, Business, and Enterprise plans. Paid activation and subscription enforcement remain deferred until a payment provider is connected.
+- Billing is a primary workspace destination in the dashboard sidebar. It compares the complete plan catalogue while keeping paid activation visibly unavailable until billing is connected.
+- The administrator entitlement migration provisions `jim.amuto@strathmore.edu` as an admin with Pro workspace access.
 
 ## Search
 
