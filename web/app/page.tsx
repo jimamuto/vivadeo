@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { BrandLogo } from "@/components/brand-logo";
@@ -92,7 +93,7 @@ export default async function HomePage() {
           ))}
         </div>
         <ScrollAnimation className="landing-product-stage">
-          <img src="/images/landing/dashboard-overview.webp" alt="Vivadeo archive search workspace" />
+          <Image src="/images/landing/dashboard-overview.webp" alt="Vivadeo archive search workspace" width={1600} height={1000} sizes="(max-width: 860px) calc(100vw - 48px), 1240px" />
           <span className="landing-product-time" aria-hidden="true">00:42</span>
           <span className="landing-product-check" aria-hidden="true">✓</span>
         </ScrollAnimation>
@@ -105,7 +106,7 @@ export default async function HomePage() {
           <span>Connect the tools around your archive without fragmenting search and review.</span>
         </ScrollAnimation>
         <div className="landing-connection-map">
-          <div className="landing-connection-core"><img src="/images/connections/vivadeo-mark.webp" alt="Vivadeo" /></div>
+          <div className="landing-connection-core"><Image src="/images/connections/vivadeo-mark.webp" alt="Vivadeo" width={256} height={256} /></div>
           {connections.map((connection) => (
             <ScrollAnimation as="article" className="landing-connection" key={connection.name}>
               <span><img src={connection.icon} alt={`${connection.name} logo`} /></span>

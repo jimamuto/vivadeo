@@ -1,23 +1,24 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
 import type { HTMLMotionProps, Variants } from 'motion/react';
 import type React from 'react';
+import { useReducedMotionPreference } from '@/lib/use-reduced-motion-preference';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 type TextTag = 'h1' | 'h2' | 'h3' | 'p' | 'span';
 
 const containerVariants: Variants = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
+  visible: { transition: { staggerChildren: 0.045 } },
 };
 
 function directionVariants(direction: Direction): Variants {
-  const distance = direction === 'right' || direction === 'down' ? 20 : -20;
-  const transition = { duration: 0.4, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] };
+  const distance = direction === 'right' || direction === 'down' ? 12 : -12;
+  const transition = { duration: 0.28, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] };
   return direction === 'left' || direction === 'right'
-    ? { hidden: { filter: 'blur(10px)', opacity: 0, x: distance }, visible: { filter: 'blur(0px)', opacity: 1, x: 0, transition } }
-    : { hidden: { filter: 'blur(10px)', opacity: 0, y: distance }, visible: { filter: 'blur(0px)', opacity: 1, y: 0, transition } };
+    ? { hidden: { opacity: 0, x: distance }, visible: { opacity: 1, x: 0, transition } }
+    : { hidden: { opacity: 0, y: distance }, visible: { opacity: 1, y: 0, transition } };
 }
 
 export default function TextAnimation({
@@ -40,7 +41,7 @@ export default function TextAnimation({
   letterAnime?: boolean;
   lineAnime?: boolean;
 } & Omit<HTMLMotionProps<TextTag>, 'children'>) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionPreference();
   const MotionComponent = motion[as] as React.ComponentType<HTMLMotionProps<TextTag>>;
   const units = lineAnime ? text.split('\n') : letterAnime ? Array.from(text) : text.split(' ');
 
@@ -49,7 +50,7 @@ export default function TextAnimation({
       className={classname}
       aria-label={text.replace(/\n/g, ' ')}
       initial={reduceMotion ? false : 'hidden'}
-      animate={reduceMotion ? { opacity: 1, filter: 'blur(0px)', x: 0, y: 0 } : undefined}
+      animate={reduceMotion ? { opacity: 1, x: 0, y: 0 } : undefined}
       whileInView={reduceMotion ? undefined : 'visible'}
       viewport={viewport}
       variants={reduceMotion ? undefined : containerVariants}
@@ -60,7 +61,7 @@ export default function TextAnimation({
           aria-hidden="true"
           key={`${unit}-${index}`}
           initial={reduceMotion ? false : undefined}
-          animate={reduceMotion ? { opacity: 1, filter: 'blur(0px)', x: 0, y: 0 } : undefined}
+          animate={reduceMotion ? { opacity: 1, x: 0, y: 0 } : undefined}
           variants={reduceMotion ? undefined : variants || directionVariants(direction)}
           style={{ display: lineAnime ? 'block' : 'inline-block', whiteSpace: lineAnime ? 'normal' : 'pre' }}
         >

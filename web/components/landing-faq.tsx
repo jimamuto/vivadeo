@@ -59,12 +59,12 @@ export function LandingFaq() {
                   <motion.div
                     id={answerId}
                     className="landing-faq-answer"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    initial={{ gridTemplateRows: '0fr', opacity: 0 }}
+                    animate={{ gridTemplateRows: '1fr', opacity: 1 }}
+                    exit={{ gridTemplateRows: '0fr', opacity: 0 }}
+                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    <p>{item.answer}</p>
+                    <div><p>{item.answer}</p></div>
                   </motion.div>
                 ) : null}
               </AnimatePresence>

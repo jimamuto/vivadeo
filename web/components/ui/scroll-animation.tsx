@@ -1,8 +1,9 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
 import type { Variants } from 'motion/react';
 import type React from 'react';
+import { useReducedMotionPreference } from '@/lib/use-reduced-motion-preference';
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 type AsTag = 'div' | 'span' | 'h1' | 'h2' | 'h3' | 'a' | 'p' | 'section' | 'figure' | 'button' | 'article';
@@ -30,13 +31,13 @@ export function ScrollAnimation({
   as: Component = 'div',
   ...props
 }: ScrollAnimationProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionPreference();
   const axis = direction === 'left' || direction === 'right' ? 'x' : 'y';
   const distance = direction === 'right' || direction === 'down' ? 24 : -24;
   const MotionComponent = motion[Component] as typeof motion.div;
   const baseVariants: Variants = customVariants || {
-    hidden: axis === 'x' ? { filter: 'blur(10px)', opacity: 0, x: distance } : { filter: 'blur(10px)', opacity: 0, y: distance },
-    visible: { filter: 'blur(0px)', opacity: 1, x: 0, y: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } },
+    hidden: axis === 'x' ? { opacity: 0, x: distance / 2 } : { opacity: 0, y: distance / 2 },
+    visible: { opacity: 1, x: 0, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } },
   };
   const visible = baseVariants.visible;
   const variants: Variants = {
@@ -47,7 +48,7 @@ export function ScrollAnimation({
   return (
     <MotionComponent
       initial={reduceMotion ? false : "hidden"}
-      animate={reduceMotion ? { opacity: 1, filter: 'blur(0px)', x: 0, y: 0 } : undefined}
+      animate={reduceMotion ? { opacity: 1, x: 0, y: 0 } : undefined}
       whileInView={reduceMotion ? undefined : "visible"}
       viewport={viewport}
       variants={reduceMotion ? undefined : variants}
