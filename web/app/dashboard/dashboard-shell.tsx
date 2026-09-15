@@ -260,7 +260,7 @@ export function DashboardShell({
           <Link href="/" className="dashboard-brand-mark" aria-label="Go to home" data-tooltip="Go to home">
             {collapsed
               ? <img className="dashboard-brand-collapsed-icon" src="/vivadeo-mark.png" alt="Vivadeo" />
-              : <BrandLogo className="dashboard-brand-logo" />}
+              : <span className="dashboard-brand-lockup"><BrandLogo className="dashboard-brand-logo" /><span className="brand-alpha-badge">Alpha</span></span>}
           </Link>
           {!collapsed ? <button className="dashboard-sidebar-close" type="button" onClick={toggleSidebar} aria-label="Close sidebar">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>

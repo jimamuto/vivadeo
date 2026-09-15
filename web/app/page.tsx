@@ -39,7 +39,12 @@ export default async function HomePage() {
     <div className="landing-page">
       <header className="topbar">
         <div className="topbar-shell">
-          <Link href="/" className="brand"><BrandLogo /></Link>
+          <Link href="/" className="brand">
+            <span className="landing-brand-lockup">
+              <BrandLogo />
+              <span className="brand-alpha-badge">Alpha</span>
+            </span>
+          </Link>
           <div className="nav-center">
             <Link href="#about" className="nav-link">About</Link>
             <Link href="#about" className="nav-link">Services</Link>
