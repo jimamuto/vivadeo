@@ -11,6 +11,11 @@ function requiresEditorAccess(method: string, targetPath: string) {
   return true;
 }
 
+function requiresManagerAccess(method: string, targetPath: string) {
+  return targetPath === "/v1/settings/llm/ollama-models"
+    || (targetPath === "/v1/settings/llm" && method !== "GET" && method !== "HEAD");
+}
+
 async function forward(
   request: NextRequest,
   path: string[],
@@ -30,6 +35,12 @@ async function forward(
   if (requiresEditorAccess(request.method, targetPath) && role === "viewer") {
     return NextResponse.json(
       { detail: "Viewer role cannot modify workspace content." },
+      { status: 403 },
+    );
+  }
+  if (requiresManagerAccess(request.method, targetPath) && role !== "owner" && role !== "admin") {
+    return NextResponse.json(
+      { detail: "Only workspace owners and admins can manage answer providers." },
       { status: 403 },
     );
   }

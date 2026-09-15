@@ -1,9 +1,11 @@
 """Small OpenAI-compatible client for Vivadeo Auto and transient BYOK requests."""
 
 import base64
+import ipaddress
 import json
 import logging
 import re
+import socket
 import time
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
@@ -50,12 +52,24 @@ class OpenAICompatibleError(RuntimeError):
     """Raised when an OpenAI-compatible gateway cannot produce an answer."""
 
 
-def validate_base_url(value: str) -> str:
+def validate_base_url(value: str, *, allow_local: bool = False) -> str:
     parsed = urlparse(value.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
         raise OpenAICompatibleError("AI endpoints must use an http(s) URL without embedded credentials.")
-    if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+    hostname = parsed.hostname or ""
+    is_localhost = hostname.casefold() == "localhost"
+    if parsed.scheme == "http" and not (allow_local and is_localhost):
         raise OpenAICompatibleError("Non-local AI endpoints must use https.")
+    if is_localhost:
+        if not allow_local:
+            raise OpenAICompatibleError("AI endpoints cannot use local or private network addresses.")
+    else:
+        try:
+            addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parsed.port or 443, type=socket.SOCK_STREAM)}
+        except socket.gaierror as exc:
+            raise OpenAICompatibleError("The AI endpoint hostname could not be resolved.") from exc
+        if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+            raise OpenAICompatibleError("AI endpoints cannot use local or private network addresses.")
     return value.rstrip("/")
 
 
@@ -99,7 +113,7 @@ def _read_answer_stream(response, on_delta, protocol: str) -> str:
 
 
 def _ollama_base_url(value: str) -> str:
-    base_url = validate_base_url(value)
+    base_url = validate_base_url(value, allow_local=True)
     parsed = urlparse(base_url)
     if Path("/.dockerenv").exists() and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
         host = "host.docker.internal"

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
+import { getWorkspaceRoleForRequest } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +8,8 @@ export async function GET(
 ) {
   const { jobId } = await params;
   const workspace = request.cookies.get("vivadeo_workspace")?.value;
+  const role = await getWorkspaceRoleForRequest(request, workspace || "default-workspace");
+  if (!role) return new Response("Workspace access is required.", { status: 401 });
   const response = await fetch(getBackendUrl(`/v1/jobs/${jobId}/events`), {
     headers: getBackendHeaders(undefined, workspace),
     cache: "no-store",

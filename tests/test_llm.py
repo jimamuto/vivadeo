@@ -8,6 +8,18 @@ import pytest
 from vivadeo.llm import OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models, validate_base_url
 
 
+@pytest.fixture(autouse=True)
+def resolve_example_provider(monkeypatch):
+    original = __import__("socket").getaddrinfo
+
+    def resolve(host, port, *args, **kwargs):
+        if host == "api.example.com":
+            return [(2, 1, 6, "", ("93.184.216.34", port))]
+        return original(host, port, *args, **kwargs)
+
+    monkeypatch.setattr("vivadeo.llm.socket.getaddrinfo", resolve)
+
+
 class _Response:
     def __init__(self, payload):
         self.payload = payload
@@ -24,9 +36,21 @@ class _Response:
 
 def test_validate_base_url_requires_secure_remote_endpoint():
     assert validate_base_url("https://api.example.com/v1") == "https://api.example.com/v1"
-    assert validate_base_url("http://localhost:11434") == "http://localhost:11434"
     with pytest.raises(OpenAICompatibleError):
         validate_base_url("http://api.example.com/v1")
+    with pytest.raises(OpenAICompatibleError):
+        validate_base_url("http://localhost:11434")
+
+
+@pytest.mark.parametrize("url", [
+    "https://127.0.0.1/v1",
+    "https://10.0.0.1/v1",
+    "https://169.254.169.254/latest/meta-data",
+    "https://[::1]/v1",
+])
+def test_validate_base_url_rejects_non_public_addresses(url):
+    with pytest.raises(OpenAICompatibleError):
+        validate_base_url(url)
 
 
 def test_ollama_models_are_discovered_through_the_docker_host(monkeypatch):

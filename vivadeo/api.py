@@ -108,6 +108,7 @@ from .worker import (
 )
 
 app = FastAPI(title="Vivadeo", version="0.1.0")
+MAX_VIDEO_UPLOAD_BYTES = 512 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
@@ -357,6 +358,19 @@ def _processing_priority(session: Session, organization_id: str) -> int:
     """Celery priority is an entitlement; higher paid tiers receive the priority lane."""
     organization = session.get(Organization, organization_id)
     return 9 if organization and organization.plan in {"pro", "team", "business", "enterprise"} else 5
+
+
+def _validate_video_upload(file: UploadFile) -> None:
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("video/"):
+        raise HTTPException(status_code=415, detail="Use a supported video file")
+    upload_size = file.size
+    if upload_size is None:
+        file.file.seek(0, 2)
+        upload_size = file.file.tell()
+        file.file.seek(0)
+    if upload_size > MAX_VIDEO_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Video files must be 512 MB or smaller")
 
 
 def db_dep():
@@ -837,6 +851,7 @@ async def upload_video(
 ):
     _get_workspace(session, organization_id)
     thread = _get_chat_thread(session, thread_id, organization_id)
+    _validate_video_upload(file)
     video_id = new_id()
     job_id = new_id()
     filename = Path(file.filename or f"{video_id}.mp4").name

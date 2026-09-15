@@ -1,8 +1,11 @@
 """Tests for the production FastAPI surface."""
 
 from datetime import datetime, timezone
+from io import BytesIO
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
 import vivadeo.api as api
@@ -72,6 +75,27 @@ def test_stats_rejects_missing_api_key(monkeypatch):
         response = client.get("/v1/stats")
 
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("content_type", "size", "status_code"),
+    [
+        ("application/octet-stream", 1, 415),
+        ("video/mp4", api.MAX_VIDEO_UPLOAD_BYTES + 1, 413),
+    ],
+)
+def test_video_upload_validation_rejects_invalid_files(content_type, size, status_code):
+    upload = UploadFile(
+        BytesIO(b"x"),
+        filename="video.mp4",
+        size=size,
+        headers={"content-type": content_type},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        api._validate_video_upload(upload)
+
+    assert exc_info.value.status_code == status_code
 
 
 def test_retry_failed_clip_job(monkeypatch):

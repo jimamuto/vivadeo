@@ -9,11 +9,21 @@ from vivadeo.llm import OpenAICompatibleError, _read_answer_stream
 
 def test_preparation_runs_every_search_stage(monkeypatch):
     calls = []
+
+    @contextmanager
+    def scope():
+        yield SimpleNamespace()
+
+    monkeypatch.setattr(worker, "session_scope", scope)
     monkeypatch.setattr(worker, "_raise_if_canceled", lambda _: None)
     monkeypatch.setattr(worker, "_mark_video", lambda *a, **kw: calls.append(kw))
     monkeypatch.setattr(worker, "_transcribe_file", lambda *a: calls.append("transcript"))
     monkeypatch.setattr(worker, "_embed_transcript_segments", lambda *a: calls.append("transcript_embeddings"))
     monkeypatch.setattr(worker, "_index_file", lambda *a: calls.append("visual"))
+    monkeypatch.setattr(worker, "enforce_storage_allowance", lambda *a: None)
+    monkeypatch.setattr(worker, "consume_processing_allowance", lambda *a: None)
+    monkeypatch.setattr(worker, "_get_video_duration", lambda *a: 1.0)
+    monkeypatch.setattr(worker, "_cache_initial_keyframe", lambda *a: None)
     worker._prepare_file("v", "org", "file", "job")
     assert calls == [
         "transcript",
