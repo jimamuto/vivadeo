@@ -7,6 +7,10 @@ export type VivadeoPlan = {
   billingNote: string;
   features: readonly string[];
   featured?: boolean;
+  processedSeconds: number | null;
+  storageSeconds: number | null;
+  answerCredits: number | null;
+  seats: number | null;
 };
 
 export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
@@ -18,6 +22,7 @@ export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
     priceLabel: "$0",
     billingNote: "Free forever",
     features: ["1 hour processed each month", "5 hours of video storage", "25 Vivadeo Auto answers", "1 workspace seat"],
+    processedSeconds: 3_600, storageSeconds: 5 * 3_600, answerCredits: 25, seats: 1,
   },
   {
     id: "starter",
@@ -28,6 +33,7 @@ export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
     billingNote: "per month",
     features: ["5 hours processed each month", "20 hours of video storage", "200 Vivadeo Auto answers", "1 workspace seat"],
     featured: true,
+    processedSeconds: 18_000, storageSeconds: 20 * 3_600, answerCredits: 200, seats: 1,
   },
   {
     id: "pro",
@@ -37,6 +43,7 @@ export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
     priceLabel: "$29",
     billingNote: "per month",
     features: ["20 hours processed each month", "100 hours of video storage", "1,000 Vivadeo Auto answers", "Priority processing"],
+    processedSeconds: 72_000, storageSeconds: 100 * 3_600, answerCredits: 1_000, seats: 1,
   },
   {
     id: "team",
@@ -46,6 +53,7 @@ export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
     priceLabel: "$79",
     billingNote: "per month",
     features: ["60 hours processed each month", "400 hours of video storage", "4,000 Vivadeo Auto answers", "5 workspace seats"],
+    processedSeconds: 216_000, storageSeconds: 400 * 3_600, answerCredits: 4_000, seats: 5,
   },
   {
     id: "business",
@@ -55,6 +63,7 @@ export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
     priceLabel: "$199",
     billingNote: "per month",
     features: ["180 hours processed each month", "1,500 hours of video storage", "15,000 Vivadeo Auto answers", "10 workspace seats"],
+    processedSeconds: 648_000, storageSeconds: 1_500 * 3_600, answerCredits: 15_000, seats: 10,
   },
   {
     id: "enterprise",
@@ -64,5 +73,12 @@ export const VIVADEO_PLANS: readonly VivadeoPlan[] = [
     priceLabel: "Custom",
     billingNote: "Talk with us",
     features: ["Custom processing and storage", "Flexible workspace seats", "Administrative controls", "Dedicated rollout support"],
+    processedSeconds: null, storageSeconds: null, answerCredits: null, seats: null,
   },
 ] as const;
+
+export type VivadeoPlanId = VivadeoPlan["id"];
+
+export function getVivadeoPlan(id: string | null | undefined): VivadeoPlan {
+  return VIVADEO_PLANS.find((plan) => plan.id === id) || VIVADEO_PLANS[0];
+}

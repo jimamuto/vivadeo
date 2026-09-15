@@ -1752,12 +1752,24 @@ main { width: 100%; }
 .billing-card-current { border-color: rgba(118, 50, 63, .2); background: var(--color-action-subtle); color: var(--color-oxblood); }
 .billing-card.is-featured > button { border-color: rgba(247, 243, 238, .45); background: var(--color-grain); color: var(--color-oxblood); opacity: 1; }
 .billing-page-note { margin: 22px 0 0; color: var(--muted); font-size: .78rem; text-align: center; }
+.billing-notice { margin: -20px 0 24px; padding: 12px 14px; border: 1px solid var(--color-oxblood); border-radius: 9px; color: var(--color-oxblood); background: var(--color-action-subtle); }
+.billing-overview { margin-bottom: 30px; padding: 22px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 18px; align-items: center; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 12px 30px rgba(45, 36, 34, .045); }
+.billing-overview div { min-width: 0; display: grid; gap: 6px; }
+.billing-overview span { color: var(--muted); font-size: .74rem; }
+.billing-overview strong { overflow: hidden; color: var(--color-content); font-size: .85rem; text-overflow: ellipsis; white-space: nowrap; }
+.billing-overview button { min-height: 44px; padding: 10px 15px; border: 1px solid var(--color-oxblood); border-radius: 9px; background: var(--color-oxblood); color: var(--color-grain); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; transition-property: opacity, scale; transition-duration: 120ms; }
+.billing-overview button:active { scale: .96; }
+.billing-overview button:disabled { cursor: wait; opacity: .65; }
+.billing-card.is-current { outline: 2px solid var(--color-oxblood); outline-offset: 2px; }
 
 @media (max-width: 1040px) {
+  .billing-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-overview button { justify-self: start; }
   .billing-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 650px) {
+  .billing-overview { grid-template-columns: 1fr; }
   .billing-page { padding: 28px 18px 56px; }
   .billing-page-header { display: grid; margin-bottom: 28px; }
   .billing-page-header > span { justify-self: start; }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 import { getWorkspaceRoleForRequest } from "@/lib/auth";
+import { randomUUID } from "node:crypto";
+import { consumeCredit, ensureWorkspaceAllowance, refundCredit } from "@/lib/billing";
 
 function requiresEditorAccess(method: string, targetPath: string) {
   if (method === "GET" || method === "HEAD") return false;
@@ -39,6 +41,7 @@ async function forward(
   if (range) headers.set("Range", range);
   const method = request.method;
   let body: BodyInit | undefined;
+  let creditOperationId: string | null = null;
 
   if (method !== "GET" && method !== "HEAD") {
     const contentType = request.headers.get("content-type") || "";
@@ -50,6 +53,15 @@ async function forward(
     } else if (contentType.includes("application/json")) {
       body = await request.text();
       headers.set("Content-Type", "application/json");
+      if (targetPath === "/v1/search/chat") {
+        const payload = JSON.parse(body || "{}") as { provider?: string };
+        if (!payload.provider || payload.provider === "vivadeo-auto") {
+          await ensureWorkspaceAllowance(workspace || "default-workspace");
+          creditOperationId = request.headers.get("x-vivadeo-operation-id") || randomUUID();
+          const allowed = await consumeCredit(workspace || "default-workspace", "answers", 1, creditOperationId);
+          if (!allowed) return NextResponse.json({ detail: "This workspace has used its monthly answer allowance. Upgrade or wait for the next reset." }, { status: 402 });
+        }
+      }
     } else if (contentType) {
       const form = await request.formData();
       const payload = Object.fromEntries(form.entries());
@@ -58,14 +70,19 @@ async function forward(
     }
   }
 
-  const response = await fetch(backendUrl, {
-    method,
-    headers,
-    body,
-    // Required by Node.js fetch when body is a ReadableStream.
-    // @ts-expect-error: duplex is not in the TS types yet but is required at runtime.
-    duplex: "half",
-  });
+  let response: Response;
+  try {
+    response = await fetch(backendUrl, {
+      method, headers, body,
+      // Required by Node.js fetch when body is a ReadableStream.
+      // @ts-expect-error: duplex is not in the TS types yet but is required at runtime.
+      duplex: "half",
+    });
+  } catch (error) {
+    if (creditOperationId) await refundCredit(workspace || "default-workspace", creditOperationId);
+    throw error;
+  }
+  if (creditOperationId && !response.ok) await refundCredit(workspace || "default-workspace", creditOperationId);
   if (method === "GET" || method === "HEAD") {
     const responseHeaders = new Headers();
     response.headers.forEach((value, key) => responseHeaders.set(key, value));

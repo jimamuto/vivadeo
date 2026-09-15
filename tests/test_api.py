@@ -48,6 +48,24 @@ def test_healthz_without_api_key(monkeypatch):
     assert response.json() == {"status": "ok"}
 
 
+def test_new_workspace_explicitly_starts_on_free(monkeypatch):
+    captured = {}
+
+    class FakeSession:
+        def scalars(self, _statement):
+            return SimpleNamespace(first=lambda: None)
+
+        def add(self, organization):
+            captured["organization"] = organization
+
+        def commit(self):
+            return None
+
+    response = api.create_workspace(api.WorkspaceCreateRequest(name="New archive", owner_email="new@example.com"), FakeSession())
+    assert response.plan == "free"
+    assert captured["organization"].plan == "free"
+
+
 def test_stats_rejects_missing_api_key(monkeypatch):
     _disable_startup_io(monkeypatch)
     with TestClient(app) as client:
@@ -588,7 +606,7 @@ def test_reindex_video_queues_upload_job(monkeypatch):
             return None
 
     called = {}
-    monkeypatch.setattr(api.ingest_uploaded_object, "delay", lambda *args: called.setdefault("args", args))
+    monkeypatch.setattr(api.ingest_uploaded_object, "apply_async", lambda **kwargs: called.update(kwargs))
 
     response = api.reindex_video("video-1", session=FakeSession(), organization_id="default-workspace")
 
@@ -597,6 +615,7 @@ def test_reindex_video_queues_upload_job(monkeypatch):
     assert video.visual_status == "queued"
     assert video.transcript_status == "queued"
     assert called["args"] == (recorded["jobs"][0].id, "video-1", "default-workspace")
+    assert called["priority"] == 5
 
 
 def test_cancel_job_marks_job_and_video_canceled():
@@ -675,13 +694,14 @@ def test_retry_canceled_upload_job(monkeypatch):
             return None
 
     called = {}
-    monkeypatch.setattr(api.ingest_uploaded_object, "delay", lambda *args: called.setdefault("args", args))
+    monkeypatch.setattr(api.ingest_uploaded_object, "apply_async", lambda **kwargs: called.update(kwargs))
 
     response = api.retry_job("job-1", session=FakeSession(), organization_id="default-workspace")
 
     assert response.status == "queued"
     assert response.message == "Retry queued"
     assert called["args"] == ("job-1", "video-1", "default-workspace")
+    assert called["priority"] == 5
 
 
 def test_conversation_only_greeting_skips_video_retrieval_and_model(monkeypatch):

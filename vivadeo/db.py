@@ -304,6 +304,40 @@ class ReviewEvidenceItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class CreditGrant(Base):
+    __tablename__ = "credit_grants"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "credit_type", "source", "source_id", name="uq_credit_grant_source"),
+        Index("ix_credit_grants_available", "organization_id", "credit_type", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    credit_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    remaining: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CreditTransaction(Base):
+    __tablename__ = "credit_transactions"
+    __table_args__ = (UniqueConstraint("organization_id", "operation_id", "kind", name="uq_credit_transaction_operation"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(String(64), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    grant_id: Mapped[str] = mapped_column(String(36), ForeignKey("credit_grants.id", ondelete="RESTRICT"), nullable=False)
+    credit_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    operation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    transaction_metadata: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class EvidenceFrame(Base):
     __tablename__ = "evidence_frames"
     __table_args__ = (UniqueConstraint("video_id", "timestamp_key", name="uq_evidence_frame_timestamp"),)

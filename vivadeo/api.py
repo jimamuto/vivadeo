@@ -353,6 +353,12 @@ def _get_workspace(session: Session, organization_id: str) -> Organization:
     return org
 
 
+def _processing_priority(session: Session, organization_id: str) -> int:
+    """Celery priority is an entitlement; higher paid tiers receive the priority lane."""
+    organization = session.get(Organization, organization_id)
+    return 9 if organization and organization.plan in {"pro", "team", "business", "enterprise"} else 5
+
+
 def db_dep():
     session = SessionLocal()
     try:
@@ -604,7 +610,7 @@ def create_workspace(
         owner_part = f"-{request.owner_email.split('@', 1)[0]}"
     base_slug = _slugify(request.slug or f"{request.name}{owner_part}")
     slug = _unique_workspace_slug(session, base_slug)
-    org = Organization(id=new_id(), slug=slug, name=request.name)
+    org = Organization(id=new_id(), slug=slug, name=request.name, plan="free")
     session.add(org)
     session.commit()
     return WorkspaceResponse(id=org.id, slug=org.slug, name=org.name, plan=org.plan)
@@ -868,7 +874,7 @@ async def upload_video(
     )
     session.add(job)
     session.commit()
-    ingest_uploaded_object.apply_async(args=(job_id, video_id, organization_id), queue="evidence" if thread else "celery")
+    ingest_uploaded_object.apply_async(args=(job_id, video_id, organization_id), queue="evidence" if thread else "celery", priority=_processing_priority(session, organization_id))
     return _job_response(job)
 
 
@@ -908,7 +914,7 @@ def ingest_video_url(
     )
     session.add(job)
     session.commit()
-    ingest_url.apply_async(args=(job_id, video_id, organization_id, request.url, request.max_height), queue="evidence" if thread else "celery")
+    ingest_url.apply_async(args=(job_id, video_id, organization_id, request.url, request.max_height), queue="evidence" if thread else "celery", priority=_processing_priority(session, organization_id))
     return _job_response(job)
 
 
@@ -948,7 +954,7 @@ def ingest_local_video(
     )
     session.add(job)
     session.commit()
-    ingest_local_path.delay(job_id, video_id, organization_id, str(path))
+    ingest_local_path.apply_async(args=(job_id, video_id, organization_id, str(path)), priority=_processing_priority(session, organization_id))
     return _job_response(job)
 
 
@@ -1342,11 +1348,11 @@ def reindex_video(
     if video.source_type == "upload":
         if not video.object_key:
           raise HTTPException(status_code=400, detail="Uploaded source object missing")
-        ingest_uploaded_object.delay(job.id, video.id, organization_id)
+        ingest_uploaded_object.apply_async(args=(job.id, video.id, organization_id), priority=_processing_priority(session, organization_id))
     elif video.source_type == "url":
-        ingest_url.delay(job.id, video.id, organization_id, video.source_uri, 480)
+        ingest_url.apply_async(args=(job.id, video.id, organization_id, video.source_uri, 480), priority=_processing_priority(session, organization_id))
     elif video.source_type == "local_path":
-        ingest_local_path.delay(job.id, video.id, organization_id, video.source_uri)
+        ingest_local_path.apply_async(args=(job.id, video.id, organization_id, video.source_uri), priority=_processing_priority(session, organization_id))
     else:
         raise HTTPException(status_code=400, detail=f"Reindex not supported for {video.source_type}")
     return _job_response(job)
@@ -1717,7 +1723,7 @@ def retry_job(
         job.message = "Retry queued"
         job.error = None
         session.commit()
-        ingest_uploaded_object.delay(job.id, video.id, organization_id)
+        ingest_uploaded_object.apply_async(args=(job.id, video.id, organization_id), priority=_processing_priority(session, organization_id))
         return _job_response(job)
     if job.kind == "ingest_url":
         if video is None:
@@ -1729,7 +1735,7 @@ def retry_job(
         job.message = "Retry queued"
         job.error = None
         session.commit()
-        ingest_url.delay(job.id, video.id, organization_id, url, max_height)
+        ingest_url.apply_async(args=(job.id, video.id, organization_id, url, max_height), priority=_processing_priority(session, organization_id))
         return _job_response(job)
     if job.kind == "ingest_local_path":
         if video is None:
@@ -1739,7 +1745,7 @@ def retry_job(
         job.message = "Retry queued"
         job.error = None
         session.commit()
-        ingest_local_path.delay(job.id, video.id, organization_id, video.source_uri)
+        ingest_local_path.apply_async(args=(job.id, video.id, organization_id, video.source_uri), priority=_processing_priority(session, organization_id))
         return _job_response(job)
     if job.kind == "extract_evidence_frame":
         frame_id = (job.payload or {}).get("frame_id")

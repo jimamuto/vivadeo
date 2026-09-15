@@ -231,6 +231,10 @@ class PostgresVideoStore:
             chunk_stmt = chunk_stmt.where(VideoChunk.organization_id == organization_id)
         video_count = self.session.scalar(video_stmt) or 0
         chunk_count = self.session.scalar(chunk_stmt) or 0
+        duration_stmt = select(func.coalesce(func.sum(Video.duration), 0.0))
+        if organization_id:
+            duration_stmt = duration_stmt.where(Video.organization_id == organization_id)
+        total_video_duration_seconds = float(self.session.scalar(duration_stmt) or 0.0)
         storage_bytes = 0
         if object_store is not None:
             keys = list(
@@ -258,4 +262,5 @@ class PostgresVideoStore:
             "total_videos": video_count,
             "total_chunks": chunk_count,
             "total_storage_bytes": storage_bytes,
+            "total_video_duration_seconds": total_video_duration_seconds,
         }

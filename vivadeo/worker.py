@@ -23,6 +23,7 @@ from .object_store import ObjectStore, clip_object_key, evidence_frame_object_ke
 from .notifications import notify_ingest_outcome
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
+from .billing import consume_processing_allowance, enforce_storage_allowance, refund_processing_allowance
 
 
 settings = get_settings()
@@ -35,6 +36,7 @@ celery_app = Celery(
 )
 celery_app.conf.update(
     task_track_started=True, worker_prefetch_multiplier=1,
+    task_queue_max_priority=9, task_default_priority=5,
     worker_max_tasks_per_child=100, broker_connection_retry_on_startup=True,
     task_routes={
         "vivadeo.generate_chat": {"queue": "chat"},
@@ -273,20 +275,28 @@ def embed_transcript_task(job_id: str, video_id: str, organization_id: str) -> N
         _update_job(job_id, status="failed", error="Could not improve spoken-content search. The transcript remains available.", message="Search preparation interrupted")
         raise
 def _prepare_file(video_id: str, organization_id: str, file_path: str, job_id: str) -> None:
-    _cache_initial_keyframe(video_id, organization_id, file_path)
+    with session_scope() as session:
+        enforce_storage_allowance(session, organization_id)
+        consume_processing_allowance(session, organization_id, _get_video_duration(file_path), job_id)
     try:
-        _transcribe_file(video_id, organization_id, file_path, job_id)
-        _embed_transcript_segments(job_id, video_id, organization_id)
-    except Exception as exc:
-        _mark_video(video_id, transcript_status="canceled" if isinstance(exc, JobCanceled) else "failed")
-        raise
-    _raise_if_canceled(job_id)
-    _mark_video(video_id, visual_status="running")
-    try:
-        _index_file(video_id, organization_id, file_path, job_id)
-        _mark_video(video_id, visual_status="ready")
-    except Exception as exc:
-        _mark_video(video_id, visual_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+        _cache_initial_keyframe(video_id, organization_id, file_path)
+        try:
+            _transcribe_file(video_id, organization_id, file_path, job_id)
+            _embed_transcript_segments(job_id, video_id, organization_id)
+        except Exception as exc:
+            _mark_video(video_id, transcript_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+            raise
+        _raise_if_canceled(job_id)
+        _mark_video(video_id, visual_status="running")
+        try:
+            _index_file(video_id, organization_id, file_path, job_id)
+            _mark_video(video_id, visual_status="ready")
+        except Exception as exc:
+            _mark_video(video_id, visual_status="canceled" if isinstance(exc, JobCanceled) else "failed")
+            raise
+    except BaseException:
+        with session_scope() as session:
+            refund_processing_allowance(session, organization_id, job_id)
         raise
 
 

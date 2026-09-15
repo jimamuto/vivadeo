@@ -16,7 +16,7 @@ export default async function BillingPage() {
 
   return (
     <DashboardShell workspace={workspace} profileInitial={displayName.trim().slice(0, 1).toUpperCase()} profileName={displayName}>
-      <BillingPlans />
+      <BillingPlans workspace={workspace} />
     </DashboardShell>
   );
 }
