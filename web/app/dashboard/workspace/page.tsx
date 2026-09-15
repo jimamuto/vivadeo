@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import { DashboardShell } from "../dashboard-shell";
 import { WorkspacePanel } from "../dashboard-ui";
 import { auth } from "@/lib/auth";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Workspace", description: "Manage your Vivadeo workspace and its members." };
 
 export default async function WorkspacePage() {
   const cookieStore = await cookies();

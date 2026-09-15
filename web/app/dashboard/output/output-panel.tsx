@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { MascotScout } from "@/components/mascot-scout";
 import type { ReviewEvidence } from "../review/review-panel";
 
 type OutputFormat = "brief" | "structured" | "export";
@@ -72,8 +73,8 @@ export function OutputPanel() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading) return <section className="review-loading" aria-live="polite"><span /><p>Loading verified evidence…</p></section>;
-  if (!items.length) return <section className="output-empty"><h2>Nothing is ready to output.</h2><p>Verify at least one evidence moment before creating an output.</p><Link className="button" href="/dashboard/review">Review evidence</Link></section>;
+  if (loading) return <section className="review-loading" aria-live="polite"><span className="vivadeo-loading-spinner" aria-hidden="true" /><p>Loading</p></section>;
+  if (!items.length) return <section className="output-empty"><MascotScout size="large" motion="look" /><h2>Nothing is ready to output.</h2><p>Verify at least one evidence moment before creating an output.</p><Link className="button" href="/dashboard/review">Review evidence</Link></section>;
 
   return (
     <div className="output-workspace">

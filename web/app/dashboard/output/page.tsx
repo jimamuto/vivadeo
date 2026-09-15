@@ -2,6 +2,9 @@ import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { DashboardShell } from "../dashboard-shell";
 import { OutputPanel } from "./output-panel";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Output", description: "Shape verified video evidence into a usable, attributed output." };
 
 export default async function OutputPage() {
   const workspace = (await cookies()).get("vivadeo_workspace")?.value || "default-workspace";

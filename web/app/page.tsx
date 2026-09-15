@@ -6,6 +6,11 @@ import { LandingFaq } from "@/components/landing-faq";
 import { ScrollAnimation } from "@/components/ui/scroll-animation";
 import ScrollBaseAnimation from "@/components/ui/scroll-text-marque";
 import TextAnimation from "@/components/ui/scroll-text";
+import type { Metadata } from "next";
+import { contactEmail, contactLocation } from "@/lib/site";
+import { CookieSettingsButton } from "@/components/cookie-consent";
+
+export const metadata: Metadata = { title: "Video evidence search", description: "Find exact moments across your video archive, verify their sources, and keep your team moving." };
 
 const archiveTeams = "Studios   •   Broadcasters   •   Newsrooms   •   Film archives   •   Sports media   •   Universities   •   Creative agencies   •";
 
@@ -191,13 +196,18 @@ export default async function HomePage() {
             <Link href="#about">About</Link>
             <Link href="#pricing">Pricing</Link>
             <Link href={signedIn ? "/dashboard" : "/sign-up"}>Get started</Link>
+            <Link href={"/privacy" as any}>Privacy</Link>
+            <Link href={"/terms" as any}>Terms</Link>
+            <CookieSettingsButton />
           </nav>
+          <address><h3>Contact</h3><a href={`mailto:${contactEmail}`}>{contactEmail}</a><span>{contactLocation}</span></address>
         </ScrollAnimation>
         <ScrollAnimation className="landing-footer-bottom">
           <span>© {new Date().getFullYear()} Vivadeo</span>
           <span>Find more in every frame.</span>
         </ScrollAnimation>
       </footer>
+      {!signedIn ? <div className="landing-mobile-cta"><Link href="/sign-up">Get started for free</Link></div> : null}
     </div>
   );
 }

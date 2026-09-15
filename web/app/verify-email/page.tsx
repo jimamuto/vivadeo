@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SubmitButton } from "@/components/submit-button";
 import { BrandLogo } from "@/components/brand-logo";
+import type { Metadata } from "next";
+export const metadata: Metadata = { title: "Verify email", description: "Verify the email address for your Vivadeo account." };
 
 export default async function VerifyEmailPage({
   searchParams,

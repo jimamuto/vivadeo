@@ -1,10 +1,18 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { ThemeSync } from "./theme-sync";
+import { Suspense } from "react";
+import { CookieConsent } from "@/components/cookie-consent";
+import { PostHogAnalytics } from "@/components/posthog-analytics";
+import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Vivadeo",
-  description: "Workspace-first video search, clip generation, and review."
+  metadataBase: new URL(siteUrl),
+  title: { default: "Vivadeo | Find more in every frame", template: "%s | Vivadeo" },
+  description: "Search video archives, verify cited moments, and turn footage into usable evidence.",
+  openGraph: { type: "website", siteName: "Vivadeo", title: "Vivadeo | Find more in every frame", description: "Search video archives, verify cited moments, and turn footage into usable evidence.", images: [{ url: "/images/landing/dashboard-overview.webp", width: 1600, height: 1000, alt: "Vivadeo video search workspace" }] },
+  twitter: { card: "summary_large_image", title: "Vivadeo | Find more in every frame", description: "Search video archives, verify cited moments, and turn footage into usable evidence.", images: ["/images/landing/dashboard-overview.webp"] },
+  icons: { icon: "/icon.png", apple: "/apple-icon.png" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -15,7 +23,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <ThemeSync />
+        <Suspense fallback={null}><PostHogAnalytics projectToken={process.env.POSTHOG_PROJECT_TOKEN} host={process.env.POSTHOG_HOST} /></Suspense>
         <main>{children}</main>
+        <CookieConsent />
       </body>
     </html>
   );

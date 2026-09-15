@@ -4,6 +4,9 @@ import { DashboardShell } from "../dashboard-shell";
 import { fetchDashboardData } from "../dashboard-data";
 import { IngestPanel } from "../dashboard-ui";
 import { auth } from "@/lib/auth";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Add video", description: "Upload videos and follow their preparation for Vivadeo search." };
 
 export default async function IngestPage() {
   const cookieStore = await cookies();

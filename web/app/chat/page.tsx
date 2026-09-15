@@ -3,6 +3,9 @@ import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { SearchContent, type ChatThread } from "@/app/search/search-content";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Search", description: "Search selected videos for cited evidence." };
 
 type BackendThread = {
   id: string;

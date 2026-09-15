@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand-logo";
+import type { Metadata } from "next";
+export const metadata: Metadata = { title: "Reset password", description: "Request a secure Vivadeo password reset." };
 
 export default function ForgotPasswordPage() {
   return (

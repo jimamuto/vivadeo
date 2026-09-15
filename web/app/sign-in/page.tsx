@@ -5,6 +5,9 @@ import { auth } from "@/lib/auth";
 import { SigninForm } from "./signin-form";
 import { BrandLogo } from "@/components/brand-logo";
 import { AuthSocialOptions } from "@/components/auth-social-options";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Sign in", description: "Sign in to your Vivadeo workspace." };
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: "Your email address has not been verified. Enter the code from your inbox.",

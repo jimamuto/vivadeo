@@ -97,6 +97,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      POSTHOG_PROJECT_TOKEN: ${POSTHOG_PROJECT_TOKEN:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-vivadeo-better-auth-secret-change-before-production}
       VIVADEO_INTERNAL_SERVICE_KEY: ${VIVADEO_INTERNAL_SERVICE_KEY:-change-me}
       VIVADEO_DEFAULT_ORG_ID: ${VIVADEO_DEFAULT_ORG_ID:-default-workspace}

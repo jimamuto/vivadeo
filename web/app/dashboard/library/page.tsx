@@ -4,6 +4,9 @@ import { DashboardShell } from "../dashboard-shell";
 import { fetchDashboardData } from "../dashboard-data";
 import { LibraryPanel } from "../dashboard-ui";
 import { auth } from "@/lib/auth";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Library", description: "Organize and revisit videos in your Vivadeo workspace." };
 
 export default async function LibraryPage({
   searchParams,

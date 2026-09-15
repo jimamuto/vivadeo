@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MascotScout } from "@/components/mascot-scout";
 
 type ReviewDecision = "pending" | "verified" | "rejected" | "needs_context";
 
@@ -130,9 +131,10 @@ export function ReviewPanel() {
     }
   }
 
-  if (loading) return <section className="review-loading" aria-live="polite"><span /><p>Loading review evidence…</p></section>;
+  if (loading) return <section className="review-loading" aria-live="polite"><span className="vivadeo-loading-spinner" aria-hidden="true" /><p>Loading</p></section>;
   if (!items.length) return (
     <section className="review-empty-simple" aria-labelledby="review-empty-title">
+      <MascotScout size="large" motion="look" />
       <h1 id="review-empty-title">No evidence to review yet.</h1>
       <p>Add moments from a search answer, then verify them here.</p>
       <Link className="button" href="/search">Search videos</Link>

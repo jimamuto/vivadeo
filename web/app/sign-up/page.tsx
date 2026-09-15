@@ -5,6 +5,9 @@ import { auth } from "@/lib/auth";
 import { SignupForm } from "./signup-form";
 import { BrandLogo } from "@/components/brand-logo";
 import { AuthSocialOptions } from "@/components/auth-social-options";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Create account", description: "Create a Vivadeo workspace for searchable video evidence." };
 
 export default async function SignUpPage({
   searchParams,

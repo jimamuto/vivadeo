@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { PasswordStrengthInput } from "@/components/password-strength-input";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -18,6 +19,11 @@ export function SignupForm({ initialError }: { initialError?: string }) {
         <input id="email" name="email" type="email" autoComplete="email" required />
       </div>
       <PasswordStrengthInput />
+      <p className="auth-legal-copy">
+        By creating an account, you agree to Vivadeo&apos;s{" "}
+        <Link href="/terms">Terms and Conditions</Link> and acknowledge our{" "}
+        <Link href="/privacy">Privacy Policy</Link>.
+      </p>
       <SubmitButton pendingLabel="Creating account...">Create account</SubmitButton>
     </form>
   );
