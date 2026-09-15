@@ -12,10 +12,10 @@ import { SETTINGS_SECTIONS, type SettingsSection } from "./settings-sections";
 export async function SettingsPageContent({ section }: { section: SettingsSection }) {
   const session = await auth.api.getSession({ headers: await headers() });
   const user = session?.user;
-  const displayName = user?.name || "Your display name";
+  const displayName = user?.name || "Guest";
   const email = user?.email || "your@email.example";
   const emailVerified = Boolean(user && "emailVerified" in user ? user.emailVerified : false);
-  const initial = (displayName || "V").trim().slice(0, 1).toUpperCase();
+  const initial = (displayName || "Guest").trim().slice(0, 1).toUpperCase();
   const profileImage = user && "image" in user && user.image ? "/api/profile/avatar" : null;
   const workspace = (await cookies()).get("vivadeo_workspace")?.value || "default-workspace";
 

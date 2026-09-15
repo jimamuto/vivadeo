@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SearchContent, type ChatThread } from "@/app/search/search-content";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
@@ -40,7 +41,8 @@ export default async function ChatPage({
   searchParams: Promise<{ q?: string; video_id?: string; video_ids?: string; thread?: string }>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
-  const displayName = session?.user?.name || session?.user?.email || "V";
+  if (!session?.user) redirect("/sign-in");
+  const displayName = session.user.name || session.user.email || "Guest";
   const params = await searchParams;
   const workspace = (await cookies()).get("vivadeo_workspace")?.value || "default-workspace";
   let initialThreads: ChatThread[] = [];

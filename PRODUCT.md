@@ -12,6 +12,7 @@ Vivadeo is a workspace-based video search, ingest, and clip creation product. Th
 
 ## Auth And Workspace
 
+- Dashboard, search, chat, and settings routes require an authenticated user. Anonymous visitors redirect to sign-in before workspace data is fetched, so the default workspace is never used as a guest workspace.
 - Workspace roles are app-level `owner/admin/editor/viewer`.
 - Sign-up workspace creation sends the normalized email as `owner_email`; backend workspace slugs are slugified from workspace name plus email local-part, then suffixed (`-2`, `-3`, etc.) on collision so duplicate display names do not break registration.
 - Better Auth native `member` is normalized to `editor`.

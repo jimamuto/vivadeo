@@ -180,7 +180,7 @@ export function AccountSettingsPanel({
           </div>
           <div className="profile-avatar-field">
             <div className="profile-avatar-frame">
-              {avatarUrl ? <img className="profile-avatar" src={avatarUrl} alt="Profile" /> : <span className="profile-avatar profile-avatar-fallback">{firstName.trim().slice(0, 1).toUpperCase() || "V"}</span>}
+              {avatarUrl ? <img className="profile-avatar" src={avatarUrl} alt="Profile" /> : <span className="profile-avatar profile-avatar-fallback">{firstName.trim().slice(0, 1).toUpperCase() || "G"}</span>}
               {avatarUrl ? (
                 <button className="profile-avatar-remove" type="button" onClick={() => void removeAvatar()} aria-label="Remove profile photo">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

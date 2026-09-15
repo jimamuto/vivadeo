@@ -19,7 +19,7 @@ function LoadingShell({
   return (
     <DashboardShell
       workspace="default-workspace"
-      profileInitial="V"
+      profileInitial="G"
       breadcrumbDetail={breadcrumbDetail}
       loading
       pageLabelOverride={pageLabel}

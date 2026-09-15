@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { DashboardShell } from "../dashboard-shell";
 import { WorkspacePanel } from "../dashboard-ui";
 import { auth } from "@/lib/auth";
@@ -12,7 +13,8 @@ export default async function WorkspacePage() {
   const activeWorkspace =
     cookieStore.get("vivadeo_workspace")?.value || "default-workspace";
   const session = await auth.api.getSession({ headers: await headers() });
-  const displayName = session?.user?.name || session?.user?.email || "V";
+  if (!session?.user) redirect("/sign-in");
+  const displayName = session?.user?.name || session?.user?.email || "Guest";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const { stats } = await import("../dashboard-data").then((mod) =>
     mod.fetchDashboardData(activeWorkspace),
