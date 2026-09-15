@@ -74,6 +74,8 @@ export function DashboardShell({
   breadcrumbDetail,
   breadcrumbActions,
   onStartNewChat,
+  loading,
+  pageLabelOverride,
   children,
 }: Readonly<{
   workspace: string;
@@ -84,6 +86,8 @@ export function DashboardShell({
   breadcrumbDetail?: ReactNode;
   breadcrumbActions?: ReactNode;
   onStartNewChat?: () => void;
+  loading?: boolean;
+  pageLabelOverride?: string;
   children: ReactNode;
 }>) {
   const [collapsed, setCollapsed] = useState(false);
@@ -101,7 +105,7 @@ export function DashboardShell({
   const isSettingsPage = pathname.startsWith("/settings");
   const settingsSection = pathname.startsWith("/settings/") ? pathname.split("/")[2] : "";
   const settingsSectionLabel = getSettingsSectionLabel(settingsSection);
-  const pageLabel = pathname.startsWith("/dashboard/library")
+  const pageLabel = pageLabelOverride || (pathname.startsWith("/dashboard/library")
     ? "Library"
     : pathname.startsWith("/dashboard/jobs")
       ? "History"
@@ -119,7 +123,7 @@ export function DashboardShell({
           ? "Settings"
           : pathname.startsWith("/jobs")
             ? "Job progress"
-            : "Chat";
+            : "Chat");
 
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("vivadeo.sidebar-collapsed") === "true");
@@ -325,11 +329,9 @@ export function DashboardShell({
             </button>
             {notificationsOpen ? <div className="dashboard-notification-panel"><header><strong>Notifications</strong><Link href="/settings/notifications">Settings</Link></header>{notifications.length ? <div>{notifications.slice(0, 8).map((item) => <Link key={item.id} href={item.job_id ? `/dashboard/ingest` : "/dashboard/ingest"}><strong>{item.title}</strong><span>{item.message}</span><time>{new Date(item.created_at).toLocaleString()}</time></Link>)}</div> : <p>No notifications yet.</p>}</div> : null}
             </div>
-            <details ref={accountMenuRef} className="dashboard-command-account">
-              <summary className="dashboard-command-profile" aria-label="Open account menu">
-                <span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span>
-                <strong>{profileName || profileInitial}</strong>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+            <details ref={accountMenuRef} className={`dashboard-command-account${loading ? " is-loading" : ""}`}>
+              <summary className="dashboard-command-profile" aria-label={loading ? "Loading account" : "Open account menu"} aria-disabled={loading} onClick={loading ? (event) => event.preventDefault() : undefined}>
+                {loading ? <><span className="dashboard-account-skeleton-avatar" aria-hidden="true" /><strong className="dashboard-account-skeleton-name" aria-hidden="true" /></> : <><span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span><strong>{profileName || profileInitial}</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg></>}
               </summary>
               <div className="dashboard-command-menu">
                 <Link href="/settings/account">Settings</Link>

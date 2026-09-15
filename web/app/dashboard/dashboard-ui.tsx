@@ -130,12 +130,18 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
   const [query, setQuery] = useState("");
   const [interruptedJobs, setInterruptedJobs] = useState<Job[]>(initialJobs.filter((job) => ["failed", "canceled"].includes(job.status)));
   const [recoveryStatus, setRecoveryStatus] = useState<FetchStatus>({ state: "idle" });
+  const hasActiveIngest = jobs.some((job) => ["ingest_uploaded_object", "ingest_url", "ingest_local_path"].includes(job.kind) && ["queued", "running"].includes(job.status))
+    || videos.some((video) => ["queued", "running", "processing"].includes(video.status));
 
   useEffect(() => {
+    if (!hasActiveIngest) return;
     let active = true;
     async function refreshIngests() {
       try {
-        const [videoResponse, jobResponse] = await Promise.all([fetch("/api/proxy/v1/videos"), fetch("/api/proxy/v1/jobs")]);
+        const [videoResponse, jobResponse] = await Promise.all([
+          fetch("/api/proxy/v1/videos", { cache: "no-store" }),
+          fetch("/api/proxy/v1/jobs", { cache: "no-store" }),
+        ]);
         if (!videoResponse.ok || !jobResponse.ok || !active) return;
         const nextVideos = (await videoResponse.json()) as Video[];
         const payload = (await jobResponse.json()) as Job[];
@@ -152,9 +158,10 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
         return;
       }
     }
+    void refreshIngests();
     const timer = window.setInterval(() => void refreshIngests(), 4000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [hasActiveIngest]);
 
   const latestJobByVideo = useMemo(() => {
     const ordered = [...jobs].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));

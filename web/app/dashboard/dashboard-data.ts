@@ -1,4 +1,11 @@
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
+import { revalidateTag, unstable_cache } from "next/cache";
+
+const DASHBOARD_CACHE_SECONDS = 30;
+
+function dashboardCacheTag(workspace: string) {
+  return `dashboard-data:${workspace}`;
+}
 
 export type Job = {
   id: string;
@@ -50,7 +57,7 @@ export type VideoChunk = {
   created_at: string;
 };
 
-export async function fetchDashboardData(workspace: string) {
+async function fetchFreshDashboardData(workspace: string) {
   async function fetchFromBackend<T>(path: string): Promise<T | []> {
     try {
       const res = await fetch(getBackendUrl(path), {
@@ -75,4 +82,16 @@ export async function fetchDashboardData(workspace: string) {
     jobs: Array.isArray(jobs) ? jobs : [],
     stats: Array.isArray(stats) ? { total_videos: 0, total_chunks: 0, total_storage_bytes: 0 } : stats,
   };
+}
+
+export async function fetchDashboardData(workspace: string) {
+  return unstable_cache(
+    () => fetchFreshDashboardData(workspace),
+    ["dashboard-data", workspace],
+    { revalidate: DASHBOARD_CACHE_SECONDS, tags: [dashboardCacheTag(workspace)] },
+  )();
+}
+
+export function invalidateDashboardData(workspace: string) {
+  revalidateTag(dashboardCacheTag(workspace), { expire: 0 });
 }

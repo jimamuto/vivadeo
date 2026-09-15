@@ -3,6 +3,7 @@ import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 import { getWorkspaceRoleForRequest } from "@/lib/auth";
 import { randomUUID } from "node:crypto";
 import { consumeCredit, ensureWorkspaceAllowance, refundCredit } from "@/lib/billing";
+import { invalidateDashboardData } from "@/app/dashboard/dashboard-data";
 
 function requiresEditorAccess(method: string, targetPath: string) {
   if (method === "GET" || method === "HEAD") return false;
@@ -94,6 +95,7 @@ async function forward(
 
   const text = await response.text();
   const responseBody = response.status === 204 || response.status === 304 ? null : text;
+  if (response.ok) invalidateDashboardData(workspace || "default-workspace");
   return new NextResponse(responseBody, {
     status: response.status,
     headers: {
