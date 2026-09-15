@@ -678,6 +678,7 @@ export function SearchContent({
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
   const [reviewEvidence, setReviewEvidence] = useState<Record<string, boolean>>({});
+  const [reviewDockDismissed, setReviewDockDismissed] = useState(false);
   const [addingReviewKey, setAddingReviewKey] = useState<string | null>(null);
   const [savedSearchName, setSavedSearchName] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -1178,6 +1179,7 @@ export function SearchContent({
         return citation;
       }));
       setReviewEvidence((current) => ({ ...current, ...Object.fromEntries(results.map((citation) => [reviewKey(turn.search_run_id!, citation), true])) }));
+      setReviewDockDismissed(false);
       setStatus(`${results.length === 1 ? "Moment" : `${results.length} moments`} added to Review.`);
       if (openReview) router.push("/dashboard/review");
     } catch (cause) {
@@ -1637,7 +1639,7 @@ export function SearchContent({
 
         <div className={`search-main ${turns.length || restoringThread ? "chat-main-active" : "chat-main-empty"}`}>
           <section key={`composer-${newChatMotionKey}`} className={`surface-section search-query${turns.length === 0 ? " chat-new-composer-enter" : ""}`}>
-            {reviewCount ? <div className="chat-review-dock"><span><strong>{reviewCount}</strong> evidence {reviewCount === 1 ? "moment" : "moments"} collected</span><Link href="/dashboard/review">Open Review →</Link></div> : null}
+            {reviewCount && !reviewDockDismissed ? <div className="chat-review-dock"><span><strong>{reviewCount}</strong> evidence {reviewCount === 1 ? "moment" : "moments"} collected</span><div className="chat-review-dock-actions"><Link href="/dashboard/review">Open Review →</Link><button type="button" onClick={() => setReviewDockDismissed(true)} aria-label="Dismiss collected evidence notice" title="Dismiss">×</button></div></div> : null}
             <form className={`chat-composer${composerExpanded ? " is-expanded" : " is-compact"}`} onSubmit={submit}
               onFocus={(event) => { if (event.currentTarget.contains(event.target)) setComposerFocused(true); }}
               onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setComposerFocused(false); }}>

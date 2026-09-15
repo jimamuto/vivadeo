@@ -3956,10 +3956,17 @@ html[data-theme="dark"] .output-choice.is-selected { border-color: var(--color-t
 .chat-review-actions .chat-open-review { border-color: var(--color-action); background: var(--color-action); color: var(--color-content-inverse); }
 .chat-review-actions .chat-open-review:hover, .chat-review-actions .chat-open-review:focus-visible { background: var(--color-blackboard); color: var(--color-grain); }
 .chat-review-actions button:disabled, .chat-evidence-add-review:disabled { cursor: wait; opacity: .58; }
-.chat-review-dock { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--color-border); background: var(--color-action-subtle); color: var(--color-content-muted); font-size: .7rem; }
+.chat-review-dock { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 16px; margin: 0; padding: 7px 12px; border: 1px solid var(--color-border-strong); border-bottom: 0; border-radius: 20px 20px 0 0; background: var(--color-action-subtle); color: var(--color-content-muted); font-size: .7rem; }
+.dashboard-stage > .search-shell .search-query .chat-review-dock + .chat-composer { border-radius: 0 0 20px 20px; }
+.dashboard-stage > .search-shell .search-query .chat-review-dock + .chat-composer .chat-composer-input textarea,
+.dashboard-stage > .search-shell .search-query .chat-review-dock + .chat-composer .chat-composer-input textarea:focus { min-height: 46px; height: 46px; padding-top: 10px; padding-bottom: 7px; }
 .chat-review-dock strong { color: var(--color-action); }
 .chat-review-dock a { color: var(--color-action); font-weight: 700; text-decoration: none; }
 .chat-review-dock a:hover, .chat-review-dock a:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+.chat-review-dock-actions { display: flex; align-items: center; gap: 10px; }
+.chat-review-dock-actions button { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-content-muted); cursor: pointer; font: inherit; font-size: 1rem; line-height: 1; }
+.chat-review-dock-actions button:hover { background: color-mix(in srgb, var(--color-content) 8%, transparent); color: var(--color-content); }
+.chat-review-dock-actions button:focus-visible { outline: 2px solid var(--color-action); outline-offset: 2px; }
 .chat-refinement-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0; color: var(--muted); font-size: .75rem; }
 .chat-refinement-row > span { margin-right: 3px; font-weight: 600; }
 .chat-refinement-row button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--color-oxblood); font: inherit; cursor: pointer; }
