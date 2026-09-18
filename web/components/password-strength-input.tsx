@@ -14,7 +14,7 @@ const PASSWORD_REQUIREMENTS = [
 
 const STRENGTH_LABELS = ['Enter a password', 'Weak', 'Fair', 'Good', 'Strong', 'Very strong'] as const;
 
-export function PasswordStrengthInput() {
+export function PasswordStrengthInput({ onPasswordChange }: { onPasswordChange?: (password: string) => void }) {
   const [password, setPassword] = useState('');
   const [isVisible, setIsVisible] = useState(false);
   const requirements = useMemo(
@@ -52,7 +52,7 @@ export function PasswordStrengthInput() {
           name="password"
           type={isVisible ? 'text' : 'password'}
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => { setPassword(event.target.value); onPasswordChange?.(event.target.value); }}
           autoComplete="new-password"
           minLength={8}
           required

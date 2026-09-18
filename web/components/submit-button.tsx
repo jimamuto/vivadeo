@@ -7,9 +7,10 @@ type SubmitButtonProps = {
   children: ReactNode;
   pendingLabel: string;
   className?: string;
+  disabled?: boolean;
 };
 
-export function SubmitButton({ children, pendingLabel, className = "button" }: SubmitButtonProps) {
+export function SubmitButton({ children, pendingLabel, className = "button", disabled = false }: SubmitButtonProps) {
   const { pending } = useFormStatus();
   const [nativePending, setNativePending] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -23,7 +24,7 @@ export function SubmitButton({ children, pendingLabel, className = "button" }: S
 
   const isPending = pending || nativePending;
   return (
-    <button ref={buttonRef} className={className} type="submit" disabled={isPending} aria-busy={isPending}>
+    <button ref={buttonRef} className={className} type="submit" disabled={isPending || disabled} aria-busy={isPending}>
       <span className="submit-button-content" aria-live="polite">
         {isPending ? <span className="submit-button-spinner" aria-hidden="true" /> : null}
         {isPending ? pendingLabel : children}
