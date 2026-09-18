@@ -263,6 +263,21 @@ async function getWorkspaceForEmail(email: string): Promise<string | null> {
   }
 }
 
+export async function userExistsByEmail(email: string): Promise<boolean> {
+  if (!databaseUrl) return false;
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const rows = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS(
+        SELECT 1 FROM "user" WHERE lower(email) = ${email.trim().toLowerCase()}
+      ) AS exists
+    `;
+    return rows[0]?.exists === true;
+  } finally {
+    await sql.end();
+  }
+}
+
 async function getSessionEmail(request: Request): Promise<string | null> {
   const sessionResponse = await authHandlers.GET(
     createAuthEndpointRequest(request, "/get-session"),

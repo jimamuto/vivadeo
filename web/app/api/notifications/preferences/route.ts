@@ -16,7 +16,7 @@ export async function PUT(request: NextRequest) {
   try {
     await sql`
       INSERT INTO user_preferences (user_id, city, timezone, date_format, theme, ingest_email_notifications, ingest_browser_notifications, created_at, updated_at)
-      VALUES (${userId}, '', 'UTC', 'dd/MM/yyyy HH:mm', 'system', ${email}, ${browser}, NOW(), NOW())
+      VALUES (${userId}, '', 'UTC', 'dd/MM/yyyy HH:mm', 'light', ${email}, ${browser}, NOW(), NOW())
       ON CONFLICT (user_id) DO UPDATE SET ingest_email_notifications = EXCLUDED.ingest_email_notifications, ingest_browser_notifications = EXCLUDED.ingest_browser_notifications, updated_at = NOW()
     `;
     return NextResponse.json({ ingest_email_notifications: email, ingest_browser_notifications: browser });

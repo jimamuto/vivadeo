@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendHeaders, getBackendUrl } from "@/lib/backend";
 import { forwardAuthCookies } from "@/lib/auth-cookies";
-import { emailVerificationEnabled, postAuthEndpoint } from "@/lib/auth";
+import { emailVerificationEnabled, postAuthEndpoint, userExistsByEmail } from "@/lib/auth";
 import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET(request: NextRequest) {
@@ -13,17 +13,11 @@ export async function POST(request: NextRequest) {
   const workspaceName = "Personal workspace";
   const email = String(form.get("email") || "").trim().toLowerCase();
   const password = String(form.get("password") || "");
-  const backendResponse = await fetch(getBackendUrl("/v1/workspaces"), {
-    method: "POST",
-    headers: getBackendHeaders({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({
-      name: workspaceName,
-      owner_email: email,
-    }),
-  });
-  const workspace = backendResponse.ok ? await backendResponse.json() : null;
+
+  if (email && await userExistsByEmail(email)) {
+    return NextResponse.redirect(publicAppUrl(request, "/sign-in?error=ACCOUNT_EXISTS"));
+  }
+
   const authResponse = await postAuthEndpoint(request, "/sign-up/email", {
     name: String(form.get("name") || ""),
     email: String(form.get("email") || ""),
@@ -32,6 +26,17 @@ export async function POST(request: NextRequest) {
   });
 
   if (authResponse.ok) {
+    const backendResponse = await fetch(getBackendUrl("/v1/workspaces"), {
+      method: "POST",
+      headers: getBackendHeaders({
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({
+        name: workspaceName,
+        owner_email: email,
+      }),
+    });
+    const workspace = backendResponse.ok ? await backendResponse.json() : null;
     const workspaceId =
       workspace?.id || "new-workspace";
 
@@ -73,7 +78,8 @@ export async function POST(request: NextRequest) {
   } catch {
     // ignore parse failures
   }
+  const duplicateEmail = /already|exist|duplicate/i.test(errorCode);
   return NextResponse.redirect(
-    publicAppUrl(request, `/sign-up?error=${encodeURIComponent(errorCode)}`),
+    publicAppUrl(request, duplicateEmail ? "/sign-in?error=ACCOUNT_EXISTS" : `/sign-up?error=${encodeURIComponent(errorCode)}`),
   );
 }

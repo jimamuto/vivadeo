@@ -25,7 +25,7 @@ export function AccountSettingsPanel({
   const [city, setCity] = useState("Nairobi");
   const [timezone, setTimezone] = useState("Africa/Nairobi");
   const [dateFormat, setDateFormat] = useState("dd/MM/yyyy HH:mm");
-  const [theme, setTheme] = useState<ThemePreference>("system");
+  const [theme, setTheme] = useState<ThemePreference>("light");
   const [profileStatus, setProfileStatus] = useState<FetchStatus>({ state: "idle" });
   const [verifyStatus, setVerifyStatus] = useState<FetchStatus>({ state: "idle" });
   const [avatarUrl, setAvatarUrl] = useState(profileImage || "");

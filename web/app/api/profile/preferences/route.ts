@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const rows = await sql<{ city: string; timezone: string; date_format: string; theme: string }[]>`
       SELECT city, timezone, date_format, theme FROM user_preferences WHERE user_id = ${userId}
     `;
-    return NextResponse.json(rows[0] || { city: "Nairobi", timezone: "Africa/Nairobi", date_format: "dd/MM/yyyy HH:mm", theme: "system" });
+    return NextResponse.json(rows[0] || { city: "Nairobi", timezone: "Africa/Nairobi", date_format: "dd/MM/yyyy HH:mm", theme: "light" });
   } finally {
     await sql.end();
   }
@@ -35,7 +35,7 @@ export async function PUT(request: NextRequest) {
   const city = (body.city || "").trim().slice(0, 120);
   const timezone = (body.timezone || "UTC").trim().slice(0, 80);
   const dateFormat = (body.date_format || "dd/MM/yyyy HH:mm").trim().slice(0, 40);
-  const theme = body.theme === "light" || body.theme === "dark" || body.theme === "system" ? body.theme : "system";
+  const theme = body.theme === "light" || body.theme === "dark" || body.theme === "system" ? body.theme : "light";
   const sql = postgres(databaseUrl, { max: 1 });
   try {
     await sql`

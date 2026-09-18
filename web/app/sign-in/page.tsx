@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Sign in", description: "Sign in to your Vivadeo workspace." };
 
 const ERROR_MESSAGES: Record<string, string> = {
+  ACCOUNT_EXISTS: "An account with this email already exists. Sign in instead.",
   EMAIL_NOT_VERIFIED: "Your email address has not been verified. Enter the code from your inbox.",
   INVALID_EMAIL_OR_PASSWORD: "Invalid email or password.",
   USER_NOT_FOUND: "Invalid email or password.",

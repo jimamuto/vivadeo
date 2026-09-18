@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SubmitButton } from "@/components/submit-button";
 import { BrandLogo } from "@/components/brand-logo";
+import { VerificationCodeInput } from "@/components/verification-code-input";
+import { VerificationResendForm } from "@/components/verification-resend-form";
+import { VerificationSentNotice } from "@/components/verification-sent-notice";
 import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Verify email", description: "Verify the email address for your Vivadeo account." };
 
@@ -25,23 +28,18 @@ export default async function VerifyEmailPage({
           <h1>Verify your email</h1>
           <p className="muted">Enter the six-digit code sent to {email || "your email address"}.</p>
 
-          {params.sent === "1" ? <p className="notice notice-good">Verification code sent.</p> : null}
+          {params.sent === "1" ? <VerificationSentNotice /> : null}
           {params.error === "invalid" ? <p className="notice notice-bad" role="alert">That code is invalid or expired.</p> : null}
 
           <form className="form" method="post" action="/api/auth/verify-email">
             <input type="hidden" name="email" value={email} />
             <div className="field">
-              <label htmlFor="code">Verification code</label>
-              <input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" aria-label="Six-digit verification code" required />
+              <VerificationCodeInput />
             </div>
             <SubmitButton pendingLabel="Verifying...">Verify email</SubmitButton>
           </form>
 
-          <form className="verify-resend-form" method="post" action="/api/auth/verify-email">
-            <input type="hidden" name="email" value={email} />
-            <input type="hidden" name="intent" value="resend" />
-            <SubmitButton className="button-secondary" pendingLabel="Sending...">Send a new code</SubmitButton>
-          </form>
+          <VerificationResendForm email={email} cooldown={params.sent === "1"} />
           <div className="auth-minimal-links auth-minimal-links-centered">
             <Link href="/sign-in">Back to sign in</Link>
           </div>
