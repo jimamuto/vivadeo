@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
-type NavIcon = "chat" | "search" | "ingest" | "library" | "jobs" | "review" | "billing";
+type NavIcon = "chat" | "search" | "ingest" | "videos" | "library" | "jobs" | "review" | "billing";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
@@ -30,6 +30,7 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
     search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M16 16l4 4",
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
+    videos: "M4 5h16v14H4z M10 9l5 3-5 3z",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
     workspace: "M4 19v-8l8-6 8 6v8 M8 19v-5h8v5",
@@ -47,6 +48,7 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
     search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M16 16l4 4",
     ingest: "M12 4v10 M8 10l4 4 4-4 M5 19h14",
+    videos: "M4 5h16v14H4z M10 9l5 3-5 3z",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
     review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
@@ -268,7 +270,7 @@ export function DashboardShell({
         </div>
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">Workflow</span>
-          <NavItem href="/dashboard/ingest" label="Add video" icon="ingest" />
+          <NavItem href="/dashboard/ingest" label="Videos" icon="videos" />
           <NavItem href="/search" label="Search" icon="search" activePaths={["/chat"]} />
           <NavItem href="/dashboard/review" label="Review" icon="review" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
