@@ -4602,14 +4602,14 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
 .ingest-registry-head h1 { margin: 0; font-family: var(--font-display); font-size: 2rem; letter-spacing: -.035em; }
 .ingest-registry-head p { max-width: 620px; margin: 8px 0 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
 .ingest-status-bar { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--color-border); }
-.ingest-status-tabs { display: flex; min-width: 0; gap: 4px; overflow-x: auto; padding-bottom: 16px; }
-.ingest-status-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 13px; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: inherit; font-size: .76rem; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.ingest-status-tabs { display: flex; min-width: 0; gap: 4px; overflow-x: auto; margin-bottom: 12px; padding: 4px; border: 0; border-radius: 12px; background: color-mix(in srgb, var(--color-surface-solid) 72%, transparent); }
+.ingest-status-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 13px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: .76rem; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .ingest-status-tabs button:hover { background: var(--color-action-subtle); color: var(--color-content); }
 .ingest-status-tabs button.is-active { border-color: var(--color-border-strong); background: var(--color-surface-solid); color: var(--color-oxblood); }
 .ingest-status-tabs button span { display: grid; min-width: 20px; height: 20px; place-items: center; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, var(--color-grain) 28%, transparent); color: inherit; font-size: .66rem; }
 .ingest-add-button { flex: 0 0 auto; min-height: 38px; margin-bottom: 16px; padding: 8px 14px; border-radius: 10px; font-size: .78rem; box-shadow: inset 0 1px 0 rgba(215, 206, 199, .32), inset 0 -1px 0 rgba(45, 36, 34, .75), 0 7px 16px rgba(45, 36, 34, .18); }
 .ingest-registry-tools { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 0; }
-.ingest-registry-tools input { width: min(360px, 100%); padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 0; background: var(--color-surface-solid); color: var(--color-content); font: inherit; font-size: .78rem; }
+.ingest-registry-tools input { width: min(360px, 100%); padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-surface-solid); color: var(--color-content); font: inherit; font-size: .78rem; }
 .ingest-registry-tools span { color: var(--muted); font-size: .72rem; }
 .ingest-registry-table-wrap { min-width: 0; overflow-x: auto; border-top: 1px solid var(--color-border); }
 .ingest-registry-table { width: 100%; min-width: 820px; border-collapse: collapse; table-layout: fixed; }
