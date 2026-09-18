@@ -96,6 +96,7 @@ class VideoResponse(BaseModel):
     duration: float | None = None
     object_key: str | None = None
     thumbnail_object_key: str | None = None
+    thumbnail_url: str | None = None
     url: str | None = None
     error: str | None = None
     collection: str | None = None

@@ -6,7 +6,7 @@ import logging
 import re
 import tempfile
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
 from redis import Redis
 from sqlalchemy import delete, or_, select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -42,6 +42,7 @@ from .db import (
 )
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
+from .media_signing import media_token_organization, signed_media_query, verify_media_token
 from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
@@ -445,7 +446,8 @@ def _video_response(
     library_metadata: dict | None = None,
     thumbnail_object_key: str | None = None,
 ) -> VideoResponse:
-    url = store.presigned_url(video.object_key) if store and video.object_key else None
+    url = f"{store.presigned_url(video.object_key)}?{signed_media_query(video.organization_id, video.object_key)}" if store and video.object_key else None
+    thumbnail_url = f"{store.presigned_url(thumbnail_object_key)}?{signed_media_query(video.organization_id, thumbnail_object_key)}" if store and thumbnail_object_key else None
     metadata = library_metadata or {}
     return VideoResponse(
         id=video.id,
@@ -459,6 +461,7 @@ def _video_response(
         duration=video.duration,
         object_key=video.object_key,
         thumbnail_object_key=thumbnail_object_key,
+        thumbnail_url=thumbnail_url,
         url=url,
         error=video.error,
         collection=metadata.get("collection"),
@@ -510,7 +513,7 @@ def _video_chunk_response(chunk: VideoChunk) -> VideoChunkResponse:
 
 
 def _clip_response(clip: Clip, store: ObjectStore | None = None) -> ClipResponse:
-    url = store.presigned_url(clip.object_key) if store and clip.object_key else None
+    url = f"{store.presigned_url(clip.object_key)}?{signed_media_query(clip.organization_id, clip.object_key)}" if store and clip.object_key else None
     return ClipResponse(
         id=clip.id,
         organization_id=clip.organization_id,
@@ -530,7 +533,7 @@ def _evidence_frame_response(frame: EvidenceFrame, store: ObjectStore | None = N
         video_id=frame.video_id,
         timestamp=frame.timestamp,
         status=frame.status,
-        url=store.presigned_url(frame.object_key) if store and frame.object_key else None,
+        url=f"{store.presigned_url(frame.object_key)}?{signed_media_query(frame.organization_id, frame.object_key)}" if store and frame.object_key else None,
         job_id=job_id,
         error=frame.error,
     )
@@ -542,7 +545,7 @@ def _keyframe_response(frame: VisualKeyframe, store: ObjectStore | None = None) 
         video_id=frame.video_id,
         timestamp=frame.timestamp,
         status=frame.status,
-        url=store.presigned_url(frame.object_key) if store and frame.object_key else None,
+        url=f"{store.presigned_url(frame.object_key)}?{signed_media_query(frame.organization_id, frame.object_key)}" if store and frame.object_key else None,
         error=frame.error,
     )
 
@@ -1525,10 +1528,16 @@ def delete_profile_avatar(
 @app.get("/v1/media/{object_key:path}", dependencies=[Depends(require_api_key)])
 def get_media(
     object_key: str,
+    token: str | None = Query(default=None),
     range_header: str | None = Header(default=None, alias="Range"),
     session: Session = Depends(db_dep),
     organization_id: str = Depends(workspace_dep),
 ) -> StreamingResponse:
+    if token:
+        token_organization = media_token_organization(token, object_key)
+        if not token_organization or not verify_media_token(token, token_organization, object_key):
+            raise HTTPException(status_code=403, detail="Media authorization expired or invalid")
+        organization_id = token_organization
     video = session.scalars(
         select(Video).where(
             Video.organization_id == organization_id, Video.object_key == object_key
@@ -3048,7 +3057,7 @@ def _review_evidence_response(item: ReviewEvidenceItem, run: ChatSearchRun, vide
         video_id=item.video_id,
         filename=video.filename,
         source_uri=video.source_uri,
-        video_url=store.presigned_url(video.object_key) if video.object_key else None,
+        video_url=f"{store.presigned_url(video.object_key)}?{signed_media_query(video.organization_id, video.object_key)}" if video.object_key else None,
         duration=video.duration,
         start_time=item.start_time,
         end_time=item.end_time,

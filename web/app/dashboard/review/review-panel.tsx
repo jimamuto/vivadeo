@@ -39,6 +39,20 @@ function decisionLabel(decision: ReviewDecision) {
   return "Not reviewed";
 }
 
+const prefetchedMedia = new Map<string, HTMLVideoElement>();
+
+function prefetchMedia(item: ReviewEvidence) {
+  if (!item.video_url) return;
+  const src = `${item.video_url}#t=${Math.max(0, item.start_time)}`;
+  if (prefetchedMedia.has(src)) return;
+  const video = document.createElement("video");
+  video.preload = "metadata";
+  video.muted = true;
+  video.src = src;
+  video.load();
+  prefetchedMedia.set(src, video);
+}
+
 export function ReviewPanel() {
   const [items, setItems] = useState<ReviewEvidence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +100,14 @@ export function ReviewPanel() {
     if (player.readyState >= 1) seek();
     else player.addEventListener("loadedmetadata", seek, { once: true });
   }, [activeItem?.id]);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    const activeIndex = activeSession.evidence.findIndex((item) => item.id === activeItem?.id);
+    if (activeIndex < 0) return;
+    const nearby = activeSession.evidence.slice(Math.max(0, activeIndex - 1), activeIndex + 3);
+    nearby.forEach(prefetchMedia);
+  }, [activeItem?.id, activeSession]);
 
   function chooseSession(runId: string) {
     const first = sessions.find((session) => session.id === runId)?.evidence[0];
@@ -164,7 +186,7 @@ export function ReviewPanel() {
 
         {activeItem ? <>
           <section className="review-player-wrap" aria-label="Selected evidence moment">
-            {activeItem.video_url ? <video ref={playerRef} key={activeItem.video_url} controls preload="metadata" src={activeItem.video_url} /> : <div className="review-player-missing">Preview unavailable</div>}
+            {activeItem.video_url ? <video ref={playerRef} key={activeItem.video_url} controls preload="metadata" src={`${activeItem.video_url}#t=${Math.max(0, activeItem.start_time)}`} /> : <div className="review-player-missing">Preview unavailable</div>}
             <div className="review-player-caption"><div><strong>{activeItem.filename}</strong><span>{fmt(activeItem.start_time)}–{fmt(activeItem.end_time)} · {activeItem.modality} evidence</span></div><span className={`review-decision review-decision-${activeItem.decision}`}>{decisionLabel(activeItem.decision)}</span></div>
           </section>
 
