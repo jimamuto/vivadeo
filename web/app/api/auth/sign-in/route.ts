@@ -20,11 +20,10 @@ export async function POST(request: NextRequest) {
   if (authResponse.ok) {
     const response = NextResponse.redirect(publicAppUrl(request, "/dashboard/ingest"));
     forwardAuthCookies(authResponse, response);
-    const requestedWorkspace = request.nextUrl.searchParams.get("workspace") || request.cookies.get("vivadeo_workspace")?.value;
-    const workspace =
-      requestedWorkspace && requestedWorkspace !== "default-workspace"
-        ? requestedWorkspace
-        : (await getWorkspaceForEmail(email)) || requestedWorkspace || process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace";
+    // Never trust a workspace cookie from a previous account. Resolve the
+    // active workspace from the authenticated user's membership and replace
+    // any stale browser state below.
+    const workspace = (await getWorkspaceForEmail(email)) || process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace";
     response.cookies.set("vivadeo_workspace", workspace, {
       httpOnly: true,
       sameSite: "lax",
