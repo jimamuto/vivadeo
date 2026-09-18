@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Settings as SettingsIcon } from "lucide-react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -8,7 +9,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
 type NavIcon = "chat" | "search" | "ingest" | "videos" | "library" | "jobs" | "review" | "billing" | "help" | "settings";
-type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
+type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile" | "notifications";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
 
@@ -17,12 +18,14 @@ const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "search", keywords: "search ask answer new chat footage" },
   { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
+  { label: "Job history", description: "Track recent video processing activity", href: "/dashboard/jobs", group: "Workspace", icon: "jobs", keywords: "jobs processing history activity status" },
   { label: "Billing", description: "Compare Vivadeo plans", href: "/dashboard/billing", group: "Workspace", icon: "billing", keywords: "billing pricing plan upgrade subscription" },
   { label: "Workspace", description: "Manage members and workspace access", href: "/dashboard/workspace", group: "Workspace", icon: "workspace", keywords: "organization team members roles invites" },
   { label: "Profile settings", description: "Update your profile and preferences", href: "/settings/account", group: "Settings", icon: "profile", keywords: "account name avatar timezone preferences" },
   { label: "Security", description: "Manage your password", href: "/settings/security", group: "Settings", icon: "shield", keywords: "password login security" },
   { label: "Data and privacy", description: "Review privacy and account controls", href: "/settings/privacy", group: "Settings", icon: "shield", keywords: "privacy data delete account" },
   { label: "Answer service", description: "Configure how Vivadeo answers questions", href: "/settings/ai-providers", group: "Settings", icon: "settings", keywords: "answer service provider model settings" },
+  { label: "Notifications", description: "Choose which workspace updates you receive", href: "/settings/notifications", group: "Settings", icon: "notifications", keywords: "alerts updates email browser notifications" },
   { label: "Help center", description: "Find answers about using Vivadeo", href: "/help", group: "Support", icon: "help", keywords: "help support faq getting started" },
 ];
 
@@ -41,11 +44,13 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
     review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
     billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
     help: "M12 18h.01 M9.2 9a3 3 0 1 1 5.4 1.8c-.9 1-2.6 1.4-2.6 3.2 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+    notifications: "M6 10a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9z M10 22h4",
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
 
 function NavGlyph({ icon }: { icon: NavIcon }) {
+  if (icon === "settings") return <SettingsIcon className="dash-nav-icon" aria-hidden="true" />;
   const paths: Record<NavIcon, string> = {
     chat: "M4 5.5h16v10H9l-4 3v-3H4z M8 9h8 M8 12h5",
     search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M16 16l4 4",

@@ -21,7 +21,7 @@ export async function SettingsPageContent({ section }: { section: SettingsSectio
 
   return (
     <DashboardShell workspace={workspace} profileInitial={initial} profileName={displayName} profileImage={profileImage}>
-      <header className="settings-header fade-in">
+      <header className="settings-header">
         <div>
           <h1>Settings</h1>
           <p className="muted">Manage your account settings and preferences.</p>
@@ -41,7 +41,7 @@ export async function SettingsPageContent({ section }: { section: SettingsSectio
         ))}
       </nav>
 
-      <div className="settings-surface settings-content fade-in">
+      <div className="settings-surface settings-content">
         {section === "account" ? (
           <AccountSettingsPanel email={email} displayName={displayName} emailVerified={emailVerified} profileImage={profileImage} />
         ) : null}

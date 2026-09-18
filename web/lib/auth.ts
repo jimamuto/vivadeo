@@ -48,6 +48,7 @@ const authBaseUrl =
 const authSecret = process.env.BETTER_AUTH_SECRET || "";
 const verificationCodeLifetimeMs = 10 * 60 * 1000;
 const verificationCodeIdentifier = (email: string) => `email-verification:${email.toLowerCase()}`;
+const deletionCodeLifetimeMs = 10 * 60 * 1000;
 
 export async function sendVerificationCode(email: string): Promise<void> {
   if (!databaseUrl) throw new Error("Auth database is not configured");
@@ -258,6 +259,30 @@ async function getWorkspaceForEmail(email: string): Promise<string | null> {
       LIMIT 1
     `;
     return rows[0]?.organization_id || null;
+  } finally {
+    await sql.end();
+  }
+}
+
+export async function sendDeletionCode(userId: string, email: string): Promise<void> {
+  if (!databaseUrl) throw new Error("Auth database is not configured");
+  const normalizedEmail = email.trim().toLowerCase();
+  const code = String(randomInt(100000, 1000000));
+  const expiresAt = new Date(Date.now() + deletionCodeLifetimeMs);
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    await sql`DELETE FROM verification WHERE identifier LIKE 'delete-account-%' AND value = ${userId}`;
+    await sql`
+      INSERT INTO verification (id, identifier, value, expires_at, created_at, updated_at)
+      VALUES (${randomUUID()}, ${`delete-account-${code}`}, ${userId}, ${expiresAt}, NOW(), NOW())
+    `;
+    await sendEmail(
+      normalizedEmail,
+      "Your Vivadeo account deletion code",
+      `<p>Use this code to confirm deletion of your Vivadeo account:</p>
+       <p style="font-size: 28px; letter-spacing: 0.24em; font-weight: 700;">${code}</p>
+       <p>This code expires in 10 minutes. If you did not request account deletion, you can safely ignore this email.</p>`,
+    );
   } finally {
     await sql.end();
   }
