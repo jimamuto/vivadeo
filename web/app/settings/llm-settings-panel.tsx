@@ -1,16 +1,47 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 const providers = [
   ["vivadeo-auto", "Vivadeo Auto"],
-  ["openai", "OpenAI-compatible"],
-  ["anthropic", "Anthropic"],
-  ["ollama", "Ollama"],
-  ["gemini", "Gemini-compatible"],
-  ["nvidia", "NVIDIA-compatible"],
   ["custom", "Custom endpoint"],
 ] as const;
+
+function ProviderPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const selected = providers.find(([optionValue]) => optionValue === value) || providers[0];
+
+  useEffect(() => {
+    function closePicker(event: PointerEvent) {
+      if (event.target instanceof Node && !pickerRef.current?.contains(event.target)) setOpen(false);
+    }
+    function closePickerWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("pointerdown", closePicker);
+    document.addEventListener("keydown", closePickerWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closePicker);
+      document.removeEventListener("keydown", closePickerWithKeyboard);
+    };
+  }, []);
+
+  return <div className="field provider-picker" ref={pickerRef}>
+    <span id="provider-label">Provider</span>
+    <button ref={triggerRef} className="provider-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby="provider-label provider-value" onClick={() => setOpen((current) => !current)} onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }}>
+      <span id="provider-value">{selected[1]}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
+    </button>
+    {open ? <div className="provider-picker-menu" role="listbox" aria-labelledby="provider-label">
+      {providers.map(([optionValue, label]) => <button key={optionValue} className={`provider-picker-option${optionValue === value ? " is-selected" : ""}`} type="button" role="option" aria-selected={optionValue === value} onClick={() => { onChange(optionValue); setOpen(false); triggerRef.current?.focus(); }}>{label}{optionValue === value ? <span aria-hidden="true">✓</span> : null}</button>)}
+    </div> : null}
+  </div>;
+}
 
 export function LlmSettingsPanel() {
   const [provider, setProvider] = useState("vivadeo-auto");
@@ -20,42 +51,19 @@ export function LlmSettingsPanel() {
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [detecting, setDetecting] = useState(false);
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
 
   useEffect(() => {
     void fetch("/api/proxy/v1/settings/llm", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load AI settings");
         const payload = await response.json() as { provider: string; base_url: string; model: string; api_key_configured: boolean };
-        setProvider(payload.provider);
+        setProvider(payload.provider === "vivadeo-auto" ? "vivadeo-auto" : "custom");
         setBaseUrl(payload.base_url);
         setModel(payload.model);
         setApiKeyConfigured(payload.api_key_configured);
       })
       .catch((cause) => setStatus(cause instanceof Error ? cause.message : "Could not load AI settings"));
   }, []);
-
-  async function detectOllamaModels() {
-    const endpoint = baseUrl.trim() || "http://localhost:11434";
-    setBaseUrl(endpoint);
-    setDetecting(true);
-    setStatus(null);
-    try {
-      const response = await fetch(`/api/proxy/v1/settings/llm/ollama-models?base_url=${encodeURIComponent(endpoint)}`, { cache: "no-store" });
-      const payload = await response.json() as { models?: string[]; detail?: string };
-      if (!response.ok) throw new Error(payload.detail || "Could not detect local models");
-      const models = payload.models || [];
-      setOllamaModels(models);
-      if (!model && models.length) setModel(models[0]);
-      setStatus(models.length ? `Found ${models.length} local ${models.length === 1 ? "model" : "models"}.` : "Ollama is running, but no local models are installed.");
-    } catch (cause) {
-      setOllamaModels([]);
-      setStatus(cause instanceof Error ? cause.message : "Could not detect local models");
-    } finally {
-      setDetecting(false);
-    }
-  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,18 +91,17 @@ export function LlmSettingsPanel() {
     <section className="settings-section" id="ai">
       <div className="settings-section-heading">
         <div>
-          <span className="eyebrow">AI providers</span>
           <h2>Video answer engine</h2>
           <p className="muted">Choose Vivadeo Auto or connect an AI provider you manage.</p>
         </div>
       </div>
       <form className="settings-form" onSubmit={save}>
         <div className="settings-form-grid">
-          <label className="field"><span>Provider</span><select value={provider} onChange={(event) => { const next = event.target.value; setProvider(next); if (next === "ollama" && !baseUrl) setBaseUrl("http://localhost:11434"); }}>{providers.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <ProviderPicker value={provider} onChange={setProvider} />
           {provider !== "vivadeo-auto" ? <>
-            <label className="field"><span>Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={provider === "ollama" ? "http://localhost:11434" : "https://api.example.com/v1"} /></label>
-            {provider === "ollama" ? <div className="field"><span>Local models</span>{ollamaModels.length ? <select value={model} onChange={(event) => setModel(event.target.value)}>{ollamaModels.map((name) => <option key={name} value={name}>{name}</option>)}</select> : <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Detect or enter a model name" />}<button className="button-secondary" type="button" disabled={detecting} onClick={() => void detectOllamaModels()}>{detecting ? "Detecting…" : "Detect local models"}</button></div> : <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model name" /></label>}
-            {provider !== "ollama" ? <label className="field"><span>API key {apiKeyConfigured ? "(configured)" : ""}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={apiKeyConfigured ? "Leave blank to keep current key" : "Paste API key"} autoComplete="off" /></label> : null}
+            <label className="field"><span>Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" /></label>
+            <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model name" /></label>
+            <label className="field"><span>API key {apiKeyConfigured ? "(configured)" : ""}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={apiKeyConfigured ? "Leave blank to keep current key" : "Paste API key"} autoComplete="off" /></label>
           </> : <p className="muted settings-inline-note">Vivadeo Auto is included with your workspace.</p>}
         </div>
         <div className="settings-actions"><button className="button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save AI settings"}</button>{status ? <span className="muted" role="status">{status}</span> : null}</div>

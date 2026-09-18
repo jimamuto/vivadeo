@@ -17,6 +17,29 @@ export const paidPlanPriceIds: Partial<Record<VivadeoPlanId, string>> = {
   business: process.env.STRIPE_PRICE_BUSINESS,
 };
 
+export type PaymentMethodSummary = { brand: string; last4: string; exp_month: number; exp_year: number; name: string | null };
+
+export async function getPaymentMethodSummary(customerId: string): Promise<PaymentMethodSummary | null> {
+  if (!stripe) return null;
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    if (customer.deleted) return null;
+    let paymentMethodId = typeof customer.invoice_settings.default_payment_method === "string"
+      ? customer.invoice_settings.default_payment_method
+      : customer.invoice_settings.default_payment_method?.id || null;
+    if (!paymentMethodId) {
+      const methods = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+      paymentMethodId = methods.data[0]?.id || null;
+    }
+    if (!paymentMethodId) return null;
+    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (paymentMethod.type !== "card" || !paymentMethod.card?.last4 || !paymentMethod.card.exp_month || !paymentMethod.card.exp_year) return null;
+    return { brand: paymentMethod.card.brand, last4: paymentMethod.card.last4, exp_month: paymentMethod.card.exp_month, exp_year: paymentMethod.card.exp_year, name: paymentMethod.billing_details?.name || null };
+  } catch {
+    return null;
+  }
+}
+
 export function requireBillingDatabase() {
   if (!databaseUrl) throw new Error("Billing database is not configured");
   return postgres(databaseUrl, { max: 1 });

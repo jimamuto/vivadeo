@@ -54,7 +54,7 @@ export function HelpContent() {
       </section>
 
       <section className="help-contact" aria-labelledby="help-contact-title">
-        <div><p className="eyebrow">{paidSupport ? "Priority support" : "Need a hand?"}</p><h2 id="help-contact-title">Still can’t find what you need?</h2><p>{paidSupport ? "Your paid workspace includes priority support. Tell us what you were trying to do and we’ll help you get unstuck." : "We’re happy to help. Paid workspaces receive priority support, while Free workspaces can still reach us with questions."}</p></div>
+        <div><h2 id="help-contact-title">Still can’t find what you need?</h2><p>{paidSupport ? "Your paid workspace includes priority support. Tell us what you were trying to do and we’ll help you get unstuck." : "We’re happy to help. Paid workspaces receive priority support, while Free workspaces can still reach us with questions."}</p></div>
         <a className="button" href={`mailto:${contactEmail}?subject=${encodeURIComponent(paidSupport ? "Vivadeo priority support" : "Vivadeo help request")}`}>Contact support</a>
       </section>
     </div>
