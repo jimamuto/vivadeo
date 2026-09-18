@@ -267,6 +267,7 @@ type VideoOption = {
   filename: string;
   status: string;
   duration?: number | null;
+  thumbnail_url?: string | null;
   url?: string | null;
 };
 
@@ -675,6 +676,7 @@ export function SearchContent({
   const [threadSearch, setThreadSearch] = useState("");
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [browseVideoIndex, setBrowseVideoIndex] = useState(0);
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
   const [reviewEvidence, setReviewEvidence] = useState<Record<string, boolean>>({});
@@ -1053,7 +1055,7 @@ export function SearchContent({
     }
   }
 
-  async function attachExistingVideo(videoIdToAttach: string) {
+  async function attachExistingVideo(videoIdToAttach: string, closePicker = true) {
     const threadId = await ensureActiveThread();
     if (!threadId) return;
     const response = await fetch(`/api/proxy/v1/chat/threads/${threadId}/sources`, {
@@ -1067,7 +1069,7 @@ export function SearchContent({
     }
     await refreshThreadSources(threadId);
     setActiveSourceIds([videoIdToAttach]);
-    setBrowseOpen(false);
+    if (closePicker) setBrowseOpen(false);
     setStatus("Video added to this chat.");
   }
 
@@ -1684,7 +1686,7 @@ export function SearchContent({
               <div className="chat-composer-reveal" inert={!composerExpanded} aria-hidden={!composerExpanded}>
               <div className="chat-composer-footer">
                 <div className="chat-composer-tools" aria-label="Composer tools">
-                  <button type="button" onClick={() => setBrowseOpen((open) => !open)} aria-label="Browse videos" data-tooltip="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
+                  <button type="button" onClick={() => { setBrowseVideoIndex(0); setBrowseOpen((open) => !open); }} aria-label="Browse videos" data-tooltip="Browse videos" aria-expanded={browseOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z M8 6l1.5-3h5L16 6 M9 10l5 2-5 2z" /></svg><span>Browse</span></button>
                   <div className="chat-model-control">
                     <button className="chat-model-trigger" type="button" aria-label="Open chat settings" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen(true); }}>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 4v6 M6 14v6" /></svg>
@@ -1741,23 +1743,29 @@ export function SearchContent({
               </div>
               </div>
             </form>
-            {browseOpen ? (
-              <div className="chat-tool-panel" role="dialog" aria-label="Browse workspace videos">
-                <div>
-                  <strong>Browse workspace videos</strong>
-                  <p className="muted">Choose an existing video to add to this chat.</p>
-                </div>
-                {videos.length ? (
-                  <div className="chat-video-picker">
-                    {videos.map((video) => {
-                      const attached = threadSources.some((source) => source.video_id === video.id);
-                      const selected = activeSourceIds.includes(video.id);
-                      return <button key={video.id} type="button" className={`chat-video-picker-item${selected ? " is-selected" : ""}`} onClick={() => attached ? setActiveSourceIds([video.id]) : void attachExistingVideo(video.id)}><span>{video.filename}</span><small>{selected ? "Using next" : attached ? "Use in next question" : video.status}</small></button>;
-                    })}
-                  </div>
-                ) : <p className="muted">No ready videos are available yet. Add a video and follow its progress on the Add video page.</p>}
-              </div>
-            ) : null}
+            {browseOpen && typeof document !== "undefined" ? createPortal(
+              <div className="chat-video-picker-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setBrowseOpen(false); }}>
+                <section className="chat-video-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-video-picker-title">
+                  <button type="button" autoFocus className="chat-video-picker-close" onClick={() => setBrowseOpen(false)} aria-label="Close video picker">×</button>
+                  {videos.length ? (() => {
+                    const video = videos[browseVideoIndex % videos.length];
+                    const attached = threadSources.some((source) => source.video_id === video.id);
+                    const selected = activeSourceIds.includes(video.id);
+                    return <>
+                      <div className="chat-video-carousel">
+                        <button type="button" className="chat-video-carousel-arrow is-prev" onClick={() => setBrowseVideoIndex((current) => (current - 1 + videos.length) % videos.length)} aria-label="Previous video">‹</button>
+                        <div className="chat-video-carousel-stage" onClick={() => attached ? setActiveSourceIds((current) => selected ? current.filter((id) => id !== video.id) : [...current, video.id]) : void attachExistingVideo(video.id, false)}>
+                          {video.thumbnail_url ? <img src={video.thumbnail_url} alt="" /> : <span aria-hidden="true">▶</span>}
+                          <span className="chat-video-picker-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+                          <span className="chat-video-carousel-overlay"><strong title={video.filename}>{video.filename}</strong><small>{fmt(video.duration || 0)} · {selected ? "Selected" : "Ready to use"}</small></span>
+                        </div>
+                        <button type="button" className="chat-video-carousel-arrow is-next" onClick={() => setBrowseVideoIndex((current) => (current + 1) % videos.length)} aria-label="Next video">›</button>
+                      </div>
+                      <div className="chat-video-carousel-dots" aria-label="Choose a video">{videos.map((item, index) => <button key={item.id} type="button" className={index === browseVideoIndex % videos.length ? "is-active" : ""} onClick={() => setBrowseVideoIndex(index)} aria-label={`Show ${item.filename}`} />)}</div>
+                    </>;
+                  })() : <p className="muted">No ready videos are available yet. Add a video and follow its progress on the Add video page.</p>}
+                </section>
+              </div>, document.body) : null}
             <p className="chat-disclaimer">Only share videos you have permission to process. Vivadeo may make mistakes.</p>
           </section>
 
