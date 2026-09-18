@@ -4592,11 +4592,16 @@ html[data-theme="dark"] .ingest-dropzone.is-active {
 .ingest-drawer-kicker { display: block; margin-bottom: 8px; color: var(--color-oxblood); font-size: .7rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .ingest-drawer-header h2 { margin: 0; font-size: 1.8rem; letter-spacing: -.035em; }
 .ingest-drawer-header p { margin: 14px 0 0; color: var(--color-content-muted); line-height: 1.55; }
-.ingest-drawer-dropzone { display: grid; place-content: center; justify-items: center; gap: 9px; min-height: 390px; width: 100%; margin-top: 28px; padding: 28px; border: 2px dashed color-mix(in srgb, var(--color-oxblood) 48%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--color-tan) 10%, var(--color-surface)); color: var(--color-content); text-align: center; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.ingest-drawer-dropzone { position: relative; display: grid; place-content: center; justify-items: center; gap: 9px; min-height: 390px; width: 100%; margin-top: 28px; padding: 28px; border: 2px dashed color-mix(in srgb, var(--color-oxblood) 48%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--color-tan) 10%, var(--color-surface)); color: var(--color-content); text-align: center; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
 .ingest-drawer-dropzone:hover, .ingest-drawer-dropzone.is-active { border-color: var(--color-oxblood); background: color-mix(in srgb, var(--color-tan) 17%, var(--color-surface)); transform: translateY(-2px); }
 .ingest-drawer-upload-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 5px; border-radius: 50%; background: var(--color-oxblood); color: var(--color-content-on-action); font-size: 1.45rem; }
 .ingest-drawer-dropzone strong { max-width: 320px; color: var(--color-oxblood); font-size: 1rem; }
+.ingest-drawer-dropzone strong { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ingest-drawer-dropzone > span:last-child { max-width: 320px; color: var(--color-content-muted); font-size: .8rem; line-height: 1.45; }
+.ingest-drawer-dropzone:focus-visible { border-color: var(--color-oxblood); outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.ingest-drawer-file-remove { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--color-border-strong); border-radius: 50%; background: var(--color-surface-solid); color: var(--color-content); font: inherit; font-size: 1.25rem; line-height: 1; cursor: pointer; }
+.ingest-drawer-file-remove:hover, .ingest-drawer-file-remove:focus-visible { border-color: var(--color-oxblood); background: var(--color-oxblood); color: var(--color-content-on-action); outline: none; }
+.ingest-status-message { margin: 0; color: var(--color-content-muted); font-size: .78rem; line-height: 1.4; }
 .ingest-drawer-recommendation { margin-top: 24px; }
 .ingest-drawer-recommendation > span { display: inline-flex; padding: 6px 9px; border-radius: 7px; background: var(--color-action-subtle); color: var(--color-oxblood); font-size: .72rem; font-weight: 700; }
 .ingest-drawer-recommendation p { margin: 10px 0 0; color: var(--color-content-muted); font-size: .86rem; line-height: 1.5; }

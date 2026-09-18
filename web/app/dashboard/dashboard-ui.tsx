@@ -12,9 +12,16 @@ import type { Job, Video } from "./dashboard-data";
 type FetchStatus = { state: "idle" | "loading" | "ok" | "error"; message?: string };
 
 function StatusLine({ status }: { status: FetchStatus }) {
-  if (status.state === "idle") return null;
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    setVisible(true);
+    if (status.state !== "error") return;
+    const timer = window.setTimeout(() => setVisible(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [status.state, status.message]);
+  if (status.state === "idle" || !visible) return null;
   const color = status.state === "ok" ? "var(--accent)" : status.state === "error" ? "var(--danger)" : "inherit";
-  return <p className="muted" style={{ marginTop: 10, color }}>{status.state === "loading" ? "Working..." : status.message}</p>;
+  return <p className="ingest-status-message" role={status.state === "error" ? "alert" : undefined} style={{ color }}>{status.state === "loading" ? "Working..." : status.message}</p>;
 }
 
 async function proxyPost<T>(path: string, body: BodyInit, json = true) {
@@ -193,6 +200,8 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
     return null;
   }
 
+  const selectedFileIsValid = Boolean(selectedFile && !validateFile(selectedFile));
+
   function syncSelectedFile(file: File | undefined) {
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
     setSelectedFile(file || null);
@@ -200,6 +209,14 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
     const validationError = validateFile(file);
     if (validationError) setFileStatus({ state: "error", message: validationError });
     else setFileStatus({ state: "idle" });
+  }
+
+  function removeSelectedFile() {
+    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+    if (fileRef.current) fileRef.current.value = "";
+    setSelectedFile(null);
+    setFilePreviewUrl(null);
+    setFileStatus({ state: "idle" });
   }
 
   function bindDroppedFile(file: File | undefined) {
@@ -317,11 +334,28 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
           <aside className="chat-settings-drawer ingest-upload-drawer" role="dialog" aria-modal="true" aria-labelledby="ingest-drawer-title">
             <header><div><h2 id="ingest-drawer-title">Add videos</h2><p>Upload a local file or add a video link.</p></div><button type="button" className="chat-model-close" aria-label="Close upload drawer" onClick={() => setIsUploadDrawerOpen(false)}>×</button></header>
             <div className="chat-settings-body ingest-drawer-body">
+              <StatusLine status={ingestMode === "file" ? fileStatus : urlStatus} />
               <div className="ingest-mode-switch" role="tablist" aria-label="Video source"><button type="button" className={ingestMode === "file" ? "is-active" : ""} onClick={() => setIngestMode("file")} role="tab" aria-selected={ingestMode === "file"}>Upload file</button><button type="button" className={ingestMode === "youtube" ? "is-active" : ""} onClick={() => setIngestMode("youtube")} role="tab" aria-selected={ingestMode === "youtube"}>Video link</button></div>
-              {ingestMode === "file" ? <button type="button" className={`ingest-drawer-dropzone${isDragActive ? " is-active" : ""}`} onClick={() => fileRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }} onDragLeave={(event) => { event.preventDefault(); setIsDragActive(false); }} onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}><span className="ingest-drawer-upload-icon" aria-hidden="true">↑</span><strong>{selectedFile ? selectedFile.name : isDragActive ? "Drop video to add it" : "Click or drag video to upload"}</strong><span>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB · ${selectedFile.type || "Video file"}` : "Video files up to 512 MB"}</span></button> : <form className="ingest-url-form" id="ingest-url-form" onSubmit={handleSubmit}><label htmlFor="url">Video URL</label><input ref={urlRef} id="url" name="url" placeholder="https://…" /><p>Confirm you have permission to use this source.</p><StatusLine status={urlStatus} /></form>}
-              <StatusLine status={fileStatus} />
+              {ingestMode === "file" ? (
+                <div
+                  className={`ingest-drawer-dropzone${isDragActive ? " is-active" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileRef.current?.click()}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); fileRef.current?.click(); } }}
+                  onDragEnter={(event) => { event.preventDefault(); setIsDragActive(true); }}
+                  onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }}
+                  onDragLeave={(event) => { event.preventDefault(); setIsDragActive(false); }}
+                  onDrop={(event) => { event.preventDefault(); setIsDragActive(false); bindDroppedFile(event.dataTransfer.files?.[0]); }}
+                >
+                  <span className="ingest-drawer-upload-icon" aria-hidden="true">↑</span>
+                  <strong title={selectedFile?.name}>{selectedFile ? selectedFile.name : isDragActive ? "Drop video to add it" : "Click or drag video to upload"}</strong>
+                  <span>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB · ${selectedFile.type || "Video file"}` : "Video files up to 512 MB"}</span>
+                  {selectedFile ? <button type="button" className="ingest-drawer-file-remove" aria-label="Remove selected file" onClick={(event) => { event.stopPropagation(); removeSelectedFile(); }}>×</button> : null}
+                </div>
+              ) : <form className="ingest-url-form" id="ingest-url-form" onSubmit={handleSubmit}><label htmlFor="url">Video URL</label><input ref={urlRef} id="url" name="url" placeholder="https://…" /><p>Confirm you have permission to use this source.</p></form>}
             </div>
-            <footer><button type="button" className="button-secondary" onClick={() => setIsUploadDrawerOpen(false)}>Cancel</button>{ingestMode === "file" ? <button type="button" onClick={handleUpload} disabled={!selectedFile || fileStatus.state === "loading" || !permissions.canEdit}>{fileStatus.state === "loading" ? "Uploading…" : "Upload video"}</button> : <button type="submit" form="ingest-url-form" disabled={urlStatus.state === "loading" || !permissions.canEdit}>{urlStatus.state === "loading" ? "Adding…" : "Add link"}</button>}</footer>
+            <footer><button type="button" className="button-secondary" onClick={() => setIsUploadDrawerOpen(false)}>Cancel</button>{ingestMode === "file" ? <button type="button" className="button" onClick={handleUpload} disabled={!selectedFileIsValid || fileStatus.state === "loading" || !permissions.canEdit}>{fileStatus.state === "loading" ? "Uploading…" : "Upload video"}</button> : <button type="submit" form="ingest-url-form" disabled={urlStatus.state === "loading" || !permissions.canEdit}>{urlStatus.state === "loading" ? "Adding…" : "Add link"}</button>}</footer>
           </aside>
         </div>
       ) : null}
