@@ -263,6 +263,24 @@ async function getWorkspaceForEmail(email: string): Promise<string | null> {
   }
 }
 
+async function getThemeForEmail(email: string): Promise<"light" | "dark" | "system"> {
+  if (!databaseUrl) return "light";
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const rows = await sql<{ theme: string }[]>`
+      SELECT p.theme
+      FROM user_preferences p
+      JOIN "user" u ON u.id = p.user_id
+      WHERE lower(u.email) = ${email.trim().toLowerCase()}
+      LIMIT 1
+    `;
+    const theme = rows[0]?.theme;
+    return theme === "dark" || theme === "system" ? theme : "light";
+  } finally {
+    await sql.end();
+  }
+}
+
 export async function userExistsByEmail(email: string): Promise<boolean> {
   if (!databaseUrl) return false;
   const sql = postgres(databaseUrl, { max: 1 });
@@ -314,4 +332,4 @@ async function getWorkspaceRoleForRequest(
   }
 }
 
-export { authHandlers, getSessionEmail, getWorkspaceRoleForRequest, getWorkspaceForEmail, normalizeWorkspaceRole, postAuthEndpoint };
+export { authHandlers, getSessionEmail, getWorkspaceRoleForRequest, getWorkspaceForEmail, getThemeForEmail, normalizeWorkspaceRole, postAuthEndpoint };

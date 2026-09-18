@@ -68,7 +68,7 @@ export function SessionPanel() {
   }
 
   return (
-    <article className="surface-section dashboard-panel">
+    <section className="settings-section security-sessions-section">
       <div className="dashboard-panel-head">
         <h3>Sessions</h3>
         <p className="muted">Review active sessions and revoke anything you do not trust.</p>
@@ -91,6 +91,6 @@ export function SessionPanel() {
           ))}
         </div>
       )}
-    </article>
+    </section>
   );
 }

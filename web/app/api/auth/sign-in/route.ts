@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { forwardAuthCookies } from "@/lib/auth-cookies";
-import { getWorkspaceForEmail, postAuthEndpoint } from "@/lib/auth";
+import { getThemeForEmail, getWorkspaceForEmail, postAuthEndpoint } from "@/lib/auth";
 import { publicAppUrl } from "@/lib/public-url";
 
 export async function GET(request: NextRequest) {
@@ -23,12 +23,21 @@ export async function POST(request: NextRequest) {
     // Never trust a workspace cookie from a previous account. Resolve the
     // active workspace from the authenticated user's membership and replace
     // any stale browser state below.
-    const workspace = (await getWorkspaceForEmail(email)) || process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace";
-    response.cookies.set("vivadeo_workspace", workspace, {
+    const [workspace, theme] = await Promise.all([
+      getWorkspaceForEmail(email),
+      getThemeForEmail(email),
+    ]);
+    response.cookies.set("vivadeo_workspace", workspace || process.env.VIVADEO_DEFAULT_ORG_ID || "default-workspace", {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
+    });
+    response.cookies.set("vivadeo_theme", theme, {
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
     });
     return response;
   }

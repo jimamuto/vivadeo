@@ -45,7 +45,7 @@ export async function SettingsPageContent({ section }: { section: SettingsSectio
         {section === "account" ? (
           <AccountSettingsPanel email={email} displayName={displayName} emailVerified={emailVerified} profileImage={profileImage} />
         ) : null}
-        {section === "security" ? <PasswordSettingsPanel /> : null}
+        {section === "security" ? <PasswordSettingsPanel emailVerified={emailVerified} /> : null}
         {section === "privacy" ? <DeleteAccountPanel /> : null}
         {section === "ai-providers" ? <LlmSettingsPanel /> : null}
         {section === "notifications" ? <NotificationSettingsPanel /> : null}

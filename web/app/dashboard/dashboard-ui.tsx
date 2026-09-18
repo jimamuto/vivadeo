@@ -71,17 +71,22 @@ export function fmt(seconds: number | null): string {
   return `${m}:${s}`;
 }
 
-function fmtDate(value: string) {
+function fmtDate(value: string, useLocalTime = false) {
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-    timeZoneName: "short",
+    hour12: true,
+    ...(useLocalTime ? {} : { timeZone: "UTC" }),
   }).format(new Date(value));
+}
+
+function useHydrated() {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  return hydrated;
 }
 
 function fmtBytes(bytes: number) {
@@ -121,6 +126,7 @@ function JobStages({ job }: { job: Job }) {
 
 export function IngestPanel({ workspace = "default-workspace", videos: initialVideos = [], jobs: initialJobs = [] }: { workspace?: string; videos?: Video[]; jobs?: Job[] }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const permissions = useWorkspacePermissions(workspace);
   const fileRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
@@ -318,8 +324,8 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
               const progress = status === "ready" ? 100 : Math.round((job?.progress || 0) * 100);
               return <tr key={video.id}>
                 <td data-label="File"><div className="ingest-file-identity"><span aria-hidden="true">▶</span><div><strong>{video.filename}</strong><small>{sourceLabel(video.source_type)} · {video.duration ? fmt(video.duration) : "Duration pending"}</small></div></div></td>
-                <td data-label="Added"><time dateTime={video.created_at}>{fmtDate(video.created_at)}</time></td>
-                <td data-label="Status"><span className={`ingest-status ingest-status-${statusTone(status)}`}><i aria-hidden="true" />{status === "ready" || status === "succeeded" ? "Ready" : status === "running" || status === "processing" ? "Processing" : status === "queued" ? "Queued" : status === "canceled" ? "Canceled" : status === "failed" ? "Failed" : status}</span></td>
+                <td data-label="Added"><time dateTime={video.created_at}>{fmtDate(video.created_at, hydrated)}</time></td>
+                <td data-label="Status"><span className={`ingest-status ingest-status-${statusTone(status)}`}>{status === "ready" || status === "succeeded" ? "Ready" : status === "running" || status === "processing" ? "Processing" : status === "queued" ? "Queued" : status === "canceled" ? "Canceled" : status === "failed" ? "Failed" : status}</span></td>
                 <td data-label="Progress"><div className="ingest-row-progress"><span><i style={{ width: `${progress}%` }} /></span><small>{isWorking ? `${progress}%` : job?.message || (status === "ready" ? "Searchable" : "Waiting")}</small></div></td>
                 <td data-label="Actions"><div className="ingest-row-actions">{status === "ready" || status === "succeeded" ? <Link href={`/search?video_ids=${encodeURIComponent(video.id)}`} aria-label={`Start a new search with ${video.filename}`}>Search</Link> : null}{!job ? <Link href={`/dashboard/library?video_id=${encodeURIComponent(video.id)}`} aria-label={`Open ${video.filename} in the library`}>Open</Link> : null}{["failed", "canceled"].includes(status) && job ? <button type="button" onClick={() => void retryInterruptedJob(job.id)} disabled={!permissions.canEdit}>Retry</button> : null}</div></td>
               </tr>;
@@ -365,6 +371,7 @@ export function IngestPanel({ workspace = "default-workspace", videos: initialVi
 
 export function JobsPanel({ jobs, videos, referenceTime }: { jobs: Job[]; videos: Video[]; referenceTime: string }) {
   const permissions = useWorkspacePermissions();
+  const hydrated = useHydrated();
   const [items, setItems] = useState(jobs);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -481,7 +488,7 @@ export function JobsPanel({ jobs, videos, referenceTime }: { jobs: Job[]; videos
                 const progress = Math.round((job.progress ?? 0) * 100);
                 return (
                   <tr key={job.id}>
-                    <td data-label="Date"><time dateTime={job.created_at}>{fmtDate(job.created_at)}</time></td>
+                    <td data-label="Date"><time dateTime={job.created_at}>{fmtDate(job.created_at, hydrated)}</time></td>
                     <td data-label="Job">
                       <strong>{jobLabel(job.kind)}</strong>
                       <span>{job.message || "Waiting for an update"}</span>
@@ -827,6 +834,7 @@ export function WorkspacePanel({
   stats: { total_videos: number; total_chunks: number; total_storage_bytes: number };
 }) {
   const permissions = useWorkspacePermissions(activeWorkspace);
+  const hydrated = useHydrated();
   const [members, setMembers] = useState<Array<{ id: string; userId: string; role: string; user?: { name?: string | null; email?: string | null } }>>([]);
   const [invites, setInvites] = useState<Array<{ id: string; email: string; role: string; status: string; expiresAt: string }>>([]);
   const [email, setEmail] = useState("");
@@ -996,7 +1004,7 @@ export function WorkspacePanel({
               <article key={invite.id} className="detail-card">
                 <span>{invite.email}</span>
                 <strong>{roleOverrides.invite_roles?.[invite.email] || invite.role}</strong>
-                <p className="muted">Status {invite.status} • Expires {fmtDate(invite.expiresAt)}</p>
+                <p className="muted">Status {invite.status} • Expires {fmtDate(invite.expiresAt, hydrated)}</p>
                 <div className="dashboard-panel-links">
                   <button type="button" className="button-secondary" onClick={() => cancelInvite(invite.id)} disabled={!permissions.canManageWorkspace}>Cancel invite</button>
                 </div>
@@ -1015,7 +1023,7 @@ export function WorkspacePanel({
               <article key={entry.id} className="detail-card">
                 <span>{entry.action}</span>
                 <strong>{entry.detail}</strong>
-                <p className="muted">{fmtDate(entry.created_at)}</p>
+                <p className="muted">{fmtDate(entry.created_at, hydrated)}</p>
               </article>
             ))}
           </div>
