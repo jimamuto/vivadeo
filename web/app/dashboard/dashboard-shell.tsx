@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
-type NavIcon = "chat" | "search" | "ingest" | "videos" | "library" | "jobs" | "review" | "billing";
+type NavIcon = "chat" | "search" | "ingest" | "videos" | "library" | "jobs" | "review" | "billing" | "help" | "settings";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
@@ -23,6 +23,7 @@ const PALETTE_COMMANDS: PaletteCommand[] = [
   { label: "Security", description: "Manage your password", href: "/settings/security", group: "Settings", icon: "shield", keywords: "password login security" },
   { label: "Data and privacy", description: "Review privacy and account controls", href: "/settings/privacy", group: "Settings", icon: "shield", keywords: "privacy data delete account" },
   { label: "Answer service", description: "Configure how Vivadeo answers questions", href: "/settings/ai-providers", group: "Settings", icon: "settings", keywords: "answer service provider model settings" },
+  { label: "Help center", description: "Find answers about using Vivadeo", href: "/help", group: "Support", icon: "help", keywords: "help support faq getting started" },
 ];
 
 function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
@@ -39,6 +40,7 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
     profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M5 21c.8-4 3.1-6 7-6s6.2 2 7 6",
     review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
     billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
+    help: "M12 18h.01 M9.2 9a3 3 0 1 1 5.4 1.8c-.9 1-2.6 1.4-2.6 3.2 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -53,6 +55,8 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
     review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
     billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
+    help: "M12 18h.01 M9.2 9a3 3 0 1 1 5.4 1.8c-.9 1-2.6 1.4-2.6 3.2 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+    settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6 7 7 M17 17l1.4 1.4 M18.4 5.6 17 7 M7 17l-1.4 1.4",
   };
   return <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[icon]} /></svg>;
 }
@@ -73,6 +77,7 @@ export function DashboardShell({
   profileName,
   profileImage,
   sidebarContent,
+  compactSidebar = false,
   breadcrumbDetail,
   breadcrumbActions,
   onStartNewChat,
@@ -85,6 +90,7 @@ export function DashboardShell({
   profileName?: string;
   profileImage?: string | null;
   sidebarContent?: ReactNode;
+  compactSidebar?: boolean;
   breadcrumbDetail?: ReactNode;
   breadcrumbActions?: ReactNode;
   onStartNewChat?: () => void;
@@ -98,6 +104,7 @@ export function DashboardShell({
   const [activeCommand, setActiveCommand] = useState(0);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [moreNavOpen, setMoreNavOpen] = useState(false);
   const paletteRef = useRef<HTMLDialogElement>(null);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const accountMenuRef = useRef<HTMLDetailsElement>(null);
@@ -105,6 +112,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const isSettingsPage = pathname.startsWith("/settings");
+  const isCompactSidebar = compactSidebar && pathname === "/search";
   const settingsSection = pathname.startsWith("/settings/") ? pathname.split("/")[2] : "";
   const settingsSectionLabel = getSettingsSectionLabel(settingsSection);
   const pageLabel = pageLabelOverride || (pathname.startsWith("/dashboard/library")
@@ -114,11 +122,13 @@ export function DashboardShell({
       : pathname.startsWith("/dashboard/ingest")
       ? "Ingest"
         : pathname.startsWith("/search")
-          ? "Search"
+          ? "Search footage"
           : pathname.startsWith("/dashboard/review")
             ? "Review"
             : pathname.startsWith("/dashboard/output")
               ? "Output"
+            : pathname.startsWith("/help")
+              ? "Help"
             : pathname.startsWith("/dashboard/billing")
               ? "Billing"
         : isSettingsPage
@@ -271,11 +281,41 @@ export function DashboardShell({
         <nav className="dashboard-nav" aria-label="Main navigation">
           <span className="dashboard-nav-label">Workflow</span>
           <NavItem href="/dashboard/ingest" label="Videos" icon="videos" />
-          <NavItem href="/search" label="Search" icon="search" activePaths={["/chat"]} />
+          <NavItem href="/search" label="Search footage" icon="search" activePaths={["/chat"]} />
           <NavItem href="/dashboard/review" label="Review" icon="review" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
-          <span className="dashboard-nav-label dashboard-nav-label-secondary">Workspace</span>
-          <NavItem href="/dashboard/billing" label="Billing" icon="billing" />
+          {isCompactSidebar ? (
+            <>
+              <button
+                className={`dash-nav-item dash-nav-more${moreNavOpen ? " is-active" : ""}`}
+                type="button"
+                aria-expanded={moreNavOpen}
+                aria-controls="dashboard-more-nav"
+                data-tooltip="More"
+                onClick={() => setMoreNavOpen((current) => !current)}
+              >
+                <svg className="dash-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
+                <span>More</span>
+              </button>
+              {moreNavOpen ? (
+                <div id="dashboard-more-nav" className="dashboard-nav-more-menu">
+                  <span className="dashboard-nav-label dashboard-nav-label-secondary">Workspace</span>
+                  <NavItem href="/dashboard/billing" label="Billing" icon="billing" />
+                  <span className="dashboard-nav-label dashboard-nav-label-secondary">Support</span>
+                  <NavItem href="/help" label="Help" icon="help" />
+                  <NavItem href="/settings/account" label="Settings" icon="settings" activePaths={["/settings"]} />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="dashboard-nav-label dashboard-nav-label-secondary">Workspace</span>
+              <NavItem href="/dashboard/billing" label="Billing" icon="billing" />
+              <span className="dashboard-nav-label dashboard-nav-label-secondary">Support</span>
+              <NavItem href="/help" label="Help" icon="help" />
+              <NavItem href="/settings/account" label="Settings" icon="settings" activePaths={["/settings"]} />
+            </>
+          )}
         </nav>
         {sidebarContent ? <div className="dashboard-sidebar-content">{sidebarContent}</div> : null}
       </aside>
@@ -336,8 +376,6 @@ export function DashboardShell({
                 {loading ? <><span className="dashboard-account-skeleton-avatar" aria-hidden="true" /><strong className="dashboard-account-skeleton-name" aria-hidden="true" /></> : <><span>{profileImage ? <img src={profileImage} alt="" /> : profileInitial}</span><strong>{profileName || profileInitial}</strong><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg></>}
               </summary>
               <div className="dashboard-command-menu">
-                <Link href="/settings/account">Settings</Link>
-                <Link href="/settings/account#help">Help &amp; Feedback</Link>
                 <form action="/api/auth/sign-out" method="post"><button type="submit">Log out</button></form>
               </div>
             </details>

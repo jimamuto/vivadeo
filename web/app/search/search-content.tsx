@@ -680,7 +680,10 @@ export function SearchContent({
   const [momentContext, setMomentContext] = useState<MomentContext | null>(null);
   const [citationFeedback, setCitationFeedback] = useState<Record<string, string>>({});
   const [reviewEvidence, setReviewEvidence] = useState<Record<string, boolean>>({});
-  const [reviewDockDismissed, setReviewDockDismissed] = useState(false);
+  // Existing Review evidence is available from the Review page, but should not
+  // interrupt a fresh search session with a persistent notice. The dock is
+  // reopened only when this session adds new evidence.
+  const [reviewDockDismissed, setReviewDockDismissed] = useState(true);
   const [addingReviewKey, setAddingReviewKey] = useState<string | null>(null);
   const [savedSearchName, setSavedSearchName] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -1556,6 +1559,7 @@ export function SearchContent({
       workspace={activeWorkspace}
       profileInitial={profileInitial}
       profileName={profileName}
+      compactSidebar
       breadcrumbDetail={activeThread?.turns.length ? (
         renamingThreadId === activeThread.id ? (
           <form className="chat-breadcrumb-rename" onSubmit={(event) => { event.preventDefault(); void saveThreadRename(activeThread); }}>
