@@ -1,10 +1,18 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Figtree } from "next/font/google";
 import { ThemeSync } from "./theme-sync";
 import { Suspense } from "react";
 import { CookieConsent } from "@/components/cookie-consent";
 import { PostHogAnalytics } from "@/components/posthog-analytics";
 import { siteUrl } from "@/lib/site";
+
+const figtree = Figtree({
+  variable: "--font-sans",
+  display: "swap",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -21,7 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){var m=document.cookie.match(/(?:^|; )vivadeo_theme=([^;]+)/);var p=m?decodeURIComponent(m[1]):'light';var a=location.pathname==='/'||/^\\/(?:sign-in|sign-up|forgot-password|reset-password|verify-email|invite)(?:\\/|$)/.test(location.pathname);var d=!a&&(p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches));document.documentElement.dataset.theme=d?'dark':'light';document.documentElement.dataset.themePreference=p;}())` }} />
       </head>
-      <body>
+      <body className={figtree.variable}>
         <ThemeSync />
         <Suspense fallback={null}><PostHogAnalytics projectToken={process.env.POSTHOG_PROJECT_TOKEN} host={process.env.POSTHOG_HOST} /></Suspense>
         <main>{children}</main>
