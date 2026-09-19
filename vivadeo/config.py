@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     nvidia_visual_embedding_model: str = Field("nvidia/llama-nemotron-embed-vl-1b-v2", alias="VIVADEO_NVIDIA_VISUAL_EMBEDDING_MODEL")
     visual_embedding_backend: Literal["nvidia", "modal"] = Field("nvidia", alias="VIVADEO_VISUAL_EMBEDDING_BACKEND")
     nvidia_embedding_timeout: int = Field(120, alias="VIVADEO_NVIDIA_EMBEDDING_TIMEOUT")
+    jev_enabled: bool = Field(True, alias="VIVADEO_JEV_ENABLED")
+    jev_api_key: str | None = Field(None, alias="VIVADEO_JEV_API_KEY")
+    jev_base_url: str = Field("https://api.typesafe.ai", alias="VIVADEO_JEV_BASE_URL")
+    jev_model: str = Field("jev-latest", alias="VIVADEO_JEV_MODEL")
+    jev_timeout: int = Field(30, ge=1, alias="VIVADEO_JEV_TIMEOUT")
+    jev_max_candidates: int = Field(24, ge=1, le=100, alias="VIVADEO_JEV_MAX_CANDIDATES")
 
     chunk_duration: int = Field(30, alias="VIVADEO_CHUNK_DURATION")
     chunk_overlap: int = Field(5, alias="VIVADEO_CHUNK_OVERLAP")

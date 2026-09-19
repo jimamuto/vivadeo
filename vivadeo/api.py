@@ -44,6 +44,7 @@ from .embedder import get_embedder, reset_embedder
 from .media import stream_object
 from .media_signing import media_token_organization, signed_media_query, verify_media_token
 from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models
+from .jev import JevClient, JevError
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
 from .secrets import decrypt_secret, encrypt_secret
@@ -286,6 +287,60 @@ def _visual_rerank_hits(
         if not exhaustive and len(selected) >= results:
             break
     return selected or chunk_hits
+
+
+def _jev_rerank_transcript_hits(
+    session: Session,
+    question: str,
+    chunk_hits: list[dict],
+    runtime_settings,
+) -> list[dict]:
+    """Optionally rerank retrieved transcript evidence without changing embeddings."""
+    if not getattr(runtime_settings, "jev_enabled", False) or not getattr(runtime_settings, "jev_api_key", None):
+        return chunk_hits
+
+    transcript_hits = [hit for hit in chunk_hits if hit.get("retrieval_modality", "transcript") == "transcript"]
+    if len(transcript_hits) < 2:
+        return chunk_hits
+    transcript_hits = transcript_hits[:runtime_settings.jev_max_candidates]
+    ids = [hit.get("chunk_id") for hit in transcript_hits if hit.get("chunk_id")]
+    segments = session.scalars(select(VideoTranscriptSegment).where(VideoTranscriptSegment.id.in_(ids))).all() if ids else []
+    text_by_id = {segment.id: segment.text for segment in segments}
+    candidates = [
+        {"id": hit["chunk_id"], "text": text_by_id[hit["chunk_id"]]}
+        for hit in transcript_hits
+        if hit.get("chunk_id") in text_by_id and text_by_id[hit["chunk_id"]].strip()
+    ]
+    if len(candidates) < 2:
+        return chunk_hits
+
+    try:
+        scores, elapsed_ms = JevClient(
+            api_key=runtime_settings.jev_api_key,
+            base_url=runtime_settings.jev_base_url,
+            model=runtime_settings.jev_model,
+            timeout=runtime_settings.jev_timeout,
+        ).score_relevance(question, candidates)
+    except JevError:
+        logger.exception("jev_rerank_failed")
+        return chunk_hits
+
+    score_by_id = scores
+    reranked = sorted(
+        transcript_hits,
+        key=lambda hit: score_by_id.get(hit.get("chunk_id"), -1.0),
+        reverse=True,
+    )
+    for hit in reranked:
+        hit["jev_relevance_score"] = score_by_id.get(hit.get("chunk_id"))
+    reranked_ids = {hit.get("chunk_id") for hit in reranked}
+    remainder = [hit for hit in chunk_hits if hit not in transcript_hits or hit.get("chunk_id") not in reranked_ids]
+    logger.info(
+        "jev_rerank_completed candidates=%d latency_ms=%.1f",
+        len(candidates),
+        elapsed_ms,
+    )
+    return reranked + remainder
 
 
 @app.on_event("startup")
@@ -2726,6 +2781,8 @@ def search_chat(
             hit for hit in chunk_hits
             if hit["video_id"] == request.focus_video_id and hit["end_time"] >= request.focus_start_time and hit["start_time"] <= focus_end
         ]
+
+    chunk_hits = _jev_rerank_transcript_hits(session, question, chunk_hits, runtime_settings)
 
     _report_search_stage(session, search_run, progress_callback, "grouping", 0.65, "Grouping evidence moments")
     citations = []
