@@ -26,6 +26,9 @@ class BaseEmbedder(ABC):
     def embed_image(self, image_path: str, verbose: bool = False) -> list[float]:
         ...
 
+    def embed_images(self, image_paths: list[str], verbose: bool = False) -> list[list[float]]:
+        return [self.embed_image(path, verbose=verbose) for path in image_paths]
+
     @abstractmethod
     def dimensions(self) -> int:
         ...

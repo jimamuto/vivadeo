@@ -385,6 +385,13 @@ def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id
                 logger.exception("head_pose_detection_failed video_id=%s", video_id)
         if len(poses) != len(frame_paths):
             poses = [{"pose": "unknown", "facing_camera": None, "confidence": 0.0, "reason": "detection-unavailable"}] * len(frame_paths)
+        keyframe_embeddings: list[list[float] | None] = [None] * len(frame_paths)
+        if settings.visual_embedding_backend == "nvidia" and hasattr(embedder, "embed_images"):
+            try:
+                _update_job(job_id, status="running", progress=0.9, message="Embedding visual keyframes")
+                keyframe_embeddings = embedder.embed_images(frame_paths, verbose=False)
+            except Exception:
+                logger.exception("keyframe_embedding_failed video_id=%s", video_id)
         for index, (timestamp, frame_path, pose) in enumerate(zip(timestamps, frame_paths, poses), 1):
             _raise_if_canceled(job_id)
             timestamp_key = f"{timestamp:.3f}"
@@ -398,6 +405,7 @@ def _index_keyframes(video_id: str, organization_id: str, file_path: str, job_id
                     timestamp=timestamp,
                     timestamp_key=timestamp_key,
                     object_key=object_key,
+                    embedding=keyframe_embeddings[index - 1],
                     pose=pose.get("pose", "unknown"),
                     pose_confidence=float(pose.get("confidence", 0.0)),
                     pose_metadata=pose,

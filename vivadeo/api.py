@@ -53,7 +53,7 @@ from .frame_extractor import extract_frame
 from .chat_accuracy import route_chat_intent, suggested_refinements, verification_for_hit
 from .chat_workflows import comparison_claims, extraction_rows, merge_evidence_ranges
 from .head_pose import is_face_orientation_query
-from .visual_retrieval import rank_frame_candidates, sample_timestamps
+from .visual_retrieval import cosine_similarity, rank_frame_candidates, sample_timestamps
 from .schemas import (
     ChatMessage,
     ChatMessageAttachmentRequest,
@@ -152,6 +152,11 @@ def _visual_rerank_hits(
                         front_keyframes = [frame for frame in keyframes if frame.pose == "front"]
                         if front_keyframes:
                             keyframes = front_keyframes
+                    if query_embedding and len(query_embedding) == 2048:
+                        keyframes.sort(
+                            key=lambda frame: cosine_similarity(query_embedding, frame.embedding or []),
+                            reverse=True,
+                        )
                     if not keyframes:
                         keyframes = list(session.scalars(select(EvidenceFrame).where(
                             EvidenceFrame.video_id == video_id,
@@ -162,7 +167,7 @@ def _visual_rerank_hits(
                         ).order_by(EvidenceFrame.timestamp)).all())
                 if keyframes:
                     frame_items = [
-                        (frame.timestamp, frame.object_key, getattr(frame, "pose", "unknown"), getattr(frame, "pose_confidence", 0.0))
+                        (frame.timestamp, frame.object_key, getattr(frame, "pose", "unknown"), getattr(frame, "pose_confidence", 0.0), getattr(frame, "embedding", None))
                         # Two cached frames per candidate are enough to refine
                         # normal visual searches. Keeping five here made one
                         # question trigger a sequential remote embedding call
@@ -177,14 +182,14 @@ def _visual_rerank_hits(
                         store.download_file(object_key, local_video)
                         local_videos[video_id] = local_video
                     frame_items = [
-                        (timestamp, None, "unknown", 0.0)
+                        (timestamp, None, "unknown", 0.0, None)
                         for timestamp in sample_timestamps(hit["start_time"], hit["end_time"])
                     ]
                 else:
                     continue
                 if len(candidates) + len(frame_items) > 720:
                     raise HTTPException(status_code=422, detail="This visual search is too broad. Focus a shorter time range.")
-                for timestamp, cached_key, pose, pose_confidence in frame_items:
+                for timestamp, cached_key, pose, pose_confidence, frame_embedding in frame_items:
                     frame_path = str(Path(tmp_dir) / f"{video_id}-{timestamp:.3f}.jpg")
                     if cached_key:
                         store.download_file(cached_key, frame_path)
@@ -199,7 +204,7 @@ def _visual_rerank_hits(
                         "pose": pose,
                         "pose_confidence": pose_confidence,
                         "path": frame_path,
-                        "embedding": embedder.embed_image(frame_path),
+                        "embedding": frame_embedding or embedder.embed_image(frame_path),
                     })
             ranked = rank_frame_candidates(query_embedding, candidates)
             if verifier is not None and ranked:
@@ -223,9 +228,10 @@ def _visual_rerank_hits(
                         verification_candidates.append(candidate)
                         if len(verification_candidates) >= 5:
                             break
-                    # One full-resolution frame is enough for the normal answer path;
-                    # keeping the rest as possible matches avoids bursting the vision quota.
-                    verification_candidates = verification_candidates[:1]
+                    # Verify a short adjacent-frame set so actions are judged
+                    # from temporal evidence, while still keeping the vision
+                    # request bounded.
+                    verification_candidates = verification_candidates[:3]
                 verified_keys: dict[tuple[str, float], dict] = {}
                 for batch_start in range(0, len(verification_candidates), 8):
                     batch = verification_candidates[batch_start:batch_start + 8]

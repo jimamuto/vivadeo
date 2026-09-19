@@ -11,6 +11,23 @@ import { appendActivity } from "@/lib/activity-log";
 
 const RECENT_SEARCHES_KEY = "vivadeo.recent-searches";
 const CHAT_ONBOARDING_KEY = "vivadeo.chat-onboarding-seen";
+const CHAT_MODEL_SETTINGS_KEY = "vivadeo.chat-model-settings";
+type ChatModel = "vivadeo-auto" | "custom";
+
+function readChatModelSettings() {
+  if (typeof window === "undefined") return { provider: "vivadeo-auto" as ChatModel, baseUrl: "", model: "", apiKey: "" };
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(CHAT_MODEL_SETTINGS_KEY) || "null") as { provider?: string; baseUrl?: string; model?: string } | null;
+    return {
+      provider: cached?.provider === "custom" ? "custom" as ChatModel : "vivadeo-auto" as ChatModel,
+      baseUrl: cached?.baseUrl || "",
+      model: cached?.model || "",
+      apiKey: window.sessionStorage.getItem(`${CHAT_MODEL_SETTINGS_KEY}.key`) || "",
+    };
+  } catch {
+    return { provider: "vivadeo-auto" as ChatModel, baseUrl: "", model: "", apiKey: "" };
+  }
+}
 const DEFAULT_CHAT_PROMPT = "What did the speaker say about the launch timeline?";
 const GREETINGS = ["Good to see you", "Ready when you are", "Let’s find something", "Back to the archive"];
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -635,7 +652,7 @@ export function SearchContent({
   const [question, setQuestion] = useState(initialQuery);
   const [videoId, setVideoId] = useState(initialVideoId);
   const [videoIds, setVideoIds] = useState(initialVideoIds);
-  const [chatModel, setChatModel] = useState("vivadeo-auto");
+  const [chatModel, setChatModel] = useState<ChatModel>(() => readChatModelSettings().provider);
   const [modalityOverride, setModalityOverride] = useState<"auto" | "visual" | "transcript" | "hybrid">("auto");
   const [searchMode, setSearchMode] = useState<"top" | "all" | "focused">("top");
   const [outputFormat, setOutputFormat] = useState<"answer" | "rows" | "comparison">("answer");
@@ -647,9 +664,9 @@ export function SearchContent({
   const [parentSearchRunId, setParentSearchRunId] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const [customModelView, setCustomModelView] = useState(false);
-  const [customBaseUrl, setCustomBaseUrl] = useState("");
-  const [customApiKey, setCustomApiKey] = useState("");
-  const [customModel, setCustomModel] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState(() => readChatModelSettings().baseUrl);
+  const [customApiKey, setCustomApiKey] = useState(() => readChatModelSettings().apiKey);
+  const [customModel, setCustomModel] = useState(() => readChatModelSettings().model);
   const [videos, setVideos] = useState<VideoOption[]>([]);
   const [videosLoaded, setVideosLoaded] = useState(false);
   const [onboardingSeen, setOnboardingSeen] = useState(initialOnboardingCompleted);
@@ -797,9 +814,34 @@ export function SearchContent({
     void attachExistingVideo(requestedVideoId);
   }, [initialThreadId, initialVideoId, initialVideoIds, videos, videosLoaded]);
 
-  useEffect(() => {
+  useClientLayoutEffect(() => {
     if (window.localStorage.getItem(CHAT_ONBOARDING_KEY) === "true") setOnboardingSeen(true);
+    try {
+      const cached = JSON.parse(window.localStorage.getItem(CHAT_MODEL_SETTINGS_KEY) || "null") as {
+        provider?: string;
+        baseUrl?: string;
+        model?: string;
+      } | null;
+      if (cached?.provider === "custom" || cached?.provider === "vivadeo-auto") setChatModel(cached.provider);
+      if (typeof cached?.baseUrl === "string") setCustomBaseUrl(cached.baseUrl);
+      if (typeof cached?.model === "string") setCustomModel(cached.model);
+      const cachedKey = window.sessionStorage.getItem(`${CHAT_MODEL_SETTINGS_KEY}.key`);
+      if (cachedKey) setCustomApiKey(cachedKey);
+    } catch {
+      // Browser storage may be unavailable; the in-memory settings still work.
+    }
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const cached = readChatModelSettings();
+      setChatModel(cached.provider);
+      setCustomBaseUrl(cached.baseUrl);
+      setCustomModel(cached.model);
+      if (cached.apiKey) setCustomApiKey(cached.apiKey);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -1707,7 +1749,14 @@ export function SearchContent({
                             <section className="chat-settings-section">
                               <h3>Answer service</h3><p>Choose Vivadeo or a service you configured.</p>
                               {!customModelView ? <div className="chat-model-options">
-                                <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => setChatModel("vivadeo-auto")}><span><strong>Vivadeo Auto</strong><small>Balanced for everyday archive questions</small></span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
+                                <button type="button" className={chatModel === "vivadeo-auto" ? "is-selected" : ""} onClick={() => {
+                                  setChatModel("vivadeo-auto");
+                                  try {
+                                    window.localStorage.setItem(CHAT_MODEL_SETTINGS_KEY, JSON.stringify({ provider: "vivadeo-auto", baseUrl: customBaseUrl, model: customModel }));
+                                  } catch {
+                                    // Browser storage may be unavailable; the in-memory settings still work.
+                                  }
+                                }}><span><strong>Vivadeo Auto</strong><small>Balanced for everyday archive questions</small></span><span aria-hidden="true">{chatModel === "vivadeo-auto" ? "✓" : ""}</span></button>
                                 <button type="button" className={chatModel === "custom" ? "is-selected" : ""} onClick={() => setCustomModelView(true)}><span><strong>Custom endpoint</strong><small>Connect a compatible answer service</small></span><span aria-hidden="true">{chatModel === "custom" ? "✓" : ""}</span></button>
                               </div> : <div className="chat-model-custom">
                                 <button type="button" className="chat-model-back" onClick={() => setCustomModelView(false)}>← Back to answer services</button>
@@ -1715,7 +1764,20 @@ export function SearchContent({
                                 <input value={customModel} onChange={(event) => setCustomModel(event.target.value)} placeholder="Model name" aria-label="Custom AI model" />
                                 <input type="password" value={customApiKey} onChange={(event) => setCustomApiKey(event.target.value)} placeholder="API key (used for this session)" aria-label="Custom AI API key" autoComplete="off" />
                                 <small>Your key is used only for your requests and is never displayed again.</small>
-                                <button type="button" className="chat-model-done" onClick={() => { setChatModel("custom"); setCustomModelView(false); }}>Use custom endpoint</button>
+                                <button type="button" className="chat-model-done" onClick={() => {
+                                  setChatModel("custom");
+                                  setCustomModelView(false);
+                                  try {
+                                    window.localStorage.setItem(CHAT_MODEL_SETTINGS_KEY, JSON.stringify({
+                                      provider: "custom",
+                                      baseUrl: customBaseUrl,
+                                      model: customModel,
+                                    }));
+                                    if (customApiKey) window.sessionStorage.setItem(`${CHAT_MODEL_SETTINGS_KEY}.key`, customApiKey);
+                                  } catch {
+                                    // Browser storage may be unavailable; the in-memory settings still work.
+                                  }
+                                }}>Use custom endpoint</button>
                               </div>}
                             </section>
                             <section className="chat-settings-section"><h3>Evidence</h3><p>Control which parts of your videos Vivadeo examines.</p>

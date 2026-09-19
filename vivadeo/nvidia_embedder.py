@@ -60,15 +60,23 @@ class NvidiaEmbedder(BaseEmbedder):
 
     def embed_image(self, image_path: str, verbose: bool = False) -> list[float]:
         """Embed one image using NVIDIA's multimodal passage endpoint."""
+        return self.embed_images([image_path], verbose=verbose)[0]
+
+    def embed_images(self, image_paths: list[str], verbose: bool = False) -> list[list[float]]:
+        """Embed multiple frames in one NVIDIA request."""
+        if not image_paths:
+            return []
         try:
-            with open(image_path, "rb") as image_file:
-                image_bytes = image_file.read()
+            image_urls = []
+            for image_path in image_paths:
+                with open(image_path, "rb") as image_file:
+                    image_bytes = image_file.read()
+                media_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
+                image_urls.append(f"data:{media_type};base64,{base64.b64encode(image_bytes).decode('ascii')}")
         except OSError as exc:
             raise NvidiaEmbedderError("Unable to read the video frame for embedding.") from exc
-        media_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
-        image_url = f"data:{media_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
         payload = json.dumps({
-            "input": [image_url],
+            "input": image_urls,
             "model": self.model,
             "input_type": "passage",
             "modality": "image",
@@ -87,9 +95,9 @@ class NvidiaEmbedder(BaseEmbedder):
             embeddings = [item["embedding"] for item in sorted(result["data"], key=lambda item: item["index"])]
         except (HTTPError, URLError, TimeoutError, OSError, KeyError, TypeError, ValueError) as exc:
             raise NvidiaEmbedderError("NVIDIA visual embedding generation failed.") from exc
-        if not embeddings or len(embeddings[0]) != 2048:
+        if len(embeddings) != len(image_paths) or any(len(vector) != 2048 for vector in embeddings):
             raise NvidiaEmbedderError("NVIDIA visual embedding endpoint returned an unexpected vector size.")
-        return embeddings[0]
+        return embeddings
 
     def dimensions(self) -> int:
         return 2048
