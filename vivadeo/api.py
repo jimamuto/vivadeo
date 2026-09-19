@@ -5,6 +5,7 @@ from datetime import timedelta
 import logging
 import re
 import tempfile
+import time
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
 from redis import Redis
@@ -162,7 +163,12 @@ def _visual_rerank_hits(
                 if keyframes:
                     frame_items = [
                         (frame.timestamp, frame.object_key, getattr(frame, "pose", "unknown"), getattr(frame, "pose_confidence", 0.0))
-                        for frame in (keyframes if exhaustive else keyframes[:5])
+                        # Two cached frames per candidate are enough to refine
+                        # normal visual searches. Keeping five here made one
+                        # question trigger a sequential remote embedding call
+                        # for every frame and pushed the visual path past a
+                        # minute. Exhaustive searches retain full coverage.
+                        for frame in (keyframes if exhaustive else keyframes[:2])
                     ]
                 elif object_key:
                     local_video = local_videos.get(video_id)
@@ -301,6 +307,16 @@ def _jev_rerank_transcript_hits(
 
     transcript_hits = [hit for hit in chunk_hits if hit.get("retrieval_modality", "transcript") == "transcript"]
     if len(transcript_hits) < 2:
+        return chunk_hits
+    similarity_scores = [
+        float(hit["similarity_score"])
+        for hit in transcript_hits
+        if isinstance(hit.get("similarity_score"), (int, float))
+    ]
+    if len(similarity_scores) < 2:
+        return chunk_hits
+    similarity_scores.sort(reverse=True)
+    if similarity_scores[0] - similarity_scores[1] > getattr(runtime_settings, "jev_max_similarity_margin", 0.05):
         return chunk_hits
     transcript_hits = transcript_hits[:runtime_settings.jev_max_candidates]
     ids = [hit.get("chunk_id") for hit in transcript_hits if hit.get("chunk_id")]
@@ -1686,8 +1702,6 @@ def stream_job_events(
     job = session.get(Job, job_id)
     if not job or job.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Job not found")
-    initial_event = _job_response(job).model_dump_json()
-    initial_status = job.status
     session.close()
 
     def event_stream():
@@ -1695,6 +1709,16 @@ def stream_job_events(
         pubsub = client.pubsub()
         pubsub.subscribe(f"vivadeo:job:{job_id}")
         try:
+            # Subscribe before reading the initial state. Otherwise a fast job
+            # can publish its terminal event between the DB read and Redis
+            # subscription, leaving the browser waiting forever on an open SSE
+            # connection with no polling fallback.
+            with SessionLocal() as current_session:
+                current_job = current_session.get(Job, job_id)
+                if current_job is None or current_job.organization_id != organization_id:
+                    return
+                initial_event = _job_response(current_job).model_dump_json()
+                initial_status = current_job.status
             yield f"event: job\ndata: {initial_event}\n\n"
             if initial_status in {"succeeded", "failed", "canceled"}:
                 return
@@ -1909,11 +1933,12 @@ def _create_search_run(session: Session, *, organization_id: str, thread_id: str
 def _finish_search_run(run: ChatSearchRun | None, *, status: str, summary: dict) -> None:
     if run is None:
         return
+    _record_search_stage_time(run)
     run.status = status
     run.stage = "complete" if status == "completed" else status
     run.progress = 1.0 if status == "completed" else run.progress
     run.search_complete = status == "completed"
-    run.verification_summary = summary
+    run.verification_summary = {**summary, "timings_ms": dict(getattr(run, "_timings_ms", {}))}
 
 
 def _set_search_stage(run: ChatSearchRun | None, stage: str, progress: float) -> None:
@@ -1925,11 +1950,28 @@ def _set_search_stage(run: ChatSearchRun | None, stage: str, progress: float) ->
 
 
 def _report_search_stage(session: Session, run: ChatSearchRun | None, callback, stage: str, progress: float, message: str) -> None:
+    _record_search_stage_time(run, next_stage=stage)
     _set_search_stage(run, stage, progress)
     if run is not None:
         session.commit()
     if callback:
         callback(progress, message)
+
+
+def _record_search_stage_time(run: ChatSearchRun | None, next_stage: str | None = None) -> None:
+    """Persist coarse stage timings with the search run for latency diagnosis."""
+    if run is None:
+        return
+    now = time.perf_counter()
+    previous_stage = getattr(run, "_timing_stage", None)
+    started_at = getattr(run, "_timing_started_at", None)
+    timings = getattr(run, "_timings_ms", {})
+    if previous_stage and started_at is not None:
+        timings[previous_stage] = round(timings.get(previous_stage, 0.0) + (now - started_at) * 1000, 1)
+    if next_stage is not None:
+        run._timing_stage = next_stage
+        run._timing_started_at = now
+        run._timings_ms = timings
 
 
 def _current_chat_message(thread: ChatThread) -> ChatThreadMessage | None:
@@ -2354,12 +2396,12 @@ def create_chat_message(
             7200,
             request.custom_api_key,
         )
-    generate_chat_task.delay(
-        job.id,
-        thread.id,
-        assistant_message.id,
-        organization_id,
-        safe_request_payload,
+    # Chat has a dedicated worker. Sending this through Celery's default queue
+    # makes interactive searches compete with ingest work and leaves the
+    # chat-worker idle in the compose deployment.
+    generate_chat_task.apply_async(
+        args=(job.id, thread.id, assistant_message.id, organization_id, safe_request_payload),
+        queue="chat",
     )
     return _job_response(job)
 
@@ -2555,6 +2597,18 @@ def _simple_greeting(question: str) -> str | None:
     if re.fullmatch(r"(?:hi|hello|hey|good (?:morning|afternoon|evening))[!. ]*", question.strip(), re.IGNORECASE):
         return "Hello! How can I help?"
     return None
+
+
+def _visual_fallback_answer(citations: list[dict]) -> str:
+    """Return a grounded visual result when answer synthesis is unavailable."""
+    moments = ", ".join(
+        f"{citation['start_time']:.0f}s–{citation['end_time']:.0f}s"
+        for citation in citations[:3]
+    )
+    return (
+        "I found visually verified matches, but the answer service was temporarily "
+        f"unavailable. Review the cited footage at {moments}."
+    )
 
 
 def _general_chat_answer(request: ChatRequest, session: Session, organization_id: str, on_delta=None) -> ChatResponse:
@@ -2937,7 +2991,6 @@ def search_chat(
         return ChatResponse(answer=answer, citations=[], thread_id=thread.id if thread else None, title=thread.title if thread else None, search_run_id=search_run.id if search_run else None, intent=intent, verification_summary=verification_summary, suggested_refinements=suggested_refinements(intent, has_results=False), output_format=request.output_format, rows=rows, comparison=comparison)
 
     _report_search_stage(session, search_run, progress_callback, "answering", 0.78, "Preparing answer")
-    settings = get_runtime_settings()
     messages = [message.model_dump() for message in request.messages[-10:]]
     generator = _chat_generator(request, session, organization_id)
     assistant_message: ChatThreadMessage | None = None
@@ -2957,7 +3010,13 @@ def search_chat(
             # Do not hold a database connection while waiting on an external model.
             session.commit()
         answer_citations = citations if overview else (verified_citations if visual_question else citations)[:12]
-        answer = answer_from_evidence(generator, messages, answer_citations, on_delta=on_delta)
+        try:
+            answer = answer_from_evidence(generator, messages, answer_citations, on_delta=on_delta)
+        except Exception:
+            if not visual_question or not verified_citations:
+                raise
+            logger.warning("visual_answer_synthesis_failed_using_grounded_fallback", exc_info=True)
+            answer = _visual_fallback_answer(verified_citations)
         if request.output_format == "comparison":
             comparison = comparison_claims(verified_citations, answer)
         elif request.output_format == "rows":

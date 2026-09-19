@@ -35,6 +35,10 @@ def choose_evidence_tool(question: str, *, modality: str, focus_start=None, focu
         hours, minutes, seconds = timestamp_match.groups()
         start = int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)
         return EvidenceTool(tool="inspect_moment", start_time=max(0, start - 5), end_time=start + 10, include_speech=intent["modality"] == "hybrid")
+    # High-confidence questions are already safely classified by the
+    # deterministic router. Calling the answer model here would add a second
+    # model round trip before retrieval for the common case. Keep the planner
+    # for ambiguous questions only.
     if generator is None or modality != "auto" or intent["confidence"] >= 0.9:
         return EvidenceTool(tool=tool, include_speech=intent["modality"] == "hybrid")
     try:

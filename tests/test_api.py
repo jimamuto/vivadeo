@@ -36,6 +36,16 @@ class _FakeObjectStore:
         return None
 
 
+def test_visual_fallback_answer_stays_grounded_in_verified_moments():
+    answer = api._visual_fallback_answer([
+        {"start_time": 38.0, "end_time": 42.0},
+        {"start_time": 91.0, "end_time": 96.0},
+    ])
+    assert "visually verified matches" in answer
+    assert "38s–42s" in answer
+    assert "91s–96s" in answer
+
+
 def _disable_startup_io(monkeypatch):
     monkeypatch.setattr("vivadeo.api.make_engine", lambda: _FakeEngine())
     monkeypatch.setattr("vivadeo.api.ObjectStore", lambda: _FakeObjectStore())
@@ -259,7 +269,6 @@ def test_video_chunk_response_includes_metadata():
 
 
 def test_search_chat_answers_with_transcript_citations(monkeypatch):
-    now = datetime.now(timezone.utc)
     segment = SimpleNamespace(
         id="segment-1",
         video_id="video-1",
@@ -469,7 +478,7 @@ def test_editing_chat_prompt_branches_before_the_edited_message(monkeypatch):
     monkeypatch.setattr(api, "_append_chat_message", append_message)
     queued = []
     monkeypatch.setattr(api, "_job_response", lambda job: job)
-    monkeypatch.setattr(api.generate_chat_task, "delay", lambda *args: queued.append(args))
+    monkeypatch.setattr(api.generate_chat_task, "apply_async", lambda **kwargs: queued.append(kwargs["args"]))
 
     api.create_chat_message(
         "thread-1",

@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 logger = logging.getLogger(__name__)
 _TRANSIENT_HTTP_STATUSES = {408, 409, 429, 500, 502, 503, 504}
 _MAX_TRANSIENT_ATTEMPTS = 3
-_MAX_RETRY_DELAY_SECONDS = 60
+_MAX_RETRY_DELAY_SECONDS = 8
 
 
 def _retry_delay(error: HTTPError, attempt: int) -> float:
