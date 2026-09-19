@@ -1,12 +1,15 @@
 """Small OpenAI-compatible client for Vivadeo Auto and transient BYOK requests."""
 
 import base64
+import copy
+import hashlib
 import ipaddress
 import json
 import logging
 import re
 import socket
 import time
+from collections import OrderedDict
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +22,8 @@ logger = logging.getLogger(__name__)
 _TRANSIENT_HTTP_STATUSES = {408, 409, 429, 500, 502, 503, 504}
 _MAX_TRANSIENT_ATTEMPTS = 3
 _MAX_RETRY_DELAY_SECONDS = 8
+_VISUAL_VERIFICATION_CACHE_MAX = 256
+_visual_verification_cache: OrderedDict[tuple[str, str, tuple[str, ...]], list[dict]] = OrderedDict()
 
 
 def _retry_delay(error: HTTPError, attempt: int) -> float:
@@ -50,6 +55,37 @@ GENERAL_CHAT_INSTRUCTION = (
 
 class OpenAICompatibleError(RuntimeError):
     """Raised when an OpenAI-compatible gateway cannot produce an answer."""
+
+    def __init__(self, message: str, *, reason: str = "model_failure"):
+        super().__init__(message)
+        self.reason = reason
+
+
+class FailoverChat:
+    """Use a primary chat service and retry the operation on a secondary service."""
+
+    def __init__(self, primary, secondary=None):
+        self.primary = primary
+        self.secondary = secondary
+
+    def answer(self, messages: list[dict], context: list[dict], on_delta=None) -> str:
+        kwargs = {"on_delta": on_delta} if on_delta is not None else {}
+        try:
+            return self.primary.answer(messages, context, **kwargs)
+        except OpenAICompatibleError:
+            if self.secondary is None:
+                raise
+            logger.warning("primary_auto_chat_failed_using_secondary", exc_info=True)
+            return self.secondary.answer(messages, context, **kwargs)
+
+    def verify_visual_candidates(self, question: str, candidates: list[dict]) -> list[dict]:
+        try:
+            return self.primary.verify_visual_candidates(question, candidates)
+        except OpenAICompatibleError:
+            if self.secondary is None:
+                raise
+            logger.warning("primary_visual_verifier_failed_using_secondary", exc_info=True)
+            return self.secondary.verify_visual_candidates(question, candidates)
 
 
 def validate_base_url(value: str, *, allow_local: bool = False) -> str:
@@ -229,14 +265,25 @@ class OpenAICompatibleChat:
 
     def verify_visual_candidates(self, question: str, candidates: list[dict]) -> list[dict]:
         """Ask a vision-capable Pro model to verify sampled candidate frames."""
+        frame_hashes = tuple(
+            hashlib.sha256(Path(candidate["path"]).read_bytes()).hexdigest()
+            for candidate in candidates
+        )
+        cache_key = (self.model, " ".join(question.lower().split()), frame_hashes)
+        cached = _visual_verification_cache.get(cache_key)
+        if cached is not None:
+            _visual_verification_cache.move_to_end(cache_key)
+            return copy.deepcopy(cached)
         content = [{
             "type": "text",
             "text": (
                 "Judge the supplied video frames for this question: " + question + "\n"
                 "Return only JSON in this exact shape: "
-                "{\\\"candidates\\\":[{\\\"index\\\":1,\\\"relevant\\\":true,\\\"confidence\\\":0.0}]}\n"
+                "{\\\"candidates\\\":[{\\\"index\\\":1,\\\"relevant\\\":true,\\\"confidence\\\":0.0,\\\"reason\\\":\\\"\\\"}]}\n"
                 "A candidate is relevant only when the visible frame supports the question. "
-                "Do not infer from timestamps or filenames."
+                "Use visible pixels only; do not infer from timestamps, filenames, or transcript text. "
+                "Confidence must be 0.0 to 1.0: 0.9+ means unmistakable, 0.7 means clearly visible, "
+                "0.5 means ambiguous, and below 0.5 means unsupported. Explain the visible cue briefly."
             ),
         }]
         for index, candidate in enumerate(candidates, 1):
@@ -270,26 +317,37 @@ class OpenAICompatibleChat:
                 if exc.code in _TRANSIENT_HTTP_STATUSES and attempt < _MAX_TRANSIENT_ATTEMPTS:
                     time.sleep(_retry_delay(exc, attempt))
                     continue
-                raise
-            except (URLError, TimeoutError, OSError):
+                raise OpenAICompatibleError(
+                    "The configured AI endpoint failed while processing visual evidence.",
+                    reason="rate_limited" if exc.code == 429 else "provider_error",
+                ) from exc
+            except (URLError, TimeoutError, OSError) as exc:
                 if attempt < _MAX_TRANSIENT_ATTEMPTS:
                     time.sleep(2 ** (attempt - 1))
                     continue
-                raise
+                raise OpenAICompatibleError(
+                    "The configured AI endpoint failed while processing visual evidence.",
+                    reason="provider_error",
+                ) from exc
         try:
             content = result["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
             parsed = json.loads(re.sub(r"^```(?:json)?\\s*|\\s*```$", "", str(content).strip(), flags=re.IGNORECASE))
             decisions = parsed.get("candidates", []) if isinstance(parsed, dict) else []
-            return [
+            decisions = [
                 decision for decision in decisions
                 if isinstance(decision, dict)
                 and isinstance(decision.get("index"), int)
                 and isinstance(decision.get("relevant"), bool)
             ]
+            _visual_verification_cache[cache_key] = copy.deepcopy(decisions)
+            _visual_verification_cache.move_to_end(cache_key)
+            while len(_visual_verification_cache) > _VISUAL_VERIFICATION_CACHE_MAX:
+                _visual_verification_cache.popitem(last=False)
+            return decisions
         except (HTTPError, URLError, TimeoutError, OSError, KeyError, IndexError, TypeError, ValueError) as exc:
-            raise OpenAICompatibleError("The configured AI endpoint could not verify visual evidence.") from exc
+            raise OpenAICompatibleError("The configured AI endpoint failed while processing visual evidence.") from exc
 
     def answer(self, messages: list[dict], context: list[dict], on_delta=None) -> str:
         evidence = "\n\n".join(

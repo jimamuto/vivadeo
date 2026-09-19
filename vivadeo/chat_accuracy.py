@@ -82,7 +82,11 @@ def verification_for_hit(hit: dict, modality: Modality) -> tuple[VerificationSta
             min(1.0, max(0.0, float(hit.get("verification_confidence") or hit.get("similarity_score") or 0.0))),
             str(hit.get("match_reason") or "Visible evidence supports the question"),
         )
-    return "possible", min(1.0, max(0.0, float(hit.get("similarity_score") or 0.0))), "Candidate frame needs visual verification"
+    return (
+        "possible",
+        min(1.0, max(0.0, float(hit.get("similarity_score") or 0.0))),
+        str(hit.get("match_reason") or "Candidate frame needs visual verification"),
+    )
 
 
 def suggested_refinements(intent: ChatIntent, *, has_results: bool) -> list[str]:

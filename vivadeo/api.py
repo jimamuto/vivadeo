@@ -44,7 +44,7 @@ from .db import (
 from .embedder import get_embedder, reset_embedder
 from .media import stream_object
 from .media_signing import media_token_organization, signed_media_query, verify_media_token
-from .llm import AnthropicChat, OllamaChat, OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models
+from .llm import AnthropicChat, FailoverChat, OllamaChat, OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models
 from .jev import JevClient, JevError
 from .object_store import ObjectStore, profile_image_object_key, video_object_key
 from .production_store import PostgresVideoStore
@@ -109,10 +109,22 @@ from .worker import (
     generate_chat_task,
     trim_clip_task,
 )
+from .visual_calibration import VisualCalibration, load_visual_calibration
 
 app = FastAPI(title="Vivadeo", version="0.1.0")
 MAX_VIDEO_UPLOAD_BYTES = 512 * 1024 * 1024
 logger = logging.getLogger(__name__)
+
+
+def _visual_diagnostic_message(reason: str | None) -> str | None:
+    return {
+        "low_similarity": "Candidate similarity was below the calibrated visual threshold.",
+        "disagreement": "Adjacent frames disagreed about the visual match.",
+        "model_failure": "Visual evidence could not be scored by the verifier.",
+        "rate_limited": "Visual evidence scoring was temporarily rate limited.",
+        "provider_error": "The visual evidence service returned an error.",
+        "verifier_unavailable": "No visual verifier was configured for this search.",
+    }.get(reason)
 
 
 def _visual_rerank_hits(
@@ -124,9 +136,22 @@ def _visual_rerank_hits(
     verifier=None,
     session: Session | None = None,
     exhaustive: bool = False,
+    diagnostics: dict | None = None,
+    calibration: VisualCalibration | None = None,
 ) -> list[dict]:
     """Rerank top chunk candidates and optionally verify frames with Pro vision."""
     candidates: list[dict] = []
+    if diagnostics is not None:
+        diagnostics.update({
+            "verifier": "configured" if verifier is not None else "unavailable",
+            "candidate_count": 0,
+            "verified_count": 0,
+            "consensus_required": 2,
+            "status": "not_run",
+            "reason": "not_run",
+            "calibration": calibration.source if calibration else "unavailable",
+            "neighbor_agreement": 0.0,
+        })
     try:
         with tempfile.TemporaryDirectory(prefix="vivadeo_visual_search_") as tmp_dir:
             local_videos: dict[str, str] = {}
@@ -166,14 +191,22 @@ def _visual_rerank_hits(
                             EvidenceFrame.timestamp <= hit["end_time"],
                         ).order_by(EvidenceFrame.timestamp)).all())
                 if keyframes:
+                    if exhaustive:
+                        selected_keyframes = keyframes
+                    else:
+                        ranked_keyframes = sorted(
+                            keyframes,
+                            key=lambda frame: cosine_similarity(query_embedding, frame.embedding or []),
+                            reverse=True,
+                        )
+                        anchor = ranked_keyframes[0]
+                        selected_keyframes = sorted(
+                            keyframes,
+                            key=lambda frame: abs(frame.timestamp - anchor.timestamp),
+                        )[:3]
                     frame_items = [
                         (frame.timestamp, frame.object_key, getattr(frame, "pose", "unknown"), getattr(frame, "pose_confidence", 0.0), getattr(frame, "embedding", None))
-                        # Two cached frames per candidate are enough to refine
-                        # normal visual searches. Keeping five here made one
-                        # question trigger a sequential remote embedding call
-                        # for every frame and pushed the visual path past a
-                        # minute. Exhaustive searches retain full coverage.
-                        for frame in (keyframes if exhaustive else keyframes[:2])
+                        for frame in selected_keyframes
                     ]
                 elif object_key:
                     local_video = local_videos.get(video_id)
@@ -207,36 +240,44 @@ def _visual_rerank_hits(
                         "embedding": frame_embedding or embedder.embed_image(frame_path),
                     })
             ranked = rank_frame_candidates(query_embedding, candidates)
+            if diagnostics is not None:
+                diagnostics["candidate_count"] = len(ranked)
+                if not ranked:
+                    diagnostics.update({"status": "no_candidates", "reason": "low_similarity"})
+                elif verifier is None:
+                    diagnostics.update({"status": "verifier_unavailable", "reason": "verifier_unavailable"})
             if verifier is not None and ranked:
                 verifier_failed = False
                 verification_candidates: list[dict] = []
                 if exhaustive:
                     verification_candidates = ranked
                 else:
-                    seen_chunks: set[tuple[str, float]] = set()
-                    for candidate in ranked:
-                        chunk_key = (candidate["video_id"], candidate["chunk_start"])
-                        if chunk_key in seen_chunks:
-                            continue
-                        seen_chunks.add(chunk_key)
-                        verification_candidates.append(candidate)
-                        if len(verification_candidates) >= 8:
-                            break
-                    for candidate in ranked:
-                        if candidate in verification_candidates:
-                            continue
-                        verification_candidates.append(candidate)
-                        if len(verification_candidates) >= 5:
-                            break
-                    # Verify a short adjacent-frame set so actions are judged
-                    # from temporal evidence, while still keeping the vision
-                    # request bounded.
-                    verification_candidates = verification_candidates[:3]
+                    anchor = ranked[0]
+                    adjacent = [
+                        candidate for candidate in ranked
+                        if candidate["video_id"] == anchor["video_id"]
+                    ]
+                    adjacent.sort(key=lambda candidate: abs(candidate["timestamp"] - anchor["timestamp"]))
+                    verification_candidates = adjacent[:3]
+                    if len(verification_candidates) < 3:
+                        verification_candidates.extend(
+                            candidate for candidate in ranked
+                            if candidate not in verification_candidates
+                        )
+                        verification_candidates = verification_candidates[:3]
                 verified_keys: dict[tuple[str, float], dict] = {}
+                relevant_keys: set[tuple[str, float]] = set()
+                signal_scores: dict[tuple[str, float], tuple[float, float, float]] = {}
+                verifier_failure_reason = "model_failure"
                 for batch_start in range(0, len(verification_candidates), 8):
                     batch = verification_candidates[batch_start:batch_start + 8]
                     try:
                         result = verifier.verify_visual_candidates(question, batch)
+                    except OpenAICompatibleError as exc:
+                        verifier_failed = True
+                        verifier_failure_reason = getattr(exc, "reason", "model_failure")
+                        logger.exception("visual_candidate_verification_failed batch=%s", batch_start // 8 + 1)
+                        break
                     except Exception:
                         verifier_failed = True
                         logger.exception("visual_candidate_verification_failed batch=%s", batch_start // 8 + 1)
@@ -249,11 +290,49 @@ def _visual_rerank_hits(
                             continue
                         candidate = batch[local_index]
                         confidence = float(decision.get("confidence", 0.0))
-                        if decision.get("relevant") and confidence >= 0.55:
-                            verified_keys[(candidate["video_id"], candidate["timestamp"])] = {
-                                "verification_confidence": confidence,
-                                "match_reason": str(decision.get("reason") or "Visible evidence supports the question"),
-                            }
+                        candidate_key = (candidate["video_id"], candidate["timestamp"])
+                        verifier_threshold = calibration.verifier_threshold if calibration else 1.0
+                        combined_threshold = calibration.combined_threshold if calibration else 1.0
+                        if decision.get("relevant") and confidence >= verifier_threshold:
+                            relevant_keys.add(candidate_key)
+                            similarity = min(1.0, max(0.0, float(candidate.get("similarity_score") or 0.0)))
+                            pose_confidence = min(1.0, max(0.0, float(candidate.get("pose_confidence") or 0.0)))
+                            signal_scores[candidate_key] = (confidence, similarity, pose_confidence)
+                            combined_confidence = round((confidence * 0.8) + (similarity * 0.15) + (pose_confidence * 0.05), 3)
+                            if combined_confidence >= combined_threshold:
+                                verified_keys[candidate_key] = {
+                                    "verification_confidence": combined_confidence,
+                                    "match_reason": str(decision.get("reason") or "Visible evidence supports the question"),
+                                }
+                consensus_count = len(relevant_keys)
+                neighbor_agreement = consensus_count / len(verification_candidates) if verification_candidates else 0.0
+                for candidate_key, verified in verified_keys.items():
+                    confidence, similarity, pose_confidence = signal_scores[candidate_key]
+                    verified["verification_confidence"] = round(
+                        (confidence * 0.7)
+                        + (similarity * 0.15)
+                        + (pose_confidence * 0.05)
+                        + (neighbor_agreement * 0.1),
+                        3,
+                    )
+                if diagnostics is not None:
+                    diagnostics.update({
+                        "verified_count": len(verified_keys),
+                        "relevant_count": consensus_count,
+                        "consensus_required": 2 if len(verification_candidates) >= 2 else 1,
+                        "status": "verifier_failed" if verifier_failed else ("verified" if consensus_count >= min(2, len(verification_candidates)) else "insufficient_consensus"),
+                        "reason": verifier_failure_reason if verifier_failed else ("verified" if consensus_count >= min(2, len(verification_candidates)) else ("disagreement" if consensus_count else "low_similarity")),
+                        "neighbor_agreement": round(neighbor_agreement, 3),
+                    })
+                if consensus_count < min(2, len(verification_candidates)):
+                    verified_keys = {}
+                    if diagnostics is not None and diagnostics.get("status") == "insufficient_consensus":
+                        reason = (
+                            f"Visual verifier found {consensus_count} relevant frame(s); "
+                            f"at least {min(2, len(verification_candidates))} adjacent frames are required."
+                        )
+                        for candidate in ranked:
+                            candidate["match_reason"] = reason
                 if not verifier_failed:
                     ranked = [
                         {**candidate, "visual_verified": True, **verified_keys[(candidate["video_id"], candidate["timestamp"])]}
@@ -263,6 +342,8 @@ def _visual_rerank_hits(
     except HTTPException:
         raise
     except Exception:
+        if diagnostics is not None:
+            diagnostics.update({"status": "retrieval_failed", "reason": "model_failure", "error": "visual evidence preparation failed"})
         logger.exception("visual_frame_rerank_failed")
         return []
 
@@ -298,7 +379,13 @@ def _visual_rerank_hits(
         })
         if not exhaustive and len(selected) >= results:
             break
-    return selected or chunk_hits
+    if selected:
+        return selected
+    if diagnostics and diagnostics.get("reason"):
+        diagnostic_reason = _visual_diagnostic_message(diagnostics["reason"])
+        if diagnostic_reason:
+            return [{**hit, "match_reason": diagnostic_reason} for hit in chunk_hits]
+    return chunk_hits
 
 
 def _jev_rerank_transcript_hits(
@@ -2595,7 +2682,16 @@ def _chat_generator(request, session: Session, organization_id: str):
     elif request.provider in {"custom", "openai", "gemini", "nvidia"}:
         generator = OpenAICompatibleChat(base_url=request.custom_base_url or "", api_key=request.custom_api_key or "", model=request.custom_model or "", timeout=settings.auto_llm_timeout)
     else:
-        generator = OpenAICompatibleChat(base_url=settings.auto_llm_base_url or "", api_key=settings.auto_llm_api_key or "", model=settings.auto_llm_model, timeout=settings.auto_llm_timeout)
+        primary = OpenAICompatibleChat(base_url=settings.auto_llm_base_url or "", api_key=settings.auto_llm_api_key or "", model=settings.auto_llm_model, timeout=settings.auto_llm_timeout)
+        fallback_key = getattr(settings, "auto_llm_fallback_api_key", None) or getattr(settings, "azure_openai_api_key", None)
+        fallback_url = getattr(settings, "auto_llm_fallback_base_url", None)
+        fallback_model = getattr(settings, "auto_llm_fallback_model", None) or settings.auto_llm_model
+        secondary = (
+            OpenAICompatibleChat(base_url=fallback_url, api_key=fallback_key, model=fallback_model, timeout=settings.auto_llm_timeout)
+            if fallback_url and fallback_key
+            else None
+        )
+        generator = FailoverChat(primary, secondary)
     return generator
 
 
@@ -2724,23 +2820,51 @@ def search_chat(
     _report_search_stage(session, search_run, progress_callback, "retrieving", 0.2, "Retrieving relevant video moments")
     use_nvidia = bool(getattr(runtime_settings, "nvidia_embedding_api_key", None))
     visual_verifier = None
+    visual_diagnostics: dict = {}
+    visual_calibration = None
     visual_question = intent["modality"] in {"visual", "hybrid"}
+    if visual_question:
+        try:
+            visual_calibration = load_visual_calibration(getattr(runtime_settings, "visual_calibration_path", None))
+        except (OSError, TypeError, ValueError):
+            logger.exception("visual_calibration_load_failed")
     from .evidence_tools import is_transcript_overview
     from .evidence_answer import answer_from_evidence
     overview = not visual_question and is_transcript_overview(question)
     result_limit = 100 if intent["search_mode"] == "all" else request.results
-    if (
+    if visual_question and request.provider in {"custom", "openai", "gemini", "nvidia"} and request.custom_api_key and request.custom_base_url and request.custom_model:
+        visual_verifier = OpenAICompatibleChat(
+            base_url=request.custom_base_url,
+            api_key=request.custom_api_key,
+            model=request.custom_model,
+            timeout=runtime_settings.auto_llm_timeout,
+        )
+    elif (
         visual_question
         and request.provider == "vivadeo-auto"
         and getattr(runtime_settings, "auto_llm_api_key", None)
         and getattr(runtime_settings, "auto_llm_base_url", None)
     ):
-        visual_verifier = OpenAICompatibleChat(
+        primary_verifier = OpenAICompatibleChat(
             base_url=runtime_settings.auto_llm_base_url,
             api_key=runtime_settings.auto_llm_api_key,
             model=runtime_settings.auto_llm_model,
             timeout=runtime_settings.auto_llm_timeout,
         )
+        fallback_key = getattr(runtime_settings, "auto_llm_fallback_api_key", None) or getattr(runtime_settings, "azure_openai_api_key", None)
+        fallback_url = getattr(runtime_settings, "auto_llm_fallback_base_url", None)
+        fallback_model = getattr(runtime_settings, "auto_llm_fallback_model", None) or runtime_settings.auto_llm_model
+        secondary_verifier = (
+            OpenAICompatibleChat(
+                base_url=fallback_url,
+                api_key=fallback_key,
+                model=fallback_model,
+                timeout=runtime_settings.auto_llm_timeout,
+            )
+            if fallback_url and fallback_key
+            else None
+        )
+        visual_verifier = FailoverChat(primary_verifier, secondary_verifier)
     try:
         # Spoken-content questions never depend on the visual index.
         store = PostgresVideoStore(session)
@@ -2814,6 +2938,8 @@ def search_chat(
                     visual_verifier,
                     session,
                     exhaustive=intent["search_mode"] == "all",
+                    diagnostics=visual_diagnostics,
+                    calibration=visual_calibration,
                 )
             if use_nvidia and visual_question and len(source_hits) < scope_limit and intent["modality"] == "hybrid":
                 if transcript_embedding is None:
@@ -2852,6 +2978,8 @@ def search_chat(
         hit_modality = hit.get("retrieval_modality") or ("visual" if intent["modality"] == "visual" else "transcript")
         evidence_modality = "visual" if hit_modality == "visual" else "transcript"
         status_value, confidence, match_reason = verification_for_hit(hit, evidence_modality)
+        if visual_question and hit_modality == "visual" and status_value == "possible":
+            match_reason = str(_visual_diagnostic_message(visual_diagnostics.get("reason")) or match_reason)
         if visual_question and hit_modality == "visual" and status_value == "rejected":
             continue
         if hit_modality == "transcript" and "text" in hit:
@@ -2941,11 +3069,13 @@ def search_chat(
         "rejected": 0,
         "modality": intent["modality"],
     }
+    if visual_question:
+        verification_summary["visual_diagnostics"] = visual_diagnostics
     rows = []
     comparison = []
 
     if not verified_citations and visual_question:
-        answer = "I found possible visual matches, but I could not verify them confidently enough to answer. Try narrowing the question or asking about one of the moments."
+        answer = "No decisive visual moment was detected in the sampled footage. Try a more specific visual description or a shorter time range."
         _finish_search_run(search_run, status="completed", summary=verification_summary)
         if thread is not None:
             assistant = _append_chat_message(thread, session=session, role="assistant", content=answer, parent_id=user_message.id if user_message else None)

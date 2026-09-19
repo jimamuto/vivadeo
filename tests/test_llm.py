@@ -5,7 +5,8 @@ from urllib.error import HTTPError
 
 import pytest
 
-from vivadeo.llm import OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models, validate_base_url
+import vivadeo.llm as llm
+from vivadeo.llm import FailoverChat, OpenAICompatibleChat, OpenAICompatibleError, list_ollama_models, validate_base_url
 
 
 @pytest.fixture(autouse=True)
@@ -173,3 +174,38 @@ def test_visual_verifier_uses_completion_token_parameter_for_gpt5(monkeypatch, t
     assert captured["max_completion_tokens"] == 512
     assert "max_tokens" not in captured
     assert "temperature" not in captured
+
+
+def test_visual_verifier_caches_by_model_question_and_frame_hash(monkeypatch, tmp_path):
+    frame = tmp_path / "frame.jpg"
+    frame.write_bytes(b"jpeg")
+    calls = []
+
+    def respond(request, timeout):
+        calls.append(request)
+        return _Response({"choices": [{"message": {"content": '{"candidates":[{"index":1,"relevant":true,"confidence":0.9}]}'}}]})
+
+    llm._visual_verification_cache.clear()
+    monkeypatch.setattr("vivadeo.llm.urlopen", respond)
+    verifier = OpenAICompatibleChat(
+        base_url="https://api.example.com/v1",
+        api_key="secret",
+        model="vision-model",
+    )
+    candidates = [{"path": str(frame), "timestamp": 1.0}]
+
+    assert verifier.verify_visual_candidates("What is visible?", candidates)[0]["confidence"] == 0.9
+    assert verifier.verify_visual_candidates("What is visible?", candidates)[0]["confidence"] == 0.9
+    assert len(calls) == 1
+
+
+def test_failover_chat_uses_secondary_after_primary_error():
+    class FailingChat:
+        def answer(self, messages, context, on_delta=None):
+            raise OpenAICompatibleError("primary failed", reason="rate_limited")
+
+    class WorkingChat:
+        def answer(self, messages, context, on_delta=None):
+            return "secondary answer"
+
+    assert FailoverChat(FailingChat(), WorkingChat()).answer([], []) == "secondary answer"
