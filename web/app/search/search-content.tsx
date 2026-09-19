@@ -1736,7 +1736,7 @@ export function SearchContent({
                   <div className="chat-model-control">
                     <button className="chat-model-trigger" type="button" aria-label="Open chat settings" aria-expanded={modelOpen} onClick={() => { setCustomModelView(false); setModelOpen(true); }}>
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 4v6 M6 14v6" /></svg>
-                      <strong>Settings · {chatModel === "custom" ? "Custom endpoint" : "Vivadeo Auto"}</strong>
+                      <strong>Settings · {hydrated && chatModel === "custom" ? "Custom endpoint" : "Vivadeo Auto"}</strong>
                     </button>
                     {modelOpen && typeof document !== "undefined" ? createPortal(
                       <div className="chat-settings-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setModelOpen(false); }}>
