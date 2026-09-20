@@ -11,6 +11,13 @@ $jevProject = (Resolve-Path -LiteralPath $jevProject).Path -replace '\\', '/'
 $jevEnv = (Join-Path $jevProject ".env") -replace '\\', '/'
 $runner = (Join-Path $PSScriptRoot "run_jev.py") -replace '\\', '/'
 
+# Windows machines may deny uv access to its global cache. Keep the default
+# cache inside the Vivadeo checkout, while allowing callers to override it.
+if (-not $env:UV_CACHE_DIR) {
+    $env:UV_CACHE_DIR = Join-Path $vivadeoRoot ".uv-cache-jev"
+}
+New-Item -ItemType Directory -Force -Path $env:UV_CACHE_DIR | Out-Null
+
 if (-not (Test-Path -LiteralPath (Join-Path $jevProject "pyproject.toml"))) {
     throw "Jev project not found at $jevProject. Set VIVADEO_JEV_PROJECT_DIR to its checkout."
 }

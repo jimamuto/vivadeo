@@ -5,9 +5,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from jev_ultrafast import Agent
+
+
+def run_agent(args, *, screenshots: bool):
+    last = None
+    with Agent(args.url, args.goal, record_dir=args.record_dir, screenshots=screenshots) as agent:
+        for last in agent.run():
+            pass
+    return last
+
+
+def is_screenshot_timeout(error: Exception) -> bool:
+    message = repr(error).lower()
+    return "capturescreenshot" in message and "timed out" in message
 
 
 def main() -> int:
@@ -22,10 +36,18 @@ def main() -> int:
     parser.add_argument("--screenshots", action="store_true")
     args = parser.parse_args()
 
-    last = None
-    with Agent(args.url, args.goal, record_dir=args.record_dir, screenshots=args.screenshots) as agent:
-        for last in agent.run():
-            pass
+    try:
+        last = run_agent(args, screenshots=args.screenshots)
+    except Exception as error:
+        # CDP screenshot capture is diagnostic only. A slow or contended
+        # browser harness must not prevent the actual click flow from running.
+        if not args.screenshots or not is_screenshot_timeout(error):
+            raise
+        print(
+            "JEV screenshot capture timed out; retrying without screenshots.",
+            file=sys.stderr,
+        )
+        last = run_agent(args, screenshots=False)
     if last is None:
         raise RuntimeError("Jev produced no final state")
     print(json.dumps({key: value for key, value in last.items() if key != "screenshot"}, default=str))

@@ -82,7 +82,11 @@ Run Jev Ultrafast from the Vivadeo repository:
 The runner uses the sibling Jev checkout and its own `.env`, reusing the
 existing logged-in Chrome/CDP session without copying Jev or its credentials
 into Vivadeo. It maps `VIVADEO_JEV_API_KEY` to Jev's `TYPESAFE_API_KEY`
-automatically. Set `VIVADEO_JEV_PROJECT_DIR` if the Jev checkout is elsewhere.
+automatically. The wrapper uses an ignored `.uv-cache-jev` cache by default so
+Windows `uv` cache permissions do not prevent startup; set `UV_CACHE_DIR` to
+override it. If diagnostic screenshots time out in the browser harness, the
+wrapper retries the same flow without screenshots. Set
+`VIVADEO_JEV_PROJECT_DIR` if the Jev checkout is elsewhere.
 
 ## Notes
 
