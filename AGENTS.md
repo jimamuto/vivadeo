@@ -33,6 +33,12 @@ Do not expose implementation vendors, model names, hosting platforms, databases,
 
 - When a frontend issue needs visual confirmation or browser reproduction, use [`.agents/skills/playwright-visual-verification/SKILL.md`](.agents/skills/playwright-visual-verification/SKILL.md). It covers temporary Playwright setup, real auth flows, screenshots, computed layout measurements, repeated interactions, and checking whether source CSS reached the running app.
 
+## Browser Automation
+
+- Prefer the repository's JEV runner for agentic browser workflows and click-through verification. Run it with `.\scripts\run-jev.ps1`; it uses the sibling Jev checkout and the existing authenticated browser session.
+- Use GPT computer-use automation only when JEV cannot perform the required workflow or when the task explicitly requests computer use.
+- Keep JEV credentials in its configured environment; do not copy them into Vivadeo source files or expose them in logs or client-facing text.
+
 ## Common Verification Commands
 
 - Backend tests: `uv sync --group test`, then `uv run pytest --cov --cov-report=term-missing`.
