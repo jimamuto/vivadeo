@@ -124,58 +124,6 @@ function ComposerSelect({
   );
 }
 
-function readCachedPoster(key: string) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedPoster(key: string, url: string) {
-  try {
-    window.localStorage.setItem(key, url);
-  } catch {
-    // Storage may be unavailable in private browsing or locked-down embeds.
-  }
-}
-
-const posterRequests = new Map<string, Promise<string | null>>();
-
-function requestPoster(videoId: string, timestamp: number, cacheKey: string) {
-  const cached = readCachedPoster(cacheKey);
-  if (cached) return Promise.resolve(cached);
-  const existing = posterRequests.get(cacheKey);
-  if (existing) return existing;
-
-  const request = (async () => {
-    try {
-      const response = await fetch(`/api/proxy/v1/videos/${videoId}/frames`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timestamp }),
-      });
-      if (!response.ok) return null;
-      let frame = await response.json() as { id: string; status: string; url?: string | null };
-      for (let attempt = 0; attempt < 30 && frame.status === "queued"; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1000));
-        const refreshed = await fetch(`/api/proxy/v1/videos/${videoId}/frames/${frame.id}`, { cache: "no-store" });
-        if (!refreshed.ok) return null;
-        frame = await refreshed.json() as { id: string; status: string; url?: string | null };
-      }
-      if (frame.status !== "ready" || !frame.url) return null;
-      writeCachedPoster(cacheKey, frame.url);
-      return frame.url;
-    } catch {
-      return null;
-    } finally {
-      posterRequests.delete(cacheKey);
-    }
-  })();
-  posterRequests.set(cacheKey, request);
-  return request;
-}
-
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -262,6 +210,7 @@ export type ThreadSource = {
   visual_status: string;
   duration: number | null;
   url: string | null;
+  thumbnail_url?: string | null;
   created_at: string;
 };
 
@@ -322,23 +271,18 @@ function fmt(s: number) {
 function CitationPreview({
   citation,
   sourceUrl,
+  posterUrl,
   previewStart,
   previewEnd,
-  preload,
 }: {
   citation: Citation;
   sourceUrl: string | null | undefined;
+  posterUrl: string | null | undefined;
   previewStart: number;
   previewEnd: number;
-  preload: boolean;
 }) {
-  const posterCacheBucket = Math.round(citation.start_time / 5) * 5;
-  const posterCacheKey = `vivadeo.citation-poster:${citation.video_id}:${posterCacheBucket}`;
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  const [posterStatus, setPosterStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const [playing, setPlaying] = useState(false);
   const [playbackStatus, setPlaybackStatus] = useState<"idle" | "loading" | "error">("idle");
-  const previewRef = useRef<HTMLDivElement>(null);
 
   function togglePreview(video: HTMLVideoElement) {
     if (!video.paused) {
@@ -349,57 +293,14 @@ function CitationPreview({
     void video.play().catch(() => setPlaybackStatus("error"));
   }
 
-  useClientLayoutEffect(() => {
-    const cached = readCachedPoster(posterCacheKey);
-    if (cached) {
-      setPosterUrl(cached);
-      setPosterStatus("ready");
-    }
-  }, [posterCacheKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let requested = false;
-
-    const loadPoster = async () => {
-      if (requested || cancelled) return;
-      requested = true;
-      setPosterStatus("loading");
-      const url = await requestPoster(citation.video_id, citation.start_time, posterCacheKey);
-      if (!cancelled) {
-        setPosterUrl(url);
-        setPosterStatus(url ? "ready" : "unavailable");
-      }
-    };
-
-    if (preload || typeof IntersectionObserver === "undefined") {
-      void loadPoster();
-      return () => { cancelled = true; };
-    }
-
-    const node = previewRef.current;
-    if (!node) return () => { cancelled = true; };
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        observer.disconnect();
-        void loadPoster();
-      }
-    }, { rootMargin: "200px" });
-    observer.observe(node);
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-  }, [citation.video_id, citation.start_time, posterCacheKey, preload]);
-
-  const showSkeleton = !posterUrl && posterStatus !== "unavailable";
+  const showSkeleton = !posterUrl && !sourceUrl;
 
   return (
-    <div ref={previewRef} className={`search-citation-preview${showSkeleton && !sourceUrl ? " is-loading" : ""}`}>
+    <div className={`search-citation-preview${showSkeleton ? " is-loading" : ""}`}>
       {sourceUrl ? (
         <video
           playsInline
-          preload={preload ? "auto" : "metadata"}
+          preload="metadata"
           poster={posterUrl || undefined}
           tabIndex={0}
           aria-label={`Play ${citation.filename} from ${fmt(citation.start_time)} to ${fmt(citation.end_time)}`}
@@ -415,7 +316,7 @@ function CitationPreview({
           onTimeUpdate={(event) => { if (event.currentTarget.currentTime >= previewEnd) { event.currentTarget.pause(); event.currentTarget.currentTime = citation.start_time; } }}
         />
       ) : posterUrl ? (
-        <img className="search-citation-poster" src={posterUrl} alt="" decoding="async" onError={() => { setPosterUrl(null); setPosterStatus("unavailable"); }} />
+        <img className="search-citation-poster" src={posterUrl} alt="" decoding="async" />
       ) : showSkeleton ? (
         <span className="search-citation-skeleton" aria-hidden="true" />
       ) : (
@@ -431,53 +332,23 @@ function CitationPreview({
 function UnifiedCitationPlayer({
   citations,
   sourceUrl,
+  posterUrl,
   duration,
   onFocus,
 }: {
   citations: Citation[];
   sourceUrl: string;
+  posterUrl?: string | null;
   duration?: number | null;
   onFocus: (citation: Citation, prompt: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const videoId = citations[0].video_id;
   const start = Math.max(0, citations[0].start_time);
   const end = Math.max(duration || 0, citations[citations.length - 1].end_time);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(start);
   const [fullscreen, setFullscreen] = useState(false);
-  const posterCacheBucket = Math.round(start / 5) * 5;
-  const posterCacheKey = `vivadeo.citation-poster:${videoId}:${posterCacheBucket}`;
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  const [posterStatus, setPosterStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [playbackStatus, setPlaybackStatus] = useState<"idle" | "loading" | "playing" | "error">("idle");
-
-  useClientLayoutEffect(() => {
-    const cached = readCachedPoster(posterCacheKey);
-    if (cached) {
-      setPosterUrl(cached);
-      setPosterStatus("ready");
-    } else {
-      setPosterUrl(null);
-      setPosterStatus("loading");
-    }
-  }, [posterCacheKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadPoster = async () => {
-      setPosterStatus("loading");
-      const url = await requestPoster(videoId, start, posterCacheKey);
-      if (!cancelled) {
-        setPosterUrl(url);
-        setPosterStatus(url ? "ready" : "unavailable");
-      }
-    };
-
-    void loadPoster();
-    return () => { cancelled = true; };
-  }, [posterCacheKey, start, videoId]);
 
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(document.fullscreenElement === videoRef.current);
@@ -515,8 +386,7 @@ function UnifiedCitationPlayer({
 
   return (
     <section className="search-evidence-player" aria-label={`Evidence from ${citations[0].filename}`}>
-      <div className={`search-evidence-video${posterStatus === "loading" ? " is-loading" : ""}`}>
-        {posterStatus === "loading" ? <span className="search-evidence-video-skeleton" aria-hidden="true" /> : null}
+      <div className="search-evidence-video">
         <video
           ref={videoRef}
           playsInline
@@ -524,7 +394,6 @@ function UnifiedCitationPlayer({
           preload="metadata"
           poster={posterUrl || undefined}
           src={`${sourceUrl}#t=${start},${end}`}
-          className={posterStatus === "loading" && playbackStatus === "idle" ? "is-awaiting-poster" : undefined}
           onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }}
           onPlaying={() => { setPlaying(true); setPlaybackStatus("playing"); }}
           onPause={() => { setPlaying(false); setPlaybackStatus("idle"); }}
@@ -1895,6 +1764,7 @@ export function SearchContent({
                             <UnifiedCitationPlayer
                               citations={unifiedCitations}
                               sourceUrl={unifiedSource.url}
+                              posterUrl={unifiedSource.thumbnail_url}
                               duration={unifiedSource.duration}
                               onFocus={(citation, prompt) => focusMoment(citation, prompt, turn.search_run_id)}
                             />
@@ -1913,9 +1783,9 @@ export function SearchContent({
                                   <CitationPreview
                                     citation={citation}
                                     sourceUrl={citationSource?.url}
+                                    posterUrl={citationSource?.thumbnail_url}
                                     previewStart={previewStart}
                                     previewEnd={previewEnd}
-                                    preload={index === turns.length - 1 && citationIndex < 3}
                                   />
                                   <div className="chat-evidence-actions">
                                     <div className="chat-evidence-summary-row">
