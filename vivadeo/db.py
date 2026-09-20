@@ -110,6 +110,7 @@ class Video(Base):
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
     source_uri: Mapped[str] = mapped_column(Text, nullable=False)
     object_key: Mapped[str | None] = mapped_column(Text)
+    preview_object_key: Mapped[str | None] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(2048), nullable=True)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(128))

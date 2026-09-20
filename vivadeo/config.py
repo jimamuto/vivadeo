@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     jev_model: str = Field("jev-latest", alias="VIVADEO_JEV_MODEL")
     jev_timeout: int = Field(30, ge=1, alias="VIVADEO_JEV_TIMEOUT")
     jev_max_candidates: int = Field(24, ge=1, le=100, alias="VIVADEO_JEV_MAX_CANDIDATES")
+    jev_max_similarity_margin: float = Field(0.05, ge=0, le=1, alias="VIVADEO_JEV_MAX_SIMILARITY_MARGIN")
 
     chunk_duration: int = Field(30, alias="VIVADEO_CHUNK_DURATION")
     chunk_overlap: int = Field(5, alias="VIVADEO_CHUNK_OVERLAP")

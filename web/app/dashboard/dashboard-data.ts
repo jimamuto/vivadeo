@@ -29,6 +29,8 @@ export type Video = {
   source_type: string;
   source_uri: string;
   object_key?: string | null;
+  preview_object_key?: string | null;
+  preview_url?: string | null;
   thumbnail_object_key?: string | null;
   thumbnail_url?: string | null;
   url?: string | null;

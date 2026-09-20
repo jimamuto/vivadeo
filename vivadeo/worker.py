@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -12,14 +13,14 @@ from celery.signals import worker_process_init, worker_process_shutdown
 from redis import Redis
 from sqlalchemy import delete, select
 
-from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_video_duration
+from .chunker import chunk_video, is_still_frame_chunk, preprocess_chunk, _get_ffmpeg_executable, _get_video_duration
 from .config import get_settings
 from .db import ChatThreadMessage, Clip, DeadLetterEntry, EvidenceFrame, Job, Organization, Video, VideoTranscriptSegment, VisualKeyframe, dispose_engine, new_id, session_scope, utcnow
 from .downloader import download_video_url
 from .embedder import get_embedder, reset_embedder
 from .frame_extractor import extract_frame
 from .azure_whisper import AzureWhisperTranscriber
-from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key, visual_keyframe_object_key
+from .object_store import ObjectStore, clip_object_key, evidence_frame_object_key, video_object_key, video_preview_object_key, visual_keyframe_object_key
 from .notifications import notify_ingest_outcome
 from .production_store import PostgresVideoStore
 from .trimmer import trim_clip
@@ -57,6 +58,50 @@ def _dispose_worker_database_pool(**_kwargs) -> None:
 
 class JobCanceled(Exception):
     pass
+
+
+def _create_video_preview(source_path: str) -> str:
+    """Create an eight-second, fast-start preview for immediate library playback."""
+    handle, preview_path = tempfile.mkstemp(prefix="vivadeo_preview_", suffix=".mp4")
+    os.close(handle)
+    try:
+        result = subprocess.run(
+            [_get_ffmpeg_executable(), "-y", "-i", source_path, "-t", "8", "-map", "0:v:0?", "-map", "0:a:0?", "-vf", "scale='min(640,iw)':-2", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", preview_path],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if result.returncode or not os.path.exists(preview_path) or os.path.getsize(preview_path) == 0:
+            raise RuntimeError(result.stderr[-1000:] or "ffmpeg produced no preview")
+        return preview_path
+    except Exception:
+        try:
+            os.unlink(preview_path)
+        except OSError:
+            pass
+        raise
+
+
+def _store_video_preview(store: ObjectStore, video_id: str, source_path: str) -> str:
+    preview_path = _create_video_preview(source_path)
+    try:
+        key = video_preview_object_key(video_id)
+        store.upload_file(preview_path, key, "video/mp4")
+        return key
+    finally:
+        try:
+            os.unlink(preview_path)
+        except OSError:
+            pass
+
+
+def _maybe_store_video_preview(store: ObjectStore, video_id: str, source_path: str) -> str | None:
+    try:
+        return _store_video_preview(store, video_id, source_path)
+    except Exception:
+        logger.warning("video_preview_failed video_id=%s source=%s", video_id, source_path, exc_info=True)
+        return None
 
 
 def _update_job(job_id: str, **values) -> None:
@@ -582,6 +627,7 @@ def ingest_local_path(job_id: str, video_id: str, organization_id: str, path: st
             object_key = video_object_key(video_id, video.filename)
             store.upload_file(path, object_key, video.content_type)
             video.object_key = object_key
+            video.preview_object_key = _maybe_store_video_preview(store, video_id, path)
             video.duration = _get_video_duration(path)
             video.status = "indexing"
 
@@ -649,6 +695,7 @@ def ingest_url(job_id: str, video_id: str, organization_id: str, url: str, max_h
                 raise RuntimeError(f"Video not found: {video_id}")
             video.filename = filename
             video.object_key = object_key
+            video.preview_object_key = _maybe_store_video_preview(store, video_id, path)
             video.duration = _get_video_duration(path)
             video.status = "indexing"
         _raise_if_canceled(job_id)

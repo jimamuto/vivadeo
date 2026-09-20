@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from email.utils import format_datetime
 
 from fastapi import HTTPException, status
 from starlette.responses import StreamingResponse
@@ -14,6 +15,7 @@ def stream_object(
     object_key: str,
     content_type: str | None = None,
     range_header: str | None = None,
+    cache_control: str | None = None,
 ) -> StreamingResponse:
     store = ObjectStore()
     try:
@@ -56,8 +58,12 @@ def stream_object(
         headers["Content-Length"] = str(response["ContentLength"])
     if response.get("ContentRange"):
         headers["Content-Range"] = response["ContentRange"]
+    if response.get("ETag"):
+        headers["ETag"] = str(response["ETag"])
+    if response.get("LastModified"):
+        headers["Last-Modified"] = format_datetime(response["LastModified"], usegmt=True)
     resolved_content_type = headers.get("Content-Type") or "application/octet-stream"
-    headers["Cache-Control"] = (
+    headers["Cache-Control"] = cache_control or (
         "private, max-age=604800, immutable"
         if resolved_content_type.startswith("image/")
         else "private, max-age=86400"

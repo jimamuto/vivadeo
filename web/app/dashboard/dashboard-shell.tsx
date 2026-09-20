@@ -8,13 +8,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { getSettingsSectionLabel } from "@/app/settings/settings-sections";
 
-type NavIcon = "chat" | "search" | "ingest" | "videos" | "library" | "jobs" | "review" | "billing" | "help" | "settings";
+type NavIcon = "chat" | "search" | "ingest" | "videos" | "library" | "jobs" | "billing" | "help" | "settings";
 type PaletteIcon = NavIcon | "workspace" | "settings" | "shield" | "profile" | "notifications";
 type PaletteCommand = { label: string; description: string; href: string; group: string; icon: PaletteIcon; keywords: string };
 type UserNotification = { id: string; job_id: string; video_id: string | null; kind: string; title: string; message: string; read_at: string | null; created_at: string };
 
 const PALETTE_COMMANDS: PaletteCommand[] = [
-  { label: "Review evidence", description: "Confirm the moments behind a result", href: "/dashboard/review", group: "Quick actions", icon: "review", keywords: "review verify evidence moments citations" },
   { label: "Ask Vivadeo", description: "Start searching your video archive", href: "/chat", group: "Quick actions", icon: "search", keywords: "search ask answer new chat footage" },
   { label: "Add video", description: "Upload a file or import a video URL", href: "/dashboard/ingest", group: "Quick actions", icon: "ingest", keywords: "upload import ingest source url" },
   { label: "Library", description: "Browse and manage workspace videos", href: "/dashboard/library", group: "Workspace", icon: "library", keywords: "videos sources archive collections" },
@@ -41,7 +40,6 @@ function PaletteGlyph({ icon }: { icon: PaletteIcon }) {
     settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6 7 7 M17 17l1.4 1.4 M18.4 5.6 17 7 M7 17l-1.4 1.4",
     shield: "M12 3l7 3v5c0 4.5-2.8 7.5-7 10-4.2-2.5-7-5.5-7-10V6z M9 12l2 2 4-4",
     profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M5 21c.8-4 3.1-6 7-6s6.2 2 7 6",
-    review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
     billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
     help: "M12 18h.01 M9.2 9a3 3 0 1 1 5.4 1.8c-.9 1-2.6 1.4-2.6 3.2 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
     notifications: "M6 10a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9z M10 22h4",
@@ -58,7 +56,6 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
     videos: "M4 5h16v14H4z M10 9l5 3-5 3z",
     library: "M4 7.5h6l1.5 2H20v9H4z M4 7.5V5h6l1.5 2",
     jobs: "M7 4h10v16H7z M9 8h6 M9 12h6 M9 16h4",
-    review: "M4 5h16v14H4z M7 9h3 M7 13h6 M14 9h3 M16 13h1",
     billing: "M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5z M9 8h6 M9 12h6 M9 16h4",
     help: "M12 18h.01 M9.2 9a3 3 0 1 1 5.4 1.8c-.9 1-2.6 1.4-2.6 3.2 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
     settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6 7 7 M17 17l1.4 1.4 M18.4 5.6 17 7 M7 17l-1.4 1.4",
@@ -128,9 +125,7 @@ export function DashboardShell({
       ? "Ingest"
         : pathname.startsWith("/search")
           ? "Search footage"
-          : pathname.startsWith("/dashboard/review")
-            ? "Review"
-            : pathname.startsWith("/dashboard/output")
+          : pathname.startsWith("/dashboard/output")
               ? "Output"
             : pathname.startsWith("/help")
               ? "Help"
@@ -194,6 +189,14 @@ export function DashboardShell({
       setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() })));
       await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mark_all_read: true }) });
     }
+  }
+
+  async function clearReadNotifications() {
+    const readIds = new Set(notifications.filter((item) => item.read_at).map((item) => item.id));
+    if (!readIds.size) return;
+    setNotifications((current) => current.filter((item) => !readIds.has(item.id)));
+    const response = await fetch("/api/notifications", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clear_read: true }) });
+    if (!response.ok) void fetch("/api/notifications", { cache: "no-store" }).then((result) => result.ok ? result.json() : null).then((payload: { notifications?: UserNotification[] } | null) => { if (payload?.notifications) setNotifications(payload.notifications); });
   }
 
   useEffect(() => {
@@ -287,7 +290,6 @@ export function DashboardShell({
           <span className="dashboard-nav-label">Workflow</span>
           <NavItem href="/dashboard/ingest" label="Videos" icon="videos" />
           <NavItem href="/search" label="Search footage" icon="search" activePaths={["/chat"]} />
-          <NavItem href="/dashboard/review" label="Review" icon="review" />
           <NavItem href="/dashboard/library" label="Library" icon="library" />
           {isCompactSidebar ? (
             <>
@@ -374,7 +376,7 @@ export function DashboardShell({
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
               {notifications.some((item) => !item.read_at) ? <span aria-label={`${notifications.filter((item) => !item.read_at).length} unread notifications`}>{Math.min(9, notifications.filter((item) => !item.read_at).length)}</span> : null}
             </button>
-            {notificationsOpen ? <div className="dashboard-notification-panel"><header><strong>Notifications</strong><Link href="/settings/notifications">Settings</Link></header>{notifications.length ? <div>{notifications.slice(0, 8).map((item) => <Link key={item.id} href={item.job_id ? `/dashboard/ingest` : "/dashboard/ingest"}><strong>{item.title}</strong><span>{item.message}</span><time>{new Date(item.created_at).toLocaleString()}</time></Link>)}</div> : <p>No notifications yet.</p>}</div> : null}
+            {notificationsOpen ? <div className="dashboard-notification-panel"><header><strong>Notifications</strong><div>{notifications.some((item) => item.read_at) ? <button type="button" className="dashboard-notification-clear" onClick={() => void clearReadNotifications()}>Clear read</button> : null}<Link href="/settings/notifications">Settings</Link><button type="button" className="dashboard-notification-close" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div></header>{notifications.length ? <div>{notifications.slice(0, 8).map((item) => <Link key={item.id} href={item.job_id ? `/dashboard/ingest` : "/dashboard/ingest"}><strong>{item.title}</strong><span>{item.message}</span><time>{new Date(item.created_at).toLocaleString()}</time></Link>)}</div> : <p>No notifications yet.</p>}</div> : null}
             </div>
             <details ref={accountMenuRef} className={`dashboard-command-account${loading ? " is-loading" : ""}`}>
               <summary className="dashboard-command-profile" aria-label={loading ? "Loading account" : "Open account menu"} aria-disabled={loading} onClick={loading ? (event) => event.preventDefault() : undefined}>

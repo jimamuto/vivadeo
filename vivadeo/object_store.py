@@ -159,9 +159,14 @@ class ObjectStore:
             return self.client.get_object(**request)
 
         blob = self.container.get_blob_client(key)
-        properties = blob.get_blob_properties()
-        total = int(properties.size)
-        requested = _byte_range(range_header, total)
+        if range_header:
+            properties = blob.get_blob_properties()
+            total = int(properties.size)
+            requested = _byte_range(range_header, total)
+        else:
+            requested = None
+            total = 0
+            properties = None
         if requested:
             start, end = requested
             downloader = blob.download_blob(offset=start, length=end - start + 1)
@@ -169,13 +174,20 @@ class ObjectStore:
             content_length = end - start + 1
         else:
             downloader = blob.download_blob()
+            properties = properties or getattr(downloader, "properties", None)
+            if properties is None:
+                properties = blob.get_blob_properties()
+            total = int(getattr(properties, "size", None) or getattr(properties, "content_length", 0))
             content_range = None
             content_length = total
+        content_settings = getattr(properties, "content_settings", None)
         return {
             "Body": downloader.chunks(),
             "ContentLength": content_length,
             "ContentRange": content_range,
-            "ContentType": properties.content_settings.content_type,
+            "ContentType": getattr(content_settings, "content_type", None),
+            "ETag": getattr(properties, "etag", None),
+            "LastModified": getattr(properties, "last_modified", None),
         }
 
     def presigned_url(self, key: str, expires_in: int | None = None) -> str:
@@ -184,6 +196,10 @@ class ObjectStore:
 
 def video_object_key(video_id: str, filename: str) -> str:
     return f"videos/{video_id}/{Path(filename).name}"
+
+
+def video_preview_object_key(video_id: str) -> str:
+    return f"video-previews/{video_id}.mp4"
 
 
 def clip_object_key(clip_id: str) -> str:

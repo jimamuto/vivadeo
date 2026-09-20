@@ -7,7 +7,7 @@ Vivadeo uses Cloudflare in front of the production web hostname `vivadeo.jimamut
 The design separates public immutable assets from workspace-private media:
 
 - Public frontend assets are cached at the Cloudflare edge.
-- Signed thumbnail URLs may be cached for a short period.
+- Signed thumbnail and short-preview URLs may be cached for a short period.
 - Full videos, clips, and unsigned media are never cached at the edge.
 - Authorization remains workspace-scoped in the Vivadeo API.
 
@@ -25,10 +25,18 @@ Do not expose storage-provider URLs or replace the signed route with a public ob
 | --- | --- | --- |
 | `/_next/static/*` | Cache | 7 days |
 | `/images/*`, `/fonts/*`, favicon | Cache | 7 days |
-| Signed `evidence-frames/*` and `visual-keyframes/*` | Cache | 24 hours |
+| Signed `evidence-frames/*`, `visual-keyframes/*`, and `video-previews/*` | Cache | 240 seconds at the edge; 60 seconds in browsers |
 | Videos, clips, unsigned media, and other media proxy paths | Bypass | No edge cache |
 
-The static asset rule does not cache HTML or API responses. Full video caching should only be considered after measuring traffic and confirming the cache key includes authorization-safe signed URL data.
+The static asset rule does not cache HTML or API responses. Each signed media URL remains a separate cache key, including its `token` query parameter. This preserves workspace authorization without requiring a Worker to remove the token from the cache key. The token currently expires after five minutes; the application edge TTL is deliberately four minutes so an expired token is never served from an edge cache entry.
+
+Create these Cloudflare Cache Rules for the proxied production hostname:
+
+1. Match `http.request.uri.path contains "/api/proxy/v1/media/evidence-frames/"` OR `http.request.uri.path contains "/api/proxy/v1/media/visual-keyframes/"` OR `http.request.uri.path contains "/api/proxy/v1/media/video-previews/"`; set **Cache eligibility: Eligible for cache**, **Edge TTL: 240 seconds**, and respect the origin Cache-Control header.
+2. Match `http.request.uri.path contains "/api/proxy/v1/media/"`; set **Cache eligibility: Bypass cache**. Place this rule after the media-asset rule only if the dashboard evaluates the more-specific rule first; otherwise use the rule expression to exclude the three cacheable prefixes.
+3. Leave HTML, API JSON, originals under `videos/*`, and clips under `clips/*` uncached.
+
+The application sends `public, max-age=60, s-maxage=240, immutable` only for the three signed derived-media prefixes. All other media remains private.
 
 ## Azure deployment setting
 

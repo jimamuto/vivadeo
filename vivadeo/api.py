@@ -611,6 +611,8 @@ def _video_response(
     thumbnail_object_key: str | None = None,
 ) -> VideoResponse:
     url = f"{store.presigned_url(video.object_key)}?{signed_media_query(video.organization_id, video.object_key)}" if store and video.object_key else None
+    preview_object_key = getattr(video, "preview_object_key", None)
+    preview_url = f"{store.presigned_url(preview_object_key)}?{signed_media_query(video.organization_id, preview_object_key)}" if store and preview_object_key else None
     thumbnail_url = f"{store.presigned_url(thumbnail_object_key)}?{signed_media_query(video.organization_id, thumbnail_object_key)}" if store and thumbnail_object_key else None
     metadata = library_metadata or {}
     return VideoResponse(
@@ -624,6 +626,8 @@ def _video_response(
         visual_status=video.visual_status,
         duration=video.duration,
         object_key=video.object_key,
+        preview_object_key=preview_object_key,
+        preview_url=preview_url,
         thumbnail_object_key=thumbnail_object_key,
         thumbnail_url=thumbnail_url,
         url=url,
@@ -1704,7 +1708,8 @@ def get_media(
         organization_id = token_organization
     video = session.scalars(
         select(Video).where(
-            Video.organization_id == organization_id, Video.object_key == object_key
+            Video.organization_id == organization_id,
+            or_(Video.object_key == object_key, Video.preview_object_key == object_key),
         )
     ).first()
     clip = session.scalars(
@@ -1728,7 +1733,9 @@ def get_media(
         raise HTTPException(status_code=404, detail="Media not found")
     content_type = video.content_type if video else "image/jpeg" if frame or keyframe else "video/mp4"
     session.close()
-    return stream_object(object_key, content_type=content_type, range_header=range_header)
+    edge_cacheable = object_key.startswith(("evidence-frames/", "visual-keyframes/", "video-previews/"))
+    cache_control = "public, max-age=60, s-maxage=240, immutable" if edge_cacheable else None
+    return stream_object(object_key, content_type=content_type, range_header=range_header, cache_control=cache_control)
 
 
 @app.get(

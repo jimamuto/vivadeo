@@ -38,3 +38,20 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } finally { await sql.end(); }
 }
+
+export async function DELETE(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  const userId = session?.user?.id;
+  if (!userId) return NextResponse.json({ detail: "Authentication required" }, { status: 401 });
+  const workspace = request.cookies.get("vivadeo_workspace")?.value || "default-workspace";
+  const body = await request.json().catch(() => ({})) as { id?: string; clear_read?: boolean };
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    if (body.clear_read) {
+      await sql`DELETE FROM user_notifications WHERE user_id = ${userId} AND organization_id = ${workspace} AND read_at IS NOT NULL`;
+    } else if (body.id) {
+      await sql`DELETE FROM user_notifications WHERE id = ${body.id} AND user_id = ${userId} AND organization_id = ${workspace} AND read_at IS NOT NULL`;
+    }
+    return NextResponse.json({ ok: true });
+  } finally { await sql.end(); }
+}

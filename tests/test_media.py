@@ -48,6 +48,28 @@ def test_stream_object_caches_immutable_images_privately(monkeypatch):
     assert response.headers["cache-control"] == "private, max-age=604800, immutable"
 
 
+def test_stream_object_accepts_explicit_edge_cache_policy(monkeypatch):
+    class Store:
+        def get_object(self, key, range_header):
+            return {
+                "Body": BytesIO(b"preview"),
+                "ContentLength": 7,
+                "ContentRange": "bytes 0-6/7",
+                "ContentType": "video/mp4",
+            }
+
+    monkeypatch.setattr(media, "ObjectStore", Store)
+
+    response = media.stream_object(
+        "video-previews/video-1.mp4",
+        range_header="bytes=0-6",
+        cache_control="public, max-age=60, s-maxage=240, immutable",
+    )
+
+    assert response.status_code == 206
+    assert response.headers["cache-control"] == "public, max-age=60, s-maxage=240, immutable"
+
+
 def test_stream_object_rejects_unsatisfiable_range(monkeypatch):
     class Store:
         def get_object(self, key, range_header):

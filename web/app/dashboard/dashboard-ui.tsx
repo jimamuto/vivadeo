@@ -89,6 +89,44 @@ function useHydrated() {
   return hydrated;
 }
 
+function LibraryThumbnail({ src }: { src: string }) {
+  const frameRef = useRef<HTMLSpanElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    if (!("IntersectionObserver" in window)) {
+      setShouldLoad(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setShouldLoad(true);
+      observer.disconnect();
+    }, { rootMargin: "240px 0px" });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <span ref={frameRef} className="library-thumbnail-frame">
+      {!shouldLoad || (!loaded && !failed) ? <span className="library-thumbnail-placeholder" aria-hidden="true" /> : null}
+      {failed ? <span className="library-thumbnail-unavailable">Preview unavailable</span> : shouldLoad ? <img className={loaded ? "is-loaded" : ""} src={src} alt="" width={320} height={180} loading="eager" decoding="async" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} /> : null}
+    </span>
+  );
+}
+
+function LibraryVideoPreview({ src, fullSrc, duration }: { src: string; fullSrc?: string | null; duration?: number | null }) {
+  const [failed, setFailed] = useState(false);
+  const [playingFull, setPlayingFull] = useState(false);
+  if (failed) return <div className="library-view-unavailable">Preview unavailable</div>;
+  const activeSrc = playingFull && fullSrc ? `${fullSrc}#t=8` : src;
+  return <video key={activeSrc} src={activeSrc} controls autoPlay preload="auto" onError={() => setFailed(true)} onEnded={() => { if (!playingFull && fullSrc && fullSrc !== src && (duration ?? 0) > 8) setPlayingFull(true); }} />;
+}
+
 function fmtBytes(bytes: number) {
   if (bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -625,7 +663,7 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
   }, [items, query, activeFolder]);
 
   const selectedVideo = items.find((video) => video.id === selectedId) ?? null;
-  const selectedMediaUrl = selectedVideo?.url || null;
+  const selectedMediaUrl = selectedVideo?.preview_url || selectedVideo?.url || null;
   const folderName = (folderId?: string | null) => folders.find((folder) => folder.id === folderId)?.name || "Unorganized";
   const unorganizedCount = items.filter((video) => !video.collection).length;
 
@@ -810,7 +848,7 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
             {filteredVideos.map((video) => {
               const thumbnailUrl = video.thumbnail_url || null;
               return <article key={video.id} className="library-media-card" draggable={permissions.canEdit} onDragStart={() => { setDraggedVideoId(video.id); setDraggedFolderId(null); }} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedVideoId) void reorderVideo(draggedVideoId, video.id); setDraggedVideoId(null); }} onDragEnd={() => setDraggedVideoId(null)}>
-                <button type="button" className="library-media-preview" onClick={() => { setSelectedId(video.id); setViewOpen(true); }} aria-label={`View ${video.filename}`}>{thumbnailUrl ? <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" /> : <span>Preview unavailable</span>}<span className="library-play-mark" aria-hidden="true">▶</span></button>
+                <button type="button" className="library-media-preview" onClick={() => { setSelectedId(video.id); setViewOpen(true); }} aria-label={`View ${video.filename}`}>{thumbnailUrl ? <LibraryThumbnail src={thumbnailUrl} /> : <span className="library-thumbnail-unavailable">Preview unavailable</span>}<span className="library-play-mark" aria-hidden="true">▶</span></button>
                 <label className="library-card-select"><input type="checkbox" aria-label={`Select ${video.filename}`} checked={selectedVideoIds.includes(video.id)} onChange={(event) => setSelectedVideoIds((current) => event.target.checked ? [...new Set([...current, video.id])] : current.filter((id) => id !== video.id))} /></label>
                 <div className="library-media-card-body"><div><input className="library-media-title" value={video.filename} aria-label={`Rename ${video.filename}`} disabled={!permissions.canEdit} onChange={(event) => setItems((current) => current.map((item) => item.id === video.id ? { ...item, filename: event.target.value } : item))} onBlur={(event) => { const filename = event.target.value.trim(); if (filename) void updateLibraryMetadata(video, { filename }); else setItems((current) => current.map((item) => item.id === video.id ? { ...item, filename: video.filename } : item)); }} /><p>{fmt(video.duration)} · {folderName(video.collection)}</p></div>{video.status !== "ready" ? <span className={`job-status job-status-${statusTone(video.status)}`}>{video.status}</span> : null}</div>
                 <div className="library-card-actions"><button type="button" className="library-delete-action library-trash-action" aria-label={`Delete ${video.filename}`} title="Delete video" onClick={() => void deleteVideo(video.id)} disabled={!permissions.canEdit}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" /></svg></button></div>
@@ -820,8 +858,8 @@ export function LibraryPanel({ videos, jobs: _jobs, initialVideoId = "", initial
           </div>}
       </article>
 
-      {viewOpen && selectedVideo ? <div className="library-view-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setViewOpen(false); }}><section className="library-view-dialog" role="dialog" aria-modal="true" aria-labelledby="library-view-title"><header><div><h2 id="library-view-title">{selectedVideo.filename}</h2><p>{fmt(selectedVideo.duration)} · {folderName(selectedVideo.collection)}</p></div><button type="button" autoFocus onClick={() => setViewOpen(false)} aria-label="Close video viewer">×</button></header>{selectedMediaUrl ? <video src={selectedMediaUrl} controls autoPlay preload="metadata" /> : <div className="library-view-unavailable">Preview unavailable</div>}<footer><Link className="button" href={`/search?video_ids=${encodeURIComponent(selectedVideo.id)}`}>Search this video</Link>{folders.length ? <LibraryFolderMenu folders={folders} value={selectedVideo.collection || ""} label="Move video to folder" onChange={(folderId) => void updateLibraryMetadata(selectedVideo, { collection: folderId })} disabled={!permissions.canEdit} /> : null}<button type="button" className="button-secondary library-delete-action" onClick={() => void deleteVideo(selectedVideo.id)} disabled={!permissions.canEdit}>Delete</button></footer></section></div> : null}
-      {folderPickerId ? <div className="library-folder-picker-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setFolderPickerId(""); }}><section className="library-folder-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-picker-title"><header><div><h2 id="folder-picker-title">Add existing videos</h2><p>Choose videos for {folderName(folderPickerId)}.</p></div><button type="button" onClick={() => setFolderPickerId("")} aria-label="Close video picker">×</button></header><div className="library-folder-picker-list">{items.filter((video) => video.collection !== folderPickerId).map((video) => <label key={video.id}><input type="checkbox" checked={pickerVideoIds.includes(video.id)} onChange={(event) => setPickerVideoIds((current) => event.target.checked ? [...current, video.id] : current.filter((id) => id !== video.id))} />{video.thumbnail_url ? <img src={video.thumbnail_url} alt="" /> : <span aria-hidden="true">▶</span>}<strong>{video.filename}</strong><small>{folderName(video.collection)}</small></label>)}</div><footer><button type="button" className="button-secondary" onClick={() => setFolderPickerId("")}>Cancel</button><button type="button" className="button" disabled={!pickerVideoIds.length} onClick={() => void addVideosToFolder()}>Add {pickerVideoIds.length || ""} {pickerVideoIds.length === 1 ? "video" : "videos"}</button></footer></section></div> : null}
+      {viewOpen && selectedVideo ? <div className="library-view-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setViewOpen(false); }}><section className="library-view-dialog" role="dialog" aria-modal="true" aria-labelledby="library-view-title"><header><div><h2 id="library-view-title">{selectedVideo.filename}</h2><p>{fmt(selectedVideo.duration)} · {folderName(selectedVideo.collection)}</p></div><button type="button" autoFocus onClick={() => setViewOpen(false)} aria-label="Close video viewer">×</button></header>{selectedMediaUrl ? <LibraryVideoPreview src={selectedMediaUrl} fullSrc={selectedVideo.url} duration={selectedVideo.duration} /> : <div className="library-view-unavailable">Preview unavailable</div>}<footer><Link className="button" href={`/search?video_ids=${encodeURIComponent(selectedVideo.id)}`}>Search this video</Link>{folders.length ? <LibraryFolderMenu folders={folders} value={selectedVideo.collection || ""} label="Move video to folder" onChange={(folderId) => void updateLibraryMetadata(selectedVideo, { collection: folderId })} disabled={!permissions.canEdit} /> : null}<button type="button" className="button-secondary library-delete-action" onClick={() => void deleteVideo(selectedVideo.id)} disabled={!permissions.canEdit}>Delete</button></footer></section></div> : null}
+      {folderPickerId ? <div className="library-folder-picker-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setFolderPickerId(""); }}><section className="library-folder-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-picker-title"><header><div><h2 id="folder-picker-title">Add existing videos</h2><p>Choose videos for {folderName(folderPickerId)}.</p></div><button type="button" onClick={() => setFolderPickerId("")} aria-label="Close video picker">×</button></header><div className="library-folder-picker-list">{items.filter((video) => video.collection !== folderPickerId).map((video) => <label key={video.id}><input type="checkbox" checked={pickerVideoIds.includes(video.id)} onChange={(event) => setPickerVideoIds((current) => event.target.checked ? [...current, video.id] : current.filter((id) => id !== video.id))} />{video.thumbnail_url ? <LibraryThumbnail src={video.thumbnail_url} /> : <span aria-hidden="true">▶</span>}<strong>{video.filename}</strong><small>{folderName(video.collection)}</small></label>)}</div><footer><button type="button" className="button-secondary" onClick={() => setFolderPickerId("")}>Cancel</button><button type="button" className="button" disabled={!pickerVideoIds.length} onClick={() => void addVideosToFolder()}>Add {pickerVideoIds.length || ""} {pickerVideoIds.length === 1 ? "video" : "videos"}</button></footer></section></div> : null}
     </section>
   );
 }
