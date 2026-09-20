@@ -71,6 +71,19 @@ uv run vivadeo index /path/to/video.mp4
 uv run vivadeo search "red truck"
 ```
 
+Run Jev Ultrafast from the Vivadeo repository:
+
+```powershell
+.\scripts\run-jev.ps1 `
+  -Url http://localhost:3000/dashboard/library `
+  -Goal "Open the library and stop when the video list is visible"
+```
+
+The runner uses the sibling Jev checkout and its own `.env`, reusing the
+existing logged-in Chrome/CDP session without copying Jev or its credentials
+into Vivadeo. It maps `VIVADEO_JEV_API_KEY` to Jev's `TYPESAFE_API_KEY`
+automatically. Set `VIVADEO_JEV_PROJECT_DIR` if the Jev checkout is elsewhere.
+
 ## Notes
 
 Video processing happens in the background. A video can be searched only after
